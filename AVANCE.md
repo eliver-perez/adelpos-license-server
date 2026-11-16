@@ -875,7 +875,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 0 — Verificación contra el código | **Cerrada.** 164 pruebas, 21 384 aserciones, todas OK. Sin cambios de código. El propietario aprobó las 7 consultas (E2-0.5). |
 | 1 — Entornos de firma | **Cerrada.** 176 pruebas, 21 578 aserciones, todas OK. Verificador Go OK. Playwright OK. |
 | 2 — Modelo de datos | **Cerrada.** 186 pruebas, 21 918 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 14 de las 20 marcas de herencia. |
-| 3 — Motor de fechas | Pendiente |
+| 3 — Motor de fechas | **Cerrada.** 258 pruebas, 26 242 aserciones, todas OK. Verificador Go OK. |
 | 4 — Contenido y firma de la licencia | Pendiente |
 | 5 — API en línea | Pendiente |
 | 6 — Archivos sin internet | Pendiente |
@@ -1349,3 +1349,90 @@ La primera pasada detectó 37. La que faltaba no era un hueco de las pruebas sin
 - **`app_version`.** La columna existe; se empieza a guardar con la API nueva (Fase 5).
 - **Pruebas con `adel_pos`.** Las nuevas ya lo usan; las demás cambian en la Fase 4 (decisión 3 del propietario).
 - **`PENDIENTE etapa 3`:** renovación con fecha de pago, conversión de prueba a pago, compra de mantenimiento, editor de planes y edición del periodo inicial de una licencia sin activar.
+
+---
+
+## Etapa 2 · Fase 3 — Motor de fechas (contrato §5.1, §5.2, §5.4 y §5.5)
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### E2-3.1 El componente
+
+`src/Domain/CalendarPeriod.php`, puro: no usa la base de datos ni la hora del sistema.
+
+| Punto de la especificación | Cómo quedó |
+| --- | --- |
+| 1. `addMonths(inicio, meses, zona, día_ancla, hora_ancla)` | Suma meses al mes local del inicio y devuelve el instante UTC del día y la hora ancla. Si el día no existe en ese mes, usa el último. |
+| 1. Hora inexistente | El primer instante después del salto (decisión 6 del propietario). En Tijuana, el 14 de marzo de 2027 a las 02:30 da las 10:00:00Z, que son las 03:00 locales. |
+| 1. Hora repetida | El primero de los dos instantes. En Tijuana, el 7 de noviembre de 2027 a las 01:30 da las 08:30Z, no las 09:30Z. |
+| 2. `addDays(inicio, días, zona)` | Días de calendario a la misma hora local. |
+| 3. Primer periodo | `firstPeriod(condiciones, inicio, zona)` devuelve inicio, vencimiento, fin de actualizaciones, día ancla y hora ancla. Suscripción: 1, 3, 6 o 12 meses. Prueba: 15 días, 1 mes o 3 meses. Perpetua: sin vencimiento, con actualizaciones por 0, 6 o 12 meses. |
+| 4. Licencia sin activar | Ya estaba desde la Fase 2: no tiene fechas y el panel muestra «Empieza al activar». |
+| 5. Formato de los instantes | `CalendarPeriod::utc` escribe seis decimales y termina en `Z`; `CalendarPeriod::sql` da el valor para las columnas `DATETIME(6)`. |
+
+**Reloj inyectable.** El motor no tiene reloj propio: recibe el instante de inicio. Quien lo llame al activar se lo dará desde el reloj de la aplicación, que es el que las pruebas sustituyen.
+
+**Todavía no está conectado.** Nada lo llama al activar: eso es de las fases 4 a 6. El estado intermedio de E2-2.6 sigue igual.
+
+`Domain\LicenseTerms` recibió los meses de cada periodo de cobro y la duración de cada prueba.
+
+### E2-3.2 Casos exactos
+
+Todos los resultados esperados se calcularon a mano con las reglas del contrato, antes de ejecutar el motor. Coincidieron en la primera ejecución.
+
+| Caso pedido | Resultado |
+| --- | --- |
+| 31 de enero más 1, 2 y 3 meses | 28 de febrero, 31 de marzo y 30 de abril. Encadenando un mes cada vez con el ancla guardada: 28 feb → 31 mar → 30 abr → 31 may. |
+| Año bisiesto y no bisiesto | 31 de enero más 1 mes: 29 de febrero en 2028 y 28 de febrero en 2027. También 2000 (bisiesto) y 2100 (no bisiesto). |
+| 29 de febrero más 12 meses | 28 de febrero de 2029. Año tras año sigue en 28 hasta 2032, que vuelve al 29. |
+| 15 días, 1 mes y 3 meses | Desde el 16 nov 2026 06:30Z: 1 dic, 16 dic y 16 feb 2027, a las 06:30Z. |
+| Las cuatro duraciones de suscripción | 16 dic 2026, 16 feb 2027, 16 may 2027 y 16 nov 2027, a las 06:30Z. La mensual es el ejemplo de la sección 4 del contrato. |
+| Perpetua con 0, 6 y 12 meses | Sin vencimiento. Actualizaciones hasta el inicio mismo, el 16 may 2027 y el 16 nov 2027. |
+| Hora inexistente en `America/Tijuana` | 02:00, 02:30 y 02:59:59.999999 dan las 10:00:00.000000Z. 01:59:59.999999 y 03:00 existen y se conservan. El mes siguiente vuelve a las 02:30. |
+| Hora repetida en `America/Tijuana` | 01:00, 01:30 y 01:59:59.999999 dan el primer instante. 00:59:59.999999 y 02:00 ocurren una vez. |
+| `America/Monterrey` cerca de la medianoche UTC | Las 03:30Z del 1 de marzo son 28 de febrero en Monterrey: más 1 mes da el 28 de marzo (29 mar 03:30Z), no el 1 de abril. |
+
+Otros casos: cambio de año (31 dic → 31 ene → 28 feb), microsegundos conservados, la hora local que se mantiene a través de un cambio de horario (la hora UTC cambia), y 15 días que caen en una hora inexistente o repetida.
+
+**Una activación dentro de una hora repetida.** Si el servidor confirma la activación en la segunda vuelta de las 01:30, una perpetua con 0 meses termina sus actualizaciones en ese mismo instante. Recalcular la hora local daría el primer instante, una hora antes de la activación, y la base lo rechazaría.
+
+### E2-3.3 Pruebas
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 2 | 186 | 21 918 | OK |
+| **Cierre de la Fase 3** | **258** | **26 242** | **OK**: unitarias 153/24 941, integración 105/1 301, sin omisiones ni advertencias |
+
+**Cambios en el número de pruebas (+72):**
+
+| Cambio | Pruebas | Detalle |
+| --- | --- | --- |
+| Nuevas | +71 | `tests/Unit/CalendarPeriodTest.php`: 8 pruebas con 71 casos. PHPUnit cuenta cada caso: 42 de meses, 11 de días, 12 de primer periodo y 6 pruebas sin tabla de casos. No necesitan MySQL y tardan medio segundo. |
+| Nueva | +1 | `ContractDataModelTest::testTheFirstPeriodOfTheDateEngineFitsTheDatabaseRulesForEveryLicenseType`: 40 primeros periodos calculados por el motor se guardan sin que ninguna restricción los rechace, y se leen idénticos al microsegundo. |
+
+Además de los casos exactos, `CalendarPeriodTest` tiene dos pruebas generales:
+
+- **Contra una definición independiente.** Recorre cada hora local alrededor de los cambios de horario de 2027 en cinco zonas, incluidos un cambio a medianoche (`America/Santiago`) y uno de 30 minutos (`Australia/Lord_Howe`). Compara el motor con la regla escrita de otra forma: el primer instante cuya hora local no es anterior a la buscada. Esa definición no usa las tablas de transiciones.
+- **Propiedades.** 900 inicios al azar con semilla fija, en tres zonas: el resultado siempre es posterior al inicio, cae en el mes esperado y en el día ancla o el último del mes, y conserva la hora local salvo dentro de una hora inexistente.
+
+**Comprobación de las pruebas.** Se quitó o debilitó cada regla por separado, 26 veces, y en las 26 falló alguna prueba: el recorte al último día del mes, el mes y el día locales, la hora repetida, la hora inexistente (tres variantes, incluida la forma en que PHP la resuelve por su cuenta), los microsegundos, los días de calendario, la perpetua con 0 meses, el fin de las actualizaciones, el paso a UTC, el formato, las validaciones y las cinco duraciones. El código se restauró idéntico después de cada una.
+
+**Otras comprobaciones:**
+- Verificador Go y `generate-fixtures.php --check`: OK, con los archivos heredados.
+- `bin/check-secrets.php`: sin hallazgos.
+- Playwright: no se ejecutó, porque la fase no toca el panel ni el arranque.
+- Residuos: 0 bases y 0 usuarios de prueba; ningún archivo temporal.
+
+### E2-3.4 Decisiones y límites
+
+Están en `DECISIONS.md`, sección 10, Fase 3. Dos conviene tenerlas presentes:
+
+1. **Datos de zonas horarias.** Los resultados dependen de los datos de zonas de PHP: aquí, los de 2026.1. Los casos exactos usan solo `America/Monterrey` y `America/Tijuana`, cuyas reglas son estables. Si México o Estados Unidos cambian sus reglas, cambian los resultados futuros; las fechas ya firmadas no se recalculan.
+2. **Límite conocido.** El mes de partida se toma de la fecha local del instante de partida. Solo importaría si un cambio de horario eliminara la última hora del último día de un mes y el ancla cayera ahí. Ninguna zona de México o de Estados Unidos cambia a medianoche. Queda anotado para la etapa 3, que encadena periodos al renovar.
+
+### E2-3.5 Pendientes que deja la fase
+
+- **Fases 4 a 6:** llamar a `firstPeriod` en la primera activación en línea y al aprobar una solicitud sin internet, y guardar el periodo en la licencia.
+- **Fase 7:** publicar estos casos como archivos de prueba del contrato, con entrada y resultado esperado.
+- **Fase 8:** mostrar las fechas en la zona horaria del cliente; el panel las muestra todavía en `America/Monterrey`.
+- **Etapa 3:** renovación (sección 5.3 del contrato), que usa `addMonths` con el ancla guardada.

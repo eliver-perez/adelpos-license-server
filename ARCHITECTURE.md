@@ -23,7 +23,7 @@ El servidor de AD-EL POS verifica cada licencia sin internet, con las llaves pú
 | `src/App.php`, `src/Config.php` | Arranque y composición de servicios. La configuración viene de `ADELPOS_LICENSE_CONFIG` o de `config/local.php`. Las variables de entorno con el mismo nombre tienen prioridad, y `Config::validate()` revisa claves, origen y el entorno de licencias (`LICENSE_ENVIRONMENT`). `App::boot()` se detiene si la llave de firma activa es de otro entorno. |
 | `src/Http/` | `Kernel` (panel: rutas, sesión, CSRF, origen, redes permitidas), `ApiKernel` (API `/v1`), `View` (escape, fechas en `America/Monterrey` y etiquetas de auditoría) y `Network` (`ADMIN_NETWORKS`). |
 | `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios), `ActivationService` (API en línea), `OfflineService` (`.licreq`/`.lic`), `RevisionPublisher` (firma de revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias) y `Operations` (idempotencia). |
-| `src/Domain/` | Reglas sin estado: `Protocol`, `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `Input`, `Uuid`, `Problem` y `ApiProblem`. |
+| `src/Domain/` | Reglas sin estado: `Protocol`, `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `LicenseTerms` (tipos, periodos, duraciones, cupos y tolerancia del contrato), `CalendarPeriod` (motor de fechas), `TimeZones`, `Input`, `Uuid`, `Problem` y `ApiProblem`. |
 | `src/Infrastructure/` | MySQL (`Database`, `Migrator`, `ReadRepository`, `MySqlFiles`), criptografía (`Crypto`, `SigningKeys`, `Totp`), `Sessions`, `RateLimiter`, `Audit`, respaldos (`Backup`, `EncryptedArchive`, `RecoveryVerifier`), `CertificatePdf` y `Clock`. |
 | `templates/` | Vistas PHP del panel, la verificación pública y la constancia PDF. |
 | `bin/` | CLI de operación: configuración, migración, permisos, administrador inicial, llaves, respaldo y restauración, verificación de auditoría, limpieza, comprobaciones previas, paquete de despliegue y revisión de secretos. |
@@ -79,6 +79,18 @@ Recorrido de una petición:
 - **Llaves públicas para AD-EL POS.** `bin/signing-key.php --action=export` entrega `kid`, `environment` y `public_key` de las llaves de licencias del entorno.
 - **Revisiones.** `RevisionPublisher` arma el contenido, incrementa el contador de revisión de la licencia y firma un JWS compacto (`EdDSA`). Cada revisión queda en `license_revisions` con su SHA-256; nunca se edita.
 
+### Motor de fechas
+
+`Domain\CalendarPeriod` calcula todas las fechas de una licencia (contrato, secciones 5.1, 5.2, 5.4 y 5.5). No consulta la base de datos ni la hora del sistema: recibe el instante de inicio de quien lo llama, que lo toma del reloj de la aplicación.
+
+- **Zona horaria.** Calcula en la zona del cliente y devuelve instantes UTC, con microsegundos.
+- **Meses de calendario** (`addMonths`). Suma meses al mes local del inicio y busca el día y la hora ancla. Si el día no existe en ese mes, usa el último: 31 ene → 28 feb → 31 mar → 30 abr. El ancla se guarda en la licencia y no cambia.
+- **Días de calendario** (`addDays`), para la prueba de 15 días: la misma hora local, 15 fechas después.
+- **Cambios de horario.** Si la hora local se repite, usa el primero de los dos instantes. Si no existe, usa el primer instante después del salto. Lo resuelve con las transiciones de la zona, sin depender de cómo PHP ajusta esas horas.
+- **Primer periodo** (`firstPeriod`). Suscripción: vence 1, 3, 6 o 12 meses después del inicio. Prueba: 15 días, 1 mes o 3 meses. En las dos, las actualizaciones terminan con el vencimiento. Perpetua: no vence, y las actualizaciones duran 0, 6 o 12 meses; con 0 terminan en la activación misma.
+
+El motor todavía no está conectado a la activación: eso ocurre en las fases 4 a 6 de la etapa 2.
+
 ## 6. Flujo sin internet
 
 1. AD-EL POS genera una solicitud `.licreq`: JSON firmado por la instalación, con acción `activate`, `renew` o `deactivate`.
@@ -132,7 +144,7 @@ El motor de licencias recibido se conserva sin cambios de lógica. Las reglas fi
 | Una instalación por licencia | `max_installations=1` y una sola activación activa | 2 |
 | Huella del equipo | `fingerprint_version` `'1'` obligatoria | 2 |
 | Lista de límites | `max_users`, `max_libraries`, `max_documents` | 2: `cash_registers`, `order_takers`, `kitchen_displays` |
-| Fechas | La emisión ya usa los tipos, planes y cupos del contrato y no fija fechas. El cálculo del primer periodo al activar todavía no está conectado | 2: motor de fechas (Fase 3) y su uso al activar (fases 4 a 6) |
+| Fechas | La emisión ya usa los tipos, planes y cupos del contrato y no fija fechas. El motor de fechas existe (sección 5), pero el primer periodo todavía no se calcula al activar | 2: uso del motor al activar en línea y al aprobar sin internet (fases 4 a 6) |
 | Renovación y mantenimiento | Deshabilitados: el servidor los rechaza | 3: renovación con fecha de pago, conversión de prueba a pago, compra de mantenimiento, editor de planes y propagación |
 | Transferencias | Solo desde el panel, por el propietario | 4: autoservicio y alertas; ajustes del flujo sin internet |
 | Panel y constancias | Pantallas actuales y constancias sin planes ni cupos | 5: pantallas nuevas, contenido de las constancias y despliegue en el VPS |

@@ -183,3 +183,17 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 12 | Las pruebas existentes siguen con el producto sintético; las nuevas usan `adel_pos`. El paso general a `adel_pos` (decisión 3 del propietario) se hace en la Fase 4. | Es la fase en la que el servidor empieza a negarse a firmar otro producto. |
 | 13 | Se quitó de `001_esquema_inicial.sql` el comentario de herencia de la tolerancia (decisión 1 del propietario). El de `license_limits` se quita en la Fase 4. | La migración `003` reemplaza esa regla. |
 | 14 | Sin dependencias nuevas de Composer en esta fase. | — |
+
+### Fase 3 — Motor de fechas
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `Domain\CalendarPeriod` no tiene reloj propio: recibe el instante de inicio. Quien lo llama lo toma del reloj de la aplicación, que es el que se sustituye en las pruebas. | Un componente puro se prueba con casos exactos. El «reloj inyectable» de la especificación es el de la aplicación. |
+| 2 | La hora local se convierte a UTC con las transiciones de la zona (`DateTimeZone::getTransitions`), no con el ajuste automático de PHP. | Para una hora que no existe, PHP la adelanta lo que dura el salto (02:30 pasa a 03:30). La decisión 6 del propietario es el primer instante después del salto (03:00). |
+| 3 | En una hora inexistente el resultado es el instante exacto del cambio, sin fracción de segundo. El ancla no cambia, y el periodo siguiente vuelve a su hora. | Es el primer instante válido. Lo contrario recorrería la hora ancla para siempre. |
+| 4 | Los meses se suman al mes **local** del instante de partida, y el día y la hora salen del ancla. | El día que cuenta es el de la zona del cliente: las 03:30Z del 1 de marzo son todavía 28 de febrero en Monterrey. |
+| 5 | En una perpetua con 0 meses, `updates_until` es el instante de inicio tal cual, sin pasar por la hora local. | Si la activación ocurre en la segunda vuelta de una hora repetida, recalcular esa hora local daría el primer instante, una hora **antes** de la activación. |
+| 6 | La prueba de «15 días» suma 15 fechas de calendario a la misma hora local. | Contrato, sección 5.1. A través de un cambio de horario no son 15 × 24 horas. |
+| 7 | Los casos exactos usan `America/Monterrey` y `America/Tijuana`. Las demás zonas (`America/Santiago`, `Australia/Lord_Howe`, `Europe/Madrid`) se comprueban contra una definición independiente de la regla, con los datos de zonas de la máquina. | Las reglas de Monterrey y Tijuana son estables. Los resultados de otras zonas dependen de la versión de los datos de zonas horarias instalada. |
+| 8 | Límite conocido: el mes de partida se toma de la fecha local del instante de partida. Si un cambio de horario hiciera inexistente la última hora del último día de un mes y el ancla cayera ahí, el periodo siguiente se contaría desde el mes siguiente. | Ninguna zona de México ni de Estados Unidos cambia de horario a medianoche. Se registra para la etapa 3, que encadena periodos al renovar. |
+| 9 | Sin dependencias nuevas de Composer en esta fase. | — |

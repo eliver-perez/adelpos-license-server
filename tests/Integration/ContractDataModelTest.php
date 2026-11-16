@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
 use AdelPos\License\Application\Actor;
-use AdelPos\License\Domain\{Protocol, Uuid};
+use AdelPos\License\Domain\{CalendarPeriod, Protocol, Uuid};
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
@@ -116,6 +116,40 @@ final class ContractDataModelTest extends TestCase
             // Updates for 0 months end at the activation itself.
             ["$start,updates_until='2026-11-16 06:30:00.123456'", "$start,updates_until='2027-05-16 06:30:00.123456'"],
             ["$start,$end", $start, "updates_until='2027-05-16 06:30:00'", "$start,updates_until='2026-11-16 06:29:59'", "expires_at='2026-12-16 06:30:00'"], 'perpetual');
+    }
+
+    public function testTheFirstPeriodOfTheDateEngineFitsTheDatabaseRulesForEveryLicenseType(): void
+    {
+        $owner = $this->fixture->owner;
+        $terms = [
+            'perpetual' => ['updates_months=0', 'updates_months=6', 'updates_months=12'],
+            'subscription' => ["billing_period='monthly'", "billing_period='quarterly'", "billing_period='semiannual'", "billing_period='annual'"],
+            'trial' => ["trial_duration='15d'", "trial_duration='1m'", "trial_duration='3m'"],
+        ];
+        // An ordinary instant with microseconds; the second 01:30 of a repeated hour; and a start whose next month falls in a missing hour.
+        $starts = [['America/Monterrey', '2026-11-16T06:30:00.123456Z'], ['America/Tijuana', '2027-11-07T09:30:00Z'], ['America/Tijuana', '2027-02-14T10:30:00.999999Z'], ['UTC', '2028-02-29T23:59:59.999999Z']];
+        $write = 'UPDATE licenses SET period_starts_at=?,expires_at=?,anchor_day=?,anchor_local_time=?,updates_until=? WHERE license_id=?';
+        $checked = 0;
+        foreach ($terms as $type => $assignments) {
+            $id = Uuid::bytes($this->license($type));
+            foreach ($assignments as $assignment) {
+                $owner->execute("UPDATE licenses SET $assignment WHERE license_id=?", [$id]);
+                $row = $owner->one('SELECT license_type,billing_period,trial_duration,updates_months FROM licenses WHERE license_id=?', [$id]);
+                foreach ($starts as [$zone, $start]) {
+                    $period = CalendarPeriod::firstPeriod($row, new \DateTimeImmutable($start), $zone);
+                    $values = [CalendarPeriod::sql($period['period_starts_at']), $period['expires_at'] === null ? null : CalendarPeriod::sql($period['expires_at']), $period['anchor_day'], $period['anchor_local_time'], CalendarPeriod::sql($period['updates_until']), $id];
+                    self::assertSame(0, $this->attempt($write, $values), "$type, $assignment, $zone, $start");
+                    ++$checked;
+                }
+            }
+        }
+        self::assertSame(40, $checked);
+        // What is stored is exactly what the engine produced, to the microsecond.
+        $period = CalendarPeriod::firstPeriod(['license_type' => 'trial', 'trial_duration' => '3m'], new \DateTimeImmutable('2026-11-16T06:30:00.123456Z'), 'America/Monterrey');
+        $owner->execute($write, [CalendarPeriod::sql($period['period_starts_at']), CalendarPeriod::sql($period['expires_at']), $period['anchor_day'], $period['anchor_local_time'], CalendarPeriod::sql($period['updates_until']), $id]);
+        $stored = $owner->one('SELECT period_starts_at,expires_at,anchor_day,anchor_local_time,updates_until FROM licenses WHERE license_id=?', [$id]);
+        self::assertSame(['2026-11-16 06:30:00.123456', '2027-02-16 06:30:00.123456', 16, '00:30:00.123456', '2027-02-16 06:30:00.123456'], [$stored['period_starts_at'], $stored['expires_at'], (int) $stored['anchor_day'], $stored['anchor_local_time'], $stored['updates_until']]);
+        self::assertSame('2027-02-16T06:30:00.123456Z', Protocol::utc($stored['expires_at']));
     }
 
     public function testActivationsUseServerIdAndRevisionsRecordTheirReasonAndSigningEnvironment(): void

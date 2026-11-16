@@ -91,6 +91,11 @@ final class RulesTest extends TestCase
         self::assertSame(6, $terms::DEFAULT_UPDATES_MONTHS);
         self::assertSame(['cash_registers', 'order_takers', 'kitchen_displays'], array_keys($terms::LIMITS));
         self::assertSame(999, $terms::MAX_LIMIT);
+        // Calendar months of each billing period, and length of each trial (contract, section 5.1).
+        self::assertSame(['monthly' => 1, 'quarterly' => 3, 'semiannual' => 6, 'annual' => 12], $terms::BILLING_MONTHS);
+        self::assertSame($terms::BILLING_PERIODS, array_keys($terms::BILLING_MONTHS));
+        self::assertSame(['15d' => ['days' => 15], '1m' => ['months' => 1], '3m' => ['months' => 3]], $terms::TRIAL_LENGTHS);
+        self::assertSame($terms::TRIAL_DURATIONS, array_keys($terms::TRIAL_LENGTHS));
         // Only subscriptions have grace days: 5.
         self::assertSame([0, 5, 0], array_map([$terms, 'graceDays'], $terms::TYPES));
     }
