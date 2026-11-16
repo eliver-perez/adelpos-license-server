@@ -1,0 +1,328 @@
+# Avance — Etapa 1: copia base y renombre
+
+Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no se implementa en esta etapa): `CONTRATO_LICENCIAS_ADEL_POS.md` V1.0.
+
+| Fase | Estado |
+| --- | --- |
+| 0 — Verificación contra el código | **Cerrada.** Línea base: 147 pruebas, 20 904 aserciones, 1 error con MySQL 8.0.46. El propietario decidió corregirlo en la Fase 1. |
+| 1 — Repositorio y copia limpia | **Cerrada.** 161 pruebas, 20 994 aserciones, todas OK. |
+| 2 — Renombre de la identidad interna | Pendiente |
+| 3 — Esquema inicial consolidado | Pendiente |
+| 4 — Retirar lo exclusivo de AIDEX | Pendiente |
+| 5 — Marca y textos | Pendiente |
+| 6 — Documentación y cierre | Pendiente |
+
+---
+
+## Fase 0 — Verificación contra el código (sin cambios)
+
+Fecha: 2026-11-16. No se modificó la copia de AIDEX: todas las ejecuciones se hicieron sobre una copia temporal.
+
+### 0.1 Origen
+
+| Dato | Valor |
+| --- | --- |
+| Ruta de la copia de AIDEX (solo lectura) | `/Applications/XAMPP/xamppfiles/htdocs/adelposlicensing/aidexlicense` |
+| Último commit del repositorio de AIDEX | `ef537cde356c101e56349bb45cba6e5769fb681c` — 2026-11-03 21:27:52 -0600 — «Guardar Dispositivo de Confianza 2FA» |
+| Fechas de los archivos (sin `.git`, `vendor/`, `node_modules/`) | del 2026-09-25 19:00 al 2026-11-03 21:24 |
+| Fecha de `composer.lock` | 2026-10-21 20:18 |
+| SHA-256 de `composer.lock` | `7f996783b79412c73ad00d23e5354a5141517ca93da5d294370f353aab9f1730` |
+
+### 0.2 Línea base de pruebas
+
+La copia temporal se hizo con `rsync` sin `.git/`; `diff -rq` contra el original no mostró diferencias. Tras un reinicio del equipo, que borró el directorio temporal, se volvió a copiar: idéntica y con el mismo SHA-256 de `composer.lock`.
+
+Entorno: PHP 8.5.7, PHPUnit 12.5.36 y **MySQL 8.0.46**, la misma versión del VPS. MySQL está instalado por el propietario en `/usr/local/mysql`, con socket `/tmp/mysql.sock` y usuario `root` exclusivo de pruebas. El servidor estaba vacío: solo las bases del sistema. Nginx 1.31.3, PHP-FPM 8.5.7 y `pdftotext` 26.08.0.
+
+**Línea base medida (2026-11-16), copia sin cambios:**
+
+| Conjunto | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| `unit` (`tests/Unit`) | 57 | 20 116 | OK |
+| `integration` (`tests/Integration`) | 90 | 788 | 89 OK, **1 error** (`BackupTest`) |
+| **Total de `phpunit.xml`** | **147** | **20 904** | **146 OK, 1 error**, sin omisiones ni advertencias. Duración: 1 min 5 s. |
+
+**Diagnóstico en una segunda copia temporal** (la de la línea base no se tocó): al quitar solo la opción `--no-login-paths` de `src/Infrastructure/MySqlFiles.php`, la suite completa da **147 pruebas y 20 937 aserciones, todas OK**. `BackupTest` pasa de 2 aserciones antes del error a 35. Detalle en 0.7, punto 1.
+
+Limpieza: después de cada corrida quedan 0 bases y 0 usuarios `aibid_test_*` en MySQL, y ninguna carpeta temporal `aibid-*`.
+
+Pruebas por archivo:
+
+| Unitarias | Pruebas | Integración | Pruebas |
+| --- | --- | --- | --- |
+| ActivationCodeTest | 2 | ActivationsTest | 20 |
+| EncryptedArchiveTest | 3 | AdministrationTest | 17 |
+| OfflineRequestTest | 15 | BackupTest | 1 |
+| ProductionConfigTest | 14 | CommercialDeliveryTest | 7 |
+| ProtectedRecordTest | 1 | CommercialMigrationTest | 1 |
+| ProtocolTest | 13 | HttpApiTest | 2 |
+| RulesTest | 9 | OfflineTest | 19 |
+| | | ProductionHttpTest | 3 |
+| | | TrustedDevicesHttpTest | 3 |
+| | | TrustedDevicesTest | 17 |
+
+**Excluidas por depender del cliente real de AIDEX (`../expediente`):**
+
+| Archivo | Motivo |
+| --- | --- |
+| `tests/System/RealClientTest.php` | 2 pruebas. Necesita `TEST_CLIENT_SOURCE` con el código Go del cliente AIDEX. No está en ningún `testsuite` de `phpunit.xml`, así que no forma parte de los 147. |
+| `tests/RealClientBridge.php` | Auxiliar de la prueba anterior; no contiene pruebas. |
+| `tests/client-bridge_test.go` | Prueba Go que se ejecuta dentro de la copia del cliente AIDEX. |
+
+Lo que necesita la integración, además de MySQL 8:
+
+| Requisito | Pruebas que lo usan | Disponible aquí |
+| --- | --- | --- |
+| `TEST_MYSQL_DSN` (+ `TEST_MYSQL_USER`/`TEST_MYSQL_PASSWORD` si no es `root` sin contraseña) | todas las de integración | Sí: MySQL 8.0.46 en `/tmp/mysql.sock` |
+| `mysql` y `mysqldump` de MySQL 8 (`TEST_MYSQL_BIN`, `TEST_MYSQLDUMP_BIN`) | BackupTest | Sí: `/usr/local/mysql/bin/` (8.0.46) |
+| `php-fpm`, `nginx`, `openssl` | ProductionHttpTest, TrustedDevicesHttpTest | Sí |
+| `pdftotext` (`TEST_PDFTOTEXT_BIN`) | pruebas de constancias PDF | Sí |
+
+### 0.3 Verificador del contrato heredado
+
+```
+$ go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+OK: 5 JWS, 3 proofs, 3 offline requests, 3 negative JWS; PHP/Go signatures match.
+Client entitlement/state cases are specified in fixtures, not executed by this crypto oracle.
+```
+
+Resultado esperado: **OK**. También pasa `php contracts/v1/generate-fixtures.php --check` («Verified 5 JWS, 3 proofs, 3 offline requests and 3 negative JWS fixtures»).
+
+### 0.4 Versiones disponibles en este equipo
+
+| Herramienta | Versión | Nota |
+| --- | --- | --- |
+| PHP (CLI y FPM) | 8.5.7 | Es la única instalada. Los alias de Homebrew `php@8.1`, `php@8.3`, `php@8.4` y `php@8.5` apuntan todos a 8.5.7. |
+| Extensiones | sodium (libsodium 1.0.22), pdo_mysql (mysqlnd 8.5.7), mbstring (oniguruma 6.9.10), gd 2.3.3, xmlwriter (libxml 2.9.13), openssl 3.6.2, intl (ICU 78.3), ctype, curl, dom, fileinfo, iconv, json, zip | Están todas las que exige `composer.json`. |
+| Composer | 2.8.6 | Muestra avisos de obsolescencia propios bajo PHP 8.5; no afectan. |
+| MySQL | 8.0.46 (MySQL Community Server, paquete oficial) | Instalado por el propietario en `/usr/local/mysql`. La MariaDB 10.4.21 de XAMPP no se usa y debe estar detenida, porque ambas usan el puerto 3306. Ver 0.7. |
+| Go | 1.25.5 | Las pruebas de AIDEX registran 1.27.1; el verificador funciona con 1.25.5. |
+| Node / npm | 22.15.0 / 11.6.3 | |
+| Nginx | 1.31.3 | |
+| OpenSSL | 3.6.3 | |
+| Google Chrome | 157.0.8103.78 | Para Playwright y `bin/render-brand.cjs`. |
+| Poppler `pdftotext` | 26.08.0 | |
+
+**Versiones del VPS (confirmadas por el propietario el 2026-11-16):**
+
+| Componente | VPS (Ubuntu 24.04) | Este equipo | Comprobación |
+| --- | --- | --- | --- |
+| PHP / PHP-FPM | **8.3.6** | 8.5.7 | `composer.json` exige `php ^8.3` y todos los paquetes de `composer.lock` admiten 8.3 (PHPUnit 12.5 pide `>=8.3`). Una búsqueda en `src/`, `bin/`, `public/`, `templates/`, `tests/` y `contracts/` no encontró sintaxis ni funciones de PHP 8.4 u 8.5. No se pueden ejecutar pruebas en 8.3 en este equipo. |
+| MySQL | **8.0.46** (`8.0.46-0ubuntu0.24.04.5`) | 8.0.46 | Misma versión. Los clientes `mysql`/`mysqldump` 8.0 no aceptan `--no-login-paths` (ver 0.7, punto 1). |
+| Nginx | **1.24.0** | 1.31.3 | `deploy/nginx.conf.example` y `nginx-http.conf.example` no usan directivas posteriores a 1.24 (por ejemplo, no usan `http2 on`). Las pruebas con Nginx real corren aquí con 1.31.3. |
+
+### 0.5 Inventario de referencias a la identidad de AIDEX
+
+Búsqueda sin distinguir mayúsculas de: `aibid`, `aidex`, `gestor_documental`, `expediente` (incluye `expedientes`), `licensing.aidex.com.mx`, `linked_libraries`, `managed_libraries`, `ocr` (como palabra completa) y `review_workflow`. Se excluyen `.git/` y `vendor/`. Resultado: **164 archivos**. De ellos, **139 entran en la lista de permitidos de la Fase 1** y deben limpiarse en las fases 2 a 6; los otros 25 no se copian.
+
+Clasificación: **código** (`src/`, `public/`, `templates/`, `bin/`, `database/`, scripts de `contracts/`), **configuración** (`config/`, `deploy/`, `composer.*`, `package*.json`, `phpunit.xml`), **pruebas** (`tests/`), **documentación** (`*.md`) y **artefactos** (archivos generados, logos, `var/`, cachés).
+
+#### Lo que se copia (139 archivos)
+
+| Categoría | Término | Archivos | Ocurrencias | Fase que lo resuelve |
+| --- | --- | --- | --- | --- |
+| Código | `aibid` | 93 | 196 | 2 (namespace `Aibid\`, HKDF, respaldos, bloqueos) |
+| Código | `aidex` | 15 | 32 | 2 y 5 |
+| Código | `gestor_documental` | 6 | 17 | 3 y 4 |
+| Código | `expediente(s)` | 7 | 12 | 3, 4 y 5 |
+| Código | `review_workflow` | 3 | 5 | 3 y 4 |
+| Código | `linked_libraries`, `managed_libraries`, `ocr` | 2 c/u | 2 c/u | 3 y 4 |
+| Código | `licensing.aidex.com.mx` | 1 | 1 | 2 |
+| Configuración | `aidex` | 10 | 41 | 2 |
+| Configuración | `aibid` | 4 | 6 | 2 |
+| Configuración | `licensing.aidex.com.mx` | 3 | 6 | 2 |
+| Pruebas | `aibid` | 26 | 135 | 2 |
+| Pruebas | `aidex` | 9 | 18 | 2 y 5 |
+| Pruebas | `gestor_documental` | 13 | 33 | 3 (producto sintético) |
+| Pruebas | `expediente(s)` | 7 | 12 | 3 |
+| Pruebas | `review_workflow` | 5 | 9 | 3 |
+| Pruebas | `ocr` | 6 | 8 | 3 |
+| Pruebas | `linked_libraries` | 5 | 7 | 3 |
+| Pruebas | `managed_libraries` | 5 | 5 | 3 |
+| Pruebas | `licensing.aidex.com.mx` | 2 | 3 | 2 |
+| Documentación | `aidex` | 5 | 117 | 6 (se reescriben) |
+| Documentación | `aibid` | 6 | 33 | 6 |
+| Documentación | `licensing.aidex.com.mx` | 3 | 14 | 6 |
+| Documentación | módulos (`expediente`, `gestor_documental`, etc.) | 1–4 | 18 en total | 6 |
+| Artefactos | módulos de AIDEX en `contracts/v1/fixtures/vectors.json` | 1 | 39 | 2 (se regeneran) |
+
+Detalle de los archivos fuera de `aibid`:
+
+- **Código:**
+  - `aidex`: `bin/build-release.php`, `bin/configure.php`, `bin/grants.php`, `bin/render-brand.cjs`, `public/index.php`, `src/Application/CatalogService.php`, `src/Http/ApiKernel.php`, `src/Infrastructure/Crypto.php`, `src/Infrastructure/Totp.php`, `templates/certificate-pdf.php`, `templates/dashboard.php`, `templates/layout.php`, `templates/products.php`, `templates/verify-document.php`, `database/migrations/005_aidex_identity.sql`.
+  - Módulos de AIDEX: `database/migrations/002_aibid_catalog.sql`, `database/migrations/005_aidex_identity.sql`, `contracts/v1/generate-fixtures.php`, `src/Application/CatalogService.php`, `templates/certificate-pdf.php`, `templates/layout.php`, `templates/product-form.php`, `templates/products.php`.
+  - `licensing.aidex.com.mx`: `bin/configure.php`.
+- **`aibid` en código, por carpeta:** `bin/` 15 archivos (59), `src/Application/` 13 (39), `src/Infrastructure/` 15 (35), `templates/` 28 (29), `src/Http/` 4 (12), `src/Domain/` 11 (11), `src/App.php` (4), `src/Config.php` (2), `contracts/` 2 (2), `database/` 2 (2), `public/index.php` (1).
+- **Configuración:** `composer.json`, `package.json`, `package-lock.json`, `config/local.example.php`, `deploy/aidex-maintenance.service`, `deploy/aidex-maintenance.sh`, `deploy/aidex-maintenance.timer`, `deploy/nginx.conf.example`, `deploy/nginx-http.conf.example`, `deploy/php-fpm-pool.conf.example`.
+- **Pruebas:** `tests/FrozenClock.php`, `tests/MySqlFixture.php`, `tests/NativeStackFixture.php`, los 10 archivos de `tests/Integration/`, los 7 de `tests/Unit/`, `tests/activation-worker.php`, `tests/offline-worker.php`, `tests/race-worker.php`, `tests/prepare-panel.php`, `tests/prepare-trusted-panel.php`, `tests/panel.cjs`, `tests/offline-panel.cjs`.
+- **Documentación:** `README.md`, `ARCHITECTURE.md`, `SCHEMA.md`, `SECURITY.md`, `OPERATIONS.md`, `TEST_PLAN.md`, `DEPLOY_UBUNTU_24_04.md`.
+
+#### Lo que no se copia (25 archivos con referencias)
+
+| Categoría | Archivos |
+| --- | --- |
+| Documentación (10) | `ACTUALIZACION-FASE1.md`, `API.md`, `DECISIONS.md`, `DESPLIEGUE-PRODUCCION.md`, `DISPOSITIVOS-DE-CONFIANZA.md`, `INFORME-TRANSICION-AIDEX.md`, `INTEGRACION-LICENCIAMIENTO.md`, `LICENCIAMIENTO-COMERCIAL-FASE1.md`, `LICENSE_CONTRACT.md`, `STATUS.md`, `prompt_2_servidor_licencias_php_v1_2.md` |
+| Configuración local con secretos (1) | `config/local.php` (permisos 600; no se abrió) |
+| Pruebas del cliente real (3) | `tests/System/RealClientTest.php`, `tests/RealClientBridge.php`, `tests/client-bridge_test.go` |
+| Logos de AIDEX (4 con referencias) | `public/assets/brand/logo-h.svg`, `logo-dark-h.svg`, `logo-v.svg`, `logo-dark-v.svg`. La carpeta también tiene `logo-h-pdf.png`, `logo-h-pdf.json` y `.DS_Store`. |
+| Artefactos (6) | `var/client-integration-report.json`, tres `.sha256` de `var/releases/`, `.phpunit.cache/test-results`, `node_modules/.package-lock.json` |
+
+Otros artefactos sin referencias en texto, que tampoco se copian: `var/releases/` (3 paquetes `.tar.gz`), `var/screenshots/` (12 PNG), `var/phase1-evidence/` (3 PDF), `.DS_Store` en `public/`, `public/assets/` y `public/assets/brand/`. No hay carpetas `__MACOSX`.
+
+### 0.6 Logos de AD-EL POS
+
+- `adelpos-license/public/assets/brand/` **todavía no existe** en el repositorio nuevo. Por indicación del propietario, los logos se copian sin cambios desde `./logos-adelpos/` en la Fase 5.
+- Archivos disponibles en `./logos-adelpos/`:
+
+| Archivo | Formato | Tamaño | SHA-256 |
+| --- | --- | --- | --- |
+| `adel-pos-tema-claro.png` | PNG con transparencia | 2048 × 682 | `fece00410137a618703c5921d2ce2aac5ef06227836b75505201e58125e05434` |
+| `adel-pos-tema-oscuro.png` | PNG con transparencia | 2048 × 682 | `82e1a563a24ebe59fa3676fbb8cae430da4ddc263034583a0f40bbd985e29116` |
+
+- Las plantillas de AIDEX usan cuatro SVG (horizontal claro, horizontal oscuro, vertical claro y vertical oscuro) y un PNG para las constancias PDF, generado desde el SVG con `bin/render-brand.cjs`. Ver la discrepancia 5.
+
+### 0.7 Discrepancias y pendientes
+
+1. **`BackupTest` falla con MySQL 8.0.46.** **Decisión del propietario (2026-11-16):** corregirlo en la Fase 1, en un commit propio después de la copia base. Ver 1.5.
+   - **Causa:** `src/Infrastructure/MySqlFiles.php`, línea 51, pasa `--no-login-paths` a `mysqldump` (respaldo) y a `mysql` (restauración). Esa opción **no existe en los clientes de MySQL 8.0**, incluida la 8.0.46 del VPS: `mysqldump: [ERROR] unknown option '--no-login-paths'`. AIDEX se probó con MySQL 8.4.11, que sí la tiene.
+   - **Efecto:** `bin/backup.php --action=create` y la restauración en base vacía fallan con MySQL 8.0. La prueba lo reporta como «No se pudo completar el comando (RuntimeException)».
+   - **Comprobación:** en una segunda copia temporal, sin esa opción, la suite completa pasa: 147 pruebas y 20 937 aserciones.
+   - **Para qué servía la opción:** impide que `mysql`/`mysqldump` lean credenciales guardadas en `~/.mylogin.cnf`, que se leen aun con `--defaults-file`. En MySQL 8.0 esa protección debe lograrse de otra forma; por ejemplo, con la variable de entorno `MYSQL_TEST_LOGIN_FILE` apuntando a un archivo inexistente.
+   - **Informativo:** AIDEX convive en el mismo VPS con MySQL 8.0.46, así que su comando de respaldo probablemente también falle allí. No se modifica AIDEX en esta etapa.
+2. **MySQL 8 de pruebas:** resuelto.
+   - **Intento descartado 1:** el paquete oficial 8.0.46 descargado al directorio temporal no se pudo ejecutar por el control de permisos de la herramienta, y se borró con el reinicio.
+   - **Intento descartado 2:** la MariaDB 10.4.21 de XAMPP no sirve como línea base, por cuatro motivos:
+     - no tiene `performance_schema.data_locks` ni `data_lock_waits`, que usan las pruebas de concurrencia de `ActivationsTest`, `AdministrationTest` y `OfflineTest`;
+     - trata distinto las 37 restricciones `CHECK`, las columnas `JSON` y las columnas generadas de las migraciones;
+     - su `mysqldump` no es el de MySQL 8;
+     - no está aislada: tiene 33 bases de otros proyectos.
+   - **Solución:** el propietario instaló MySQL 8.0.46 oficial en `/usr/local/mysql` y detuvo la MariaDB de XAMPP, porque ambas usan el puerto 3306. La primera instalación no arrancó por ese choque y dejó a `root` sin la contraseña elegida; se reinstaló y funciona.
+   - **Si se vuelve a encender la MariaDB de XAMPP,** hay que mover MySQL 8 a otro puerto, por ejemplo el 3307.
+3. **Versiones del VPS:** resuelto. PHP 8.3.6, MySQL 8.0.46 y Nginx 1.24.0 en Ubuntu 24.04 (ver 0.4).
+4. **Solo PHP 8.5.7 en este equipo.** La especificación lo permite. La compatibilidad con 8.3.6 se comprueba con `composer.json`/`composer.lock` y con una búsqueda de sintaxis nueva, pero no ejecutando las pruebas en 8.3.
+5. **Nombre del paquete npm.** La tabla de la Fase 2 pide `adelpos/license-server` para Composer y npm. Es válido en Composer, pero **npm lo rechaza** («name can only contain URL-friendly characters»). **Decisión del propietario (2026-11-16):** en npm se usa `@adelpos/license-server`; en Composer, `adelpos/license-server`.
+6. **Logos.** AD-EL POS tiene dos PNG horizontales (claro y oscuro) y no tiene SVG ni versión vertical o ícono. En la Fase 5:
+   - las referencias horizontales se ajustarán a los PNG;
+   - **decisión del propietario (2026-11-16):** por ahora no hay versiones verticales; se dejan fuera;
+   - sin SVG no se puede regenerar el PNG para PDF con `bin/render-brand.cjs`. **Decisión del propietario (2026-11-16):** las constancias PDF usan `adel-pos-tema-claro.png` tal cual, sin modificar sus bytes, en lugar del nombre en texto. Se registrará en `DECISIONS.md` en la Fase 6.
+7. **`INTEGRACION-LICENCIAMIENTO.md`** existe en AIDEX y no aparece ni en la lista de permitidos ni en la de excluidos de la Fase 1. Como la Fase 1 copia solo lo permitido, **no se copia**.
+8. Informativo: la documentación de AIDEX registra corridas anteriores (por ejemplo, 96 pruebas/571 aserciones o 127/20 802). La línea base vale solo con lo medido aquí: 147 pruebas y 20 904 aserciones en `phpunit.xml`.
+
+### 0.8 Comandos para reproducir
+
+```sh
+# Copia temporal (el original no se toca)
+rsync -a --exclude '.git/' aidexlicense/ "$TMP/aidex/"
+cd "$TMP/aidex"
+
+# Verificador del contrato heredado
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOCACHE="$TMP/go-cache" \
+  go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+php contracts/v1/generate-fixtures.php --check
+
+# Unitarias
+php vendor/bin/phpunit --testsuite unit
+
+# Suite completa contra el MySQL 8.0.46 de pruebas de este equipo
+# (MariaDB de XAMPP detenida; la contraseña de root de pruebas no se escribe en el repositorio)
+export TEST_MYSQL_PASSWORD='<contraseña de root de pruebas>'
+env TEST_MYSQL_DSN='mysql:unix_socket=/tmp/mysql.sock;charset=utf8mb4' \
+    TEST_MYSQL_USER=root \
+    TEST_MYSQL_BIN=/usr/local/mysql/bin/mysql TEST_MYSQLDUMP_BIN=/usr/local/mysql/bin/mysqldump \
+    TEST_FPM_BIN=/opt/homebrew/sbin/php-fpm TEST_NGINX_BIN=/opt/homebrew/bin/nginx \
+    TEST_OPENSSL_BIN=/opt/homebrew/opt/openssl@3/bin/openssl TEST_PDFTOTEXT_BIN=/opt/homebrew/bin/pdftotext \
+    php vendor/bin/phpunit
+
+# Residuos después de las pruebas (debe dar 0 y 0)
+php -r '$p=new PDO("mysql:unix_socket=/tmp/mysql.sock","root",getenv("TEST_MYSQL_PASSWORD"));
+  echo $p->query("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME LIKE \"aibid\\_test\\_%\"")->fetchColumn(), " ",
+       $p->query("SELECT COUNT(*) FROM mysql.user WHERE user LIKE \"aibid\\_test\\_%\"")->fetchColumn(), "\n";'
+
+# Inventario: búsqueda sin distinguir mayúsculas, sin .git ni vendor
+grep -rIciE --exclude-dir=.git --exclude-dir=vendor \
+  -e 'aibid|aidex|gestor_documental|expediente|licensing\.aidex\.com\.mx|linked_libraries|managed_libraries|\bocr\b|review_workflow' .
+```
+
+---
+
+## Fase 1 — Repositorio y copia limpia
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### 1.1 Repositorio
+
+Repositorio git independiente en `adelpos-license/`, rama `main`. La carpeta de trabajo superior no tiene git.
+
+| Commit | Contenido |
+| --- | --- |
+| `3c0c87b` | **Copia base desde AIDEX (sin secretos ni artefactos).** Solo la lista de permitidos, más `.gitignore` ampliado y `var/.gitkeep`. |
+| `295961f` | Compatibilidad de respaldos con MySQL 8.0 (ver 1.5) |
+| `50b22e9` | Funcionar sin los logos de AIDEX (ver 1.5) |
+| commit de cierre | Revisión de secretos, su prueba, sección en `README.md` y este registro |
+
+### 1.2 Copia
+
+- Se copiaron 169 archivos de AIDEX según la lista de permitidos. Todos son **idénticos byte a byte** al original (comprobado con `cmp`), y el SHA-256 de `composer.lock` coincide.
+- Se comprobó que no hay `.DS_Store`, `__MACOSX`, `config/local.php`, `var/` (salvo `.gitkeep`), `vendor/`, `node_modules/`, `.phpunit.cache/`, logos de AIDEX, pruebas del cliente real, ni archivos `*.key` o `*.pem`.
+- `tests/System/` no existe, porque su única prueba es del cliente real.
+- `INTEGRACION-LICENCIAMIENTO.md` no se copió (0.7, punto 7).
+
+### 1.3 `.gitignore`
+
+Al original se agregaron `/var/keys/`, `*.key`, `*.pem`, `*.aibidbackup`, `*.adelposbackup` y `__MACOSX/`. Ya cubría `config/local.php`, `var/*` (excepto `.gitkeep`), `vendor/`, `node_modules/`, `.phpunit.cache/` y `.DS_Store`. Se verificó con `git check-ignore` que cada caso queda ignorado y que `var/.gitkeep` sí se versiona. La extensión `*.aibidbackup` se retira en la Fase 2, junto con el formato heredado.
+
+### 1.4 Revisión de secretos
+
+- `bin/check-secrets.php`. Revisa el índice de git y los archivos nuevos no ignorados, y falla si encuentra:
+  - un valor no vacío en `DB_PASSWORD` o `*_KEY` (en PHP, por análisis de tokens; en otros archivos, por patrones de asignación);
+  - llaves privadas PEM, o semillas o llaves secretas Ed25519;
+  - archivos bajo `var/keys/`, o archivos `*.key` o `*.pem`.
+- Nunca imprime el valor encontrado. No necesita `composer install`.
+- Excepción: las semillas de `contracts/v1/fixtures/vectors.json` se aceptan solo si son exactamente `sha256('AIBIDLICENSE PUBLIC TEST ONLY V1 ' + nombre)`, el prefijo público de prueba. En la Fase 2 cambia junto con las semillas.
+- La regla de claves de configuración no revisa `public/assets/vendor/`, que es Bootstrap de terceros y define constantes de teclado como `ESCAPE_KEY`. Las reglas de llaves sí lo revisan.
+- `tests/Unit/SecretsCheckTest.php` (14 pruebas). Cubre:
+  - un repositorio limpio con marcadores vacíos y semillas públicas;
+  - 11 tipos de hallazgo, incluido un archivo nuevo sin agregar;
+  - un secreto en el índice aunque la copia de trabajo esté limpia;
+  - el propio repositorio sin hallazgos.
+- Resultado antes de cada commit de la fase: «sin hallazgos».
+- Documentada en `README.md`, con un gancho `pre-commit` opcional.
+
+### 1.5 Ajustes necesarios fuera de la copia
+
+1. **Respaldos con MySQL 8.0** (decisión del propietario; 0.7, punto 1). `src/Infrastructure/MySqlFiles.php`:
+   - se quita `--no-login-paths`;
+   - las utilidades se ejecutan con `MYSQL_TEST_LOGIN_FILE` apuntando a una ruta inexistente, y con ninguna otra variable de entorno.
+
+   Comprobado con el cliente 8.0.46 y `--print-defaults`:
+   - un `.mylogin.cnf`, por la variable o por `HOME`, se lee aun con `--defaults-file`, y sus valores sustituyen a los del archivo privado;
+   - con la variable apuntando a una ruta inexistente, no se lee ninguno.
+
+   Verificado sobre la copia de AIDEX con los logos: 147 pruebas, 20 937 aserciones, OK.
+2. **Funcionar sin los logos de AIDEX.** La Fase 1 no copia los logos, y sin ellos fallaban 7 pruebas: 5 errores al generar constancias PDF y 2 fallas en `ProductionHttpTest`.
+   - `src/Infrastructure/CertificatePdf.php` y `templates/certificate-pdf.php`: si no hay archivos de marca, la constancia muestra el nombre en texto. Es el criterio de la Fase 5 cuando faltan logos. Si existen, se conservan las comprobaciones de integridad.
+   - `tests/Integration/ProductionHttpTest.php`: la comprobación de recursos estáticos usa `app.css` y `app.js` en lugar de los 4 SVG de AIDEX. **Prueba sustituida parcialmente:** son 8 aserciones menos. **Pendiente para la Fase 5:** volver a comprobar la marca con los logos de AD-EL POS.
+   - Mientras tanto, el panel muestra imágenes rotas donde AIDEX tenía logos. Las plantillas se cambian en la Fase 5.
+
+### 1.6 Pruebas de la fase
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Línea base de AIDEX (Fase 0) | 147 | 20 904 | 146 OK, 1 error (`BackupTest`) |
+| AIDEX + corrección de MySQL 8.0 (copia de diagnóstico) | 147 | 20 937 | OK |
+| Copia pura en el repositorio (`3c0c87b`) | 147 | 20 822 | 5 errores y 2 fallas por los logos ausentes |
+| Tras «Funcionar sin los logos de AIDEX» (`50b22e9`) | 147 | 20 929 | OK |
+| **Cierre de la Fase 1** | **161** | **20 994** | **OK**: unitarias 71/20 181, integración 90/813, sin omisiones ni advertencias |
+
+Diferencias contra la línea base, justificadas:
+- **+14 pruebas y +65 aserciones:** `SecretsCheckTest` es nueva.
+- **−8 aserciones:** la sustitución parcial en `ProductionHttpTest` (1.5, punto 2).
+- **+33 aserciones:** `BackupTest` llega al final con MySQL 8.0.
+- No hay pruebas eliminadas. Las 2 del cliente real nunca estuvieron en `phpunit.xml`.
+
+Otras comprobaciones:
+- `composer install` funciona y no modifica `composer.lock`.
+- El verificador Go da «OK: 5 JWS, 3 proofs, 3 offline requests, 3 negative JWS».
+- `php contracts/v1/generate-fixtures.php --check` da OK.
+- `php bin/check-secrets.php` no encuentra nada.
+- En MySQL quedan 0 bases y 0 usuarios de prueba.

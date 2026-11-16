@@ -67,6 +67,28 @@ env TEST_MYSQL_DSN='mysql:unix_socket=/ruta/mysql.sock;charset=utf8mb4' php vend
 
 Las pruebas crean bases y usuarios aleatorios `aibid_test_*`, aplican los permisos reales de aplicación y eliminan sus propios datos al finalizar. No apuntarlas a producción. La integración de respaldo necesita `mysql`/`mysqldump` de MySQL en PATH o `TEST_MYSQL_BIN`/`TEST_MYSQLDUMP_BIN` explícitos. [TEST_PLAN.md](TEST_PLAN.md) contiene reproducción y evidencia: 96 pruebas PHP/571 aserciones, más 2 pruebas del cliente real y stack HTTPS/83 aserciones. Go se usa para el oráculo y para ejecutar una copia temporal del cliente AIDEX real: **el servidor no ejecuta Go ni requiere Go en el VPS**.
 
+## Revisión de secretos antes de cada commit
+
+Antes de cada commit se ejecuta:
+
+```sh
+php bin/check-secrets.php
+```
+
+Revisa lo que entraría al repositorio: el contenido del índice de git y los archivos nuevos que no están ignorados. Termina con error (código 1) si encuentra:
+
+- un valor no vacío en `DB_PASSWORD` o en cualquier clave `*_KEY`;
+- una llave privada PEM, o una semilla o llave secreta Ed25519;
+- archivos bajo `var/keys/`, o archivos `*.key` o `*.pem`.
+
+Muestra la ubicación de cada hallazgo, nunca su valor. Las llaves de los archivos de prueba del contrato son públicas a propósito: se aceptan solo si su semilla es exactamente la derivada del prefijo público de prueba. No necesita `composer install`. `tests/Unit/SecretsCheckTest.php` comprueba cada caso.
+
+Para que git la ejecute automáticamente en tu copia (opcional; el gancho no se versiona):
+
+```sh
+printf '#!/bin/sh\nexec php bin/check-secrets.php\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+```
+
 ## Documentación
 
 | Documento | Contenido |
