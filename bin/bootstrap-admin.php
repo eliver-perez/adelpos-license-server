@@ -10,5 +10,5 @@ consoleRun(function (): void {
     $app = AdelPos\License\App::boot();
     $app->auth->bootstrap($options['login'], $options['name'], $password);
     sodium_memzero($password);
-    fwrite(STDOUT, "Superadministrador creado. Ingresa al panel y configura MFA para continuar.\n");
+    fwrite(STDOUT, "Superadministrador creado. Ingresa al panel y configura la verificación en dos pasos para continuar.\n");
 });

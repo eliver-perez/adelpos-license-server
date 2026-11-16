@@ -1,191 +1,186 @@
-# Operación del panel y despliegue previsto
+# Operación del servidor de licencias de AD-EL POS
 
-Las etapas 2–4 incluyen panel administrativo, API online, gestión CLI de firmantes y operación offline con transferencias. Se verificaron con MySQL 8.4.11 aislado y PHP 8.5.7 CLI; no se modificaron XAMPP ni sus bases y no se desplegó en un VPS. La integración del cliente real, restauración operativa completa y publicación corresponden a etapa 5. Las secciones 7–9 contienen los pasos ejecutables actuales.
+Cómo configurar, operar, respaldar y verificar el servidor. La instalación paso a paso en Ubuntu 24.04 está en [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md); las decisiones, en [DECISIONS.md](DECISIONS.md); el contrato con AD-EL POS, en [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
 
-## 1. Entorno observado
+> **Herencia temporal.** El motor de licencias todavía es el heredado: contenido `LIC-V1`/`lic+jws`, huella del equipo, una instalación por licencia, 15 días de tolerancia y límites heredados. Cada regla fija está marcada en el código con `HEREDADO:` y listada en [AVANCE.md](AVANCE.md) (Fase 4, 4.2). Se reemplaza según el contrato así:
+>
+> | Etapa | Qué cambia en la operación |
+> | --- | --- |
+> | 2 | Contenido de la licencia, rutas, prueba de posesión, archivos `.licreq`/`.lic` y entornos de firma `test`/`production` |
+> | 3 | Planes, tipos de licencia (incluida la prueba), fechas de calendario, renovación y propagación de planes |
+> | 4 | Transferencia por autoservicio, alertas y ajustes del flujo sin internet |
+> | 5 | Pantallas nuevas del panel, contenido de las constancias y despliegue en el VPS |
 
-Inspección local del 25 de septiembre de 2026:
+## 1. Requisitos
 
-| Componente | Observado | Implicación |
-| --- | --- | --- |
-| Directorio inicial | Solo el documento de requisitos; sin repositorio Git | El diseño se agregó como archivos; no hay historial Git creado |
-| PHP encontrado en PATH | PHP 8.5.7 CLI, Homebrew | Supera 8.3; disponibles Sodium y PDO MySQL |
-| PHP de XAMPP | PHP 8.1.6, con advertencia de carga de `intl` | No cumple el mínimo del proyecto |
-| Cliente de BD de XAMPP | MariaDB 10.4.21 | No demuestra presencia de MySQL 8; no es el motor de validación requerido |
-| Go | 1.25.5 | Disponible para el verificador independiente de fixtures, no para backend |
-| Composer | 2.8.6; dependencias fijadas en composer.lock | OTPHP, QR y PHPUnit instalados para etapa 2 |
-
-La verificación de etapa 2 utilizó una instancia temporal independiente de MySQL 8.4.11 por socket Unix, sin puerto TCP. Cada prueba crea sus propios datos sintéticos. El binario CLI no confirma qué versión atiende Apache/FPM; verificar PHP-FPM 8.3+ en el VPS antes del despliegue. No se reutilizaron bases del gestor documental.
-
-## 2. Topología y configuración
-
-VPS Ubuntu con Nginx expuesto solo por HTTPS, pool PHP-FPM dedicado por socket Unix y MySQL sin puerto público. Raíz web `/srv/aidexlicense/current/public`; versiones en directorios separados y datos persistentes fuera del árbol de releases. Desactivar listado de directorios, denegar dotfiles y servir PHP únicamente mediante el front controller previsto.
-
-Configuración de entorno requerida: nombre de entorno, URL base, DSN/usuario/secreto MySQL, registro de claves por propósito, referencias a secretos, redes autorizadas del panel, límites de tasa/tamaño y parámetros de sesión. `config/local.example.php` contiene nombres y marcadores; `bin/configure.php` genera la configuración real. Las variables de entorno prevalecen sobre ese archivo y `AIBID_CONFIG` permite indicar una ubicación externa. La configuración de producción no se sirve como archivo web ni se imprime en diagnósticos.
-
-Permisos: código de solo lectura para FPM, acceso de lectura a sus claves protegidas, escritura únicamente a directorios temporales necesarios. MySQL con usuarios distintos para app, migración y respaldo. Cuenta app sin DDL ni permisos de modificar/borrar historia inmutable. Logs, archivos temporales y respaldos fuera de `public/`. Desactivar `display_errors`, ajustar límites de memoria/tiempo y no incluir dumps de entorno en errores.
-
-Los assets Bootstrap/JS se publican localmente con versiones fijadas. Fuentes PHP y JavaScript legibles; minificación opcional con fuente conservada. Ningún daemon PHP propio ni cola es requisito para V1. Limpieza, exportación de auditoría y respaldo se programan con cron/timer y locks para impedir ejecución solapada.
-
-## 3. Secuencia de despliegue
-
-1. Probar el artefacto en entorno aislado con MySQL real y PHP-FPM de la misma familia que producción; ejecutar suites requeridas para la entrega.
-2. Preflight: Sodium, PDO MySQL, Argon2id, HTTPS, permisos, zona UTC, sincronización del reloj, espacio y secretos presentes. Comprobar que las claves de fixtures no estén autorizadas.
-3. Crear respaldo cifrado y comprobar que el procedimiento de restauración de esa versión fue ensayado.
-4. Poner temporalmente en mantenimiento las mutaciones administrativas y API si el cambio lo requiere; devolver 503 uniforme. Las instalaciones mantienen sus derechos locales válidos.
-5. Ejecutar migraciones con usuario específico, checksum y exclusión mutua. MySQL DDL no garantiza rollback global: preferir expansión compatible y contracción en una entrega posterior.
-6. Publicar release, recargar FPM sin dejar procesos con una configuración de claves incoherente y verificar permisos/secretos.
-7. Bootstrap inicial por CLI con entrada segura de contraseña; completar MFA por HTTPS. En actualizaciones, no recrear usuarios.
-8. Comprobar login, creación de desafío, consulta administrativa y operación sintética en licencia de prueba del entorno adecuado. No contaminar producción con claves de fixtures.
-9. Retirar mantenimiento y monitorizar errores de firma, bloqueos, latencias y auditoría.
-
-Rollback de aplicación solo cuando sea compatible con el esquema y estados ya emitidos. Nunca restaurar una BD vieja como una simple operación de rollback de código: podría resucitar plazas o disminuir revisiones aceptadas por clientes.
-
-## 4. Claves y rotación
-
-Generar claves nuevas fuera del repositorio con herramienta operativa restringida. Registrar pública, `kid`, propósito, entorno y ubicación protegida. Verificar el par mediante un mensaje de prueba interno sin emitir licencias reales.
-
-Rotación normal: registrar clave `staged` → distribuir confianza al cliente por un canal autenticado → verificar interoperabilidad → con transacción sobre el registro de claves cambiar firmante a `signing` y anterior a `verify_only` → preservar públicas antiguas y respaldar material requerido. Los emisores mantienen bloqueo compartido de metadatos hasta confirmar para coordinarse con rotación.
-
-V1 no define endpoint público para obtener claves. Propuesta inicial: el cliente incorpora un conjunto de públicas actuales y siguientes en su distribución autorizada; para equipos offline se usa el mecanismo confiable de entrega del producto. No activar un `kid` que los clientes destino no puedan verificar. Nunca confiar en una pública porque venga junto al `.lic` o por la selección de `app_version` autoafirmada.
-
-Las licencias perpetuas requieren conservar la verificación de firmas antiguas sin vencimiento arbitrario. El compromiso de una privada exige suspender nuevas firmas con ella, preservar evidencia, preparar confianza de reemplazo y coordinar recuperación con clientes. No invalidar indiscriminadamente todas las públicas antiguas en una rotación rutinaria.
-
-## 5. Respaldo y restauración
-
-Objetivos iniciales propuestos: RPO de 15 minutos mediante copias y registro de cambios/binlogs, RTO de 4 horas; ambos se deben medir, no se ofrecen como garantía. Copia completa diaria cifrada fuera del VPS, incrementales/binlogs frecuentes, 30 copias diarias y 12 mensuales como punto de partida. Restricciones de acceso y credenciales de borrado separadas del proceso que sube copias.
-
-Respaldar BD, JWS y solicitudes archivadas, claves privadas necesarias, peppers/digests históricos, claves de MFA/evidencia offline/auditoría y configuración recuperable. Cifrar claves y datos con acceso separado a la clave de recuperación; no dejar todos los secretos junto al mismo archivo cifrado accesible por una sola cuenta comprometida. Versionar formato y procedimiento de restauración.
-
-Ensayo antes de la primera salida y luego trimestral: restaurar en red aislada, validar checksums, abrir copia de claves, verificar JWS históricos y cadena de auditoría, comparar contadores/revisiones y comprobar una sola plaza. Ninguna prueba restaura sobre producción.
-
-Tras un desastre, detener emisión y mutaciones hasta conciliar el punto restaurado con binlogs, historial firmado y anclajes externos. Una pérdida de operaciones posteriores al respaldo puede reabrir plazas cerradas o repetir números de revisión. Si no puede reconstruirse esa historia, marcar las licencias afectadas para recuperación administrativa y mantener la emisión suspendida para ellas; no adivinar su contador ni considerar la BD antigua autoritativa por sí sola. Los clientes que conservan un JWS válido siguen operando según el contrato.
-
-## 6. Observabilidad y runbooks
-
-Métricas sin secretos: latencias por ruta, errores 4xx/5xx, solicitudes rate-limited, conflictos de plaza, deadlocks, pendientes offline, antigüedad del respaldo, última exportación de auditoría y reloj. No etiquetar métricas públicas con UUID, correos, claves o huellas. Diagnósticos operativos fuera de las cuatro rutas del contrato y restringidos a administración/CLI.
-
-| Incidente | Respuesta operativa |
+| Componente | Versión |
 | --- | --- |
-| Firma o BD indisponibles | Fallar con 503 y rollback; no emitir JWS provisionales ni afectar derechos locales válidos |
-| Respuesta de activación perdida | Reintentar mismo request; recuperar bytes confirmados |
-| Activación ocupada | Consultar identidad/historial; transferencia autorizada con motivo, sin borrar registros |
-| Equipo averiado o privada perdida | Verificar cliente comercial por canal operativo, transferencia forzada auditada y nueva identidad |
-| `.licreq` inválida o alterada | Rechazar sin conceder derechos; registrar digest/código seguro y solicitar regeneración |
-| Clave comercial perdida al emitir | Reemitir credencial e invalidar anterior; no revelar el HMAC ni recuperar la original |
-| Pérdida de MFA del último administrador | Recuperación CLI restringida, motivo, auditoría externa y revocación de sesiones |
-| Desfase del reloj del VPS | Corregir sincronización y revisar desafíos/emisiones afectadas; no extender licencias automáticamente |
-| Clave privada comprometida | Detener uso, preservar evidencia y coordinar reemplazo; reconocer límite offline |
+| PHP (CLI y FPM) | 8.3 o superior. Extensiones: `sodium`, `pdo_mysql`, `mbstring`, `xmlwriter`, `dom`, `iconv` y `gd`; Argon2id disponible |
+| MySQL | 8.0 o superior. MariaDB no es compatible: el migrador y `bin/preflight.php` la rechazan |
+| Nginx | Probado con la configuración de `deploy/`; el VPS tiene 1.24.0 |
+| Composer | Instala las dependencias de `composer.lock` (`--no-dev` en el servidor) |
 
-El paquete V1 solo puede publicarse cuando incluya también activación/renovación offline y sus pruebas; la disponibilidad previa del panel o endpoints no constituye una V1 terminada.
+Go y Node no se usan en el servidor; solo en desarrollo (verificador del contrato y pruebas del panel).
 
-## 7. Instalación disponible del panel
+## 2. Configuración
 
-Preparar MySQL 8 con una base vacía `aidex_licenses` (utf8mb4/InnoDB), una cuenta `aidex_migrate` restringida a esa base con permisos DDL/DML y una cuenta `aidex_app` inicialmente sin permisos. Ambas cuentas deben tener contraseñas aleatorias propias; crearlas con la administración habitual del servidor. No incluir contraseñas reales en argumentos de shell ni en este repositorio.
+La configuración es un arreglo PHP. Se lee del archivo indicado en `ADELPOS_LICENSE_CONFIG` o, si no está definida, de `config/local.php`. Las variables de entorno del proceso prevalecen. `config/local.example.php` muestra las claves con valores vacíos.
+
+| Clave | Uso |
+| --- | --- |
+| `APP_ENV` | `production`, `development` o `testing`. Fuera de desarrollo local, HTTPS es obligatorio |
+| `APP_URL` | Origen del sitio, sin subdirectorio. Pruebas: `https://licensing.sicrat.com` |
+| `DB_DSN`, `DB_USER`, `DB_PASSWORD` | Conexión de la cuenta de aplicación (`adelpos_license_app`, permisos restringidos) |
+| `MFA_KEY`, `CREDENTIAL_KEY`, `AUDIT_KEY`, `SESSION_KEY`, `OPERATION_KEY` | Cinco claves independientes de 32 bytes. **Se conservan en toda actualización y restauración** |
+| `ADMIN_NETWORKS` | Redes CIDR desde las que se permite el panel, separadas por comas. Vacío: cualquier red (sigue exigiendo contraseña y verificación en dos pasos) |
+| `SIGNING_KEY_DIR` | Directorio absoluto de las llaves privadas de firma, fuera de `public/`. Por omisión, `var/keys/<APP_ENV>` |
+
+Crear una configuración nueva:
 
 ```sh
-composer install --no-dev --prefer-dist --optimize-autoloader
-php bin/configure.php --env=production --url=https://licensing.aidex.com.mx --dsn='mysql:host=127.0.0.1;dbname=aidex_licenses;charset=utf8mb4' --user=aidex_app
-php bin/migrate.php --user=aidex_migrate
-php bin/grants.php --database=aidex_licenses --user=aidex_app
+php bin/configure.php --env=production --url=https://licensing.sicrat.com \
+  --dsn='mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=adelpos_license;charset=utf8mb4' \
+  --user=adelpos_license_app --output=/srv/adelpos-license/shared/config.php \
+  --signing-dir=/srv/adelpos-license/shared/keys
 ```
 
-`configure` pide el secreto de aplicación SQL y crea cinco claves de 32 bytes independientes. `migrate --user` pide la contraseña de migración y no la persiste. `grants` imprime SQL para la cuenta `'aidex_app'@'localhost'`; aplicar ese SQL con la cuenta administradora de MySQL, antes de iniciar el panel. El DSN y el host de la cuenta deben corresponder al despliegue; el ejemplo asume app y MySQL en el mismo equipo. Las migraciones no conceden permisos globales.
+Pide la contraseña de la base sin mostrarla, genera las cinco claves y escribe el archivo con permisos 0600. Nunca reemplaza un archivo existente.
+
+## 3. Base de datos
+
+| Paso | Comando |
+| --- | --- |
+| Aplicar migraciones (cuenta de migración, contraseña sin eco) | `php bin/migrate.php --user=adelpos_license_migrate` |
+| Generar los GRANT de la cuenta de aplicación | `php bin/grants.php --database=adelpos_license --user=adelpos_license_app` |
+
+- El esquema se crea con una sola migración, `database/migrations/001_esquema_inicial.sql`. Solo inserta el producto `adel_pos` («AD-EL POS»), sin módulos. Las tablas y columnas están en [SCHEMA.md](SCHEMA.md).
+- El migrador guarda el checksum de cada archivo, usa un bloqueo para que no haya dos migraciones a la vez y se detiene ante una migración incompleta o modificada. Una migración aplicada no se edita: los cambios van en un archivo nuevo.
+- `bin/grants.php` imprime los GRANT por tabla. La cuenta de aplicación no puede modificar ni borrar historia: auditoría, revisiones firmadas, cambios comerciales y decisiones sin internet.
+
+## 4. Administradores y acceso
+
+| Tarea | Comando o lugar |
+| --- | --- |
+| Crear el primer superadministrador (solo en una base sin administradores) | `php bin/bootstrap-admin.php --login=correo@ejemplo.com --name="Nombre"` |
+| Recuperar una cuenta | `php bin/recover-admin.php --login=correo@ejemplo.com --reason="Motivo"` |
+| Crear administradores, roles y permisos especiales | Panel → Administradores |
+
+- **Roles:** `superadmin`, `operator` (operación) y `viewer` (consulta).
+- **Permisos especiales** del operador: revelar códigos de activación, generar constancias de entrega y descargar archivos de licencia (`.lic`). Requieren contraseña y verificación en dos pasos.
+- **Primer ingreso:** cada cuenta configura la verificación en dos pasos y guarda sus códigos de recuperación.
+- **Dispositivo de confianza:** opcional.
+- **Recuperar una cuenta:** reemplaza la contraseña e invalida sesiones, dispositivos de confianza y códigos anteriores. La verificación en dos pasos debe configurarse de nuevo.
+
+## 5. Llaves de firma
 
 ```sh
-php bin/bootstrap-admin.php --login=administrador@example.com --name='Administración AIDEX'
-php bin/preflight.php
-php bin/audit-verify.php
-```
-
-El bootstrap solo funciona cuando no hay administradores. Las contraseñas se introducen dos veces por una terminal interactiva, sin eco. El primer acceso exige enrolar TOTP y muestra ocho códigos de recuperación una sola vez. No existen credenciales de producción predeterminadas.
-
-Publicar únicamente `public/`. El ejemplo `deploy/nginx.conf.example` contiene TLS y un socket FPM que deben adaptarse al VPS. En producción el panel lee HTTPS de Nginx/FPM directamente, sin confiar en encabezados de proxy arbitrarios. `ADMIN_NETWORKS` puede contener CIDR separados por comas; vacío permite cualquier red que supere la autenticación. Las rutas no soportan instalar el panel en un subdirectorio como `/aidexlicense/`: usar un dominio/virtual host propio.
-
-En desarrollo se puede usar `--env=development --url=http://127.0.0.1:8088` y `php -S 127.0.0.1:8088 -t public public/router.php`. El servidor integrado de PHP sirve solo para pruebas locales, no es el servicio de producción. El panel de pruebas usa `AIBID_CONFIG` en `/private/tmp` para no crear ni alterar la configuración real.
-
-### Actualización y recuperación administrativa
-
-Conservar configuración, claves y BD. Instalar el nuevo código/dependencias, ejecutar migraciones con la cuenta correspondiente, aplicar nuevos permisos si los hubiera y repetir preflight/audit-verify. Cada migración guarda checksum y estado pendiente antes del DDL; si queda incompleta, el migrador se detiene y requiere conciliar el estado, sin simular rollback de DDL.
-
-```sh
-php bin/recover-admin.php --login=administrador@example.com --reason='Recuperación autorizada y documentada'
-php bin/cleanup.php
-php bin/audit-verify.php
-```
-
-La recuperación solicita una nueva contraseña, borra el enrolamiento MFA, invalida sesiones y códigos anteriores y deja auditoría. No rehabilita una cuenta deshabilitada. La siguiente entrada requiere volver a enrolar TOTP. `cleanup` elimina sesiones/desafíos vencidos hace más de un día y contadores de tasa de más de dos días; conserva historia comercial e idempotencia. Al programarlo en Linux, usar `flock` o el mecanismo de exclusión del sistema. La salida de `audit-verify` contiene secuencia/hash/instante para guardar un anclaje externo bajo otra credencial; ese almacenamiento no se automatizó en etapa 2.
-
-### Dependencias y marca
-
-El runtime usa PHP/PDO/Sodium y dos bibliotecas Composer de propósito acotado: OTPHP 11.5.0 y BaconQrCode 3.1.1, fijadas con sus dependencias transitivas en composer.lock. PHPUnit 12 es solo de desarrollo y requiere PHP 8.3+. XMLWriter es necesario para generar QR SVG. Bootstrap 5.3.8 se conserva en `public/assets/vendor/bootstrap/`, con su licencia MIT; no hay CDN en ejecución.
-
-Los cuatro SVG de `public/assets/brand/` se copiaron sin cambios de los archivos compartidos por el usuario. Conservan las fuentes y fallbacks del original. Node/Playwright y el oráculo Go solo se usan durante pruebas; el VPS no necesita instalarlos.
-
-## 8. Claves y API online disponibles en etapa 3
-
-La actualización agrega `003_online_activations.sql`. Conservar la configuración y las cinco claves de aplicación existentes; ejecutar `php bin/migrate.php --user=aidex_migrate` y aplicar el SQL actualizado que imprime `bin/grants.php`. Las migraciones 001/002 no se reescribieron. Antes del primer uso online, preparar un firmante del entorno:
-
-```sh
-php bin/signing-key.php --action=generate --kid=lic-prod-2026-a --purpose=license --user=aidex_migrate
+php bin/signing-key.php --action=generate --kid=lic-prod-2026-a --purpose=license --user=adelpos_license_migrate
 php bin/signing-key.php --action=list
-```
-
-La cuenta de gestión debe tener INSERT/UPDATE sobre `signing_keys`/`signing_scopes` y acceso a la auditoría; una cuenta de migración restringida a esta BD sirve para la CLI. La cuenta de runtime solo recibe SELECT sobre esas tablas. `--user` pide la contraseña SQL oculta y no modifica el archivo de configuración.
-
-El comando genera una privada aleatoria, registra una pública inicialmente `staged` e imprime solo kid/entorno/propósito/pública/estado. `APP_ENV` identifica el entorno real, no el prefijo del kid. Usar claves independientes para cada entorno y para `license`/`manifest`; la API actual firma únicamente el propósito `license` y no genera manifiestos.
-
-Distribuir la pública al conjunto de confianza del cliente por su canal autenticado. Este servidor no añade una ruta `/v1/keys` ni permite que una licencia elija una URL de claves. Solo después de verificar esa confianza:
-
-```sh
-php bin/signing-key.php --action=activate --kid=lic-prod-2026-a --reason='Pública distribuida y verificada en clientes' --trust-confirmed --user=aidex_migrate
+php bin/signing-key.php --action=activate --kid=lic-prod-2026-a --reason="Pública distribuida" --trust-confirmed --user=adelpos_license_migrate
 php bin/preflight.php --require-signer
 ```
 
-`--trust-confirmed` es una confirmación explícita del operador; no automatiza la distribución ni demuestra que cada instalación haya recibido la pública. El comando selecciona la clave del ámbito bajo bloqueo exclusivo, cambia la anterior a `verify_only` y conserva el historial. Repetir la selección de la misma clave no produce otra rotación. No eliminar públicas antiguas necesarias para perpetuas.
+- `generate` crea una llave privada aleatoria en `SIGNING_KEY_DIR` (0600) y muestra solo la pública. Queda en estado `staged`.
+- `activate` exige `--trust-confirmed`: confirma que la pública ya se distribuyó en AD-EL POS por un canal autenticado. Las llaves anteriores quedan para verificación (`verify_only`) y no se borran.
+- **Rotación:** generar otro `kid`, distribuir la nueva pública junto con las anteriores y solo después activarla.
+- En producción se rechazan las llaves derivadas de las semillas públicas de prueba (`ADELPOS LICENSE PUBLIC TEST ONLY V1 …`).
+- **Herencia temporal (etapa 2):** los entornos de firma son `production`, `development` y `testing`. El contrato define `test` y `production`, con `kid` asociado al entorno.
 
-Configurar `SIGNING_KEY_DIR` con un directorio absoluto persistente fuera de `public/`, por ejemplo `/srv/aidexlicense/secrets/production-licenses`. Por defecto se usa `var/keys/<APP_ENV>`, útil en desarrollo. Los archivos son 0600; ejecutar la generación con el usuario dedicado que podrá leerlos desde PHP-FPM o ajustar propietario/permisos mediante la administración del VPS. Evitar un directorio efímero de release para producción y respaldar las privadas por separado. El cargador rechaza archivos públicos, enlaces de archivo, permisos abiertos y metadatos/par incompatibles.
+## 6. Licencias y operación sin internet
 
-Si la BD pierde conexión durante el registro de una clave, la CLI conserva el archivo privado por posible commit ambiguo. Conciliar archivo/registro antes de reintentar; no borrar automáticamente una privada que podría estar registrada. Las operaciones online reintentan deadlocks/timeouts conocidos como máximo dos veces; ante una conexión perdida durante commit se debe repetir el mismo request, sin asumir que falló.
+Todo se hace en el panel:
+- **Licencias:** emitir (muestra el código 3-4-4-4 una sola vez), renovar, registrar mantenimiento, cambiar módulos, reemplazar la clave, revocar y generar constancias en PDF.
+- **Solicitudes sin internet:**
+  - importar un `.licreq` (máximo 64 KiB);
+  - revisar la identidad del equipo;
+  - elegir la licencia, aprobar o rechazar;
+  - descargar el `.lic`.
 
-Las cuatro rutas V1 ya están disponibles. El panel no requiere un firmante para emitir derechos comerciales sin activación. Activar, modificar derechos activos y desactivar requieren una nueva firma; si no hay firmante o falla su archivo, el servidor devuelve 503 y revierte el efecto completo. Refresh reutiliza un JWS existente y no requiere leer la privada.
+  Importar no concede nada: solo la aprobación firma una revisión.
+- **Recuperación de equipo averiado:** libera la plaza con autorización excepcional. La firma no demuestra que se hayan borrado copias del equipo anterior.
 
-`php bin/preflight.php --require-signer` comprueba configuración, motor, migraciones/checksums, permisos inmutables en producción y firmante de licencias del entorno. No sustituye las pruebas de PHP-FPM, TLS/proxy, límites y respuestas JSON del proxy, sincronización del reloj, respaldo/restauración e integración con el cliente real previstas para el VPS.
+La API en línea solo atiende `POST` a `/v1/activations/challenge`, `/v1/activations`, `/v1/activations/refresh` y `/v1/activations/deactivate`, con JSON de hasta 16 KiB. **Herencia temporal (etapa 2):** el contrato de AD-EL POS sustituye estas rutas, sus cuerpos y los formatos `LIC-V1`/`LICREQ-V1`.
 
-## 9. Operación offline y actualización a etapa 4
+## 7. Mantenimiento diario
 
-Para una instalación de etapa 3, conservar `config/local.php`, todas sus claves y el directorio de firmantes. Aplicar `004_offline_requests.sql` con el migrador y actualizar GRANT de runtime:
+`deploy/adelpos-license-maintenance.sh` se instala como `/usr/local/sbin/adelpos-license-maintenance` y lo ejecuta el servicio y temporizador `adelpos-license-maintenance` (03:15 UTC, con `flock`). Hace tres cosas:
+
+1. `bin/cleanup.php`: borra sesiones, contadores de intentos y desafíos vencidos. Conserva la historia comercial y la idempotencia.
+2. `bin/audit-verify.php`: verifica la cadena de auditoría y escribe un anclaje (`.anchor.json`).
+3. `bin/backup.php --action=create`: crea el respaldo cifrado (`.adelposbackup`) y su recibo (`.receipt.json`).
+
+La tarea no borra respaldos antiguos. La retención y la copia externa las define el operador.
+
+## 8. Respaldos y restauración
+
+| Paso | Comando |
+| --- | --- |
+| Crear la clave de respaldo (0600; guardar otra copia fuera del servidor) | `php bin/backup.php --action=keygen --key-file=/ruta/recovery.key` |
+| Crear un respaldo | `php bin/backup.php --action=create --key-file=/ruta/recovery.key --output=/ruta/FECHA.adelposbackup [--mysqldump=/ruta/mysqldump] [--mysql-options=/ruta/archivo-0600]` |
+| Extraer y verificar en un directorio nuevo | `php bin/backup.php --action=extract --key-file=/ruta/recovery.key --archive=/ruta/FECHA.adelposbackup --directory=/ruta/nueva` |
+| Crear la configuración de la base de destino, conservando las cinco claves | `php bin/recovery-config.php --directory=/ruta/extraida --output=/ruta/config.php --dsn='…' --user=… --signing-dir=/ruta/extraida/keys` |
+| Importar en una base **vacía** | `php bin/restore-empty.php --directory=/ruta/extraida --target-config=/ruta/config.php [--mysql=/ruta/mysql]` |
+| Verificar firmas, referencias y auditoría contra el último anclaje externo | `php bin/recovery-check.php --against=/ruta/anclaje.json` y `php bin/audit-verify.php --against=/ruta/anclaje.json` |
+
+- **Contenido del respaldo:**
+  - `database.sql` (`mysqldump --single-transaction`);
+  - `config.json`, con las cinco claves;
+  - las llaves privadas registradas del entorno;
+  - `manifest.json`, con los SHA-256 y el anclaje.
+
+  Todo va cifrado con Sodium secretstream, con el encabezado `ADELPOS-LICENSE-BACKUP-V1`.
+- **Las utilidades de MySQL** se ejecutan sin variables de entorno y con `MYSQL_TEST_LOGIN_FILE` apuntando a una ruta inexistente, para no usar credenciales guardadas en `~/.mylogin.cnf`. Funciona con los clientes de MySQL 8.0.
+- **`restore-empty`** rechaza un destino con tablas y nunca borra ni trunca. Un anclaje posterior al respaldo hace fallar la verificación hasta conciliar la historia faltante.
+- **La extracción contiene secretos.** Se retira de forma controlada al terminar.
+
+## 9. Mantenimiento programado y verificación previa
+
+- **Modo mantenimiento.** Si existe `shared/maintenance.flag`, Nginx responde 503 a todas las rutas; en `/v1/` lo hace con JSON `TEMPORARY_UNAVAILABLE`. No detiene los comandos de `bin/`.
+- **Página «Servicio no disponible».** Es de `public/index.php`, con la marca de AD-EL POS y una referencia para el registro. Aparece cuando la aplicación no puede atender; por ejemplo, si falta la base de datos.
+- **Revisión previa.** `php bin/preflight.php` comprueba:
+  - la versión de PHP, las extensiones y Argon2id;
+  - MySQL 8;
+  - que las migraciones estén completas y sus checksums coincidan;
+  - en producción, que la cuenta de aplicación no pueda modificar ni borrar historia.
+
+  Con `--require-signer` verifica además la llave de firma activa del entorno.
+
+## 10. Paquete de despliegue
 
 ```sh
-php bin/migrate.php --user=aidex_migrate
-php bin/grants.php --database=aidex_licenses --user=aidex_app
-# Aplicar el SQL generado mediante la cuenta administradora de esta BD.
-php bin/preflight.php --require-signer
-php bin/audit-verify.php
+php bin/build-release.php --output=/ruta/existente/adelpos-license.tar.gz
 ```
 
-No repetir configure/bootstrap ni generar otra clave de firma si ya hay una válida y distribuida. La evidencia usa HKDF desde el `CREDENTIAL_KEY` existente; no exige añadir secretos ni modificar la configuración. Conservar esa raíz junto con los respaldos recuperables. La migración agrega tablas sin modificar licencias/revisiones previas y se probó con historia online existente.
+- **Qué incluye:**
+  - solo los archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`;
+  - `composer.json` y `composer.lock`;
+  - `config/local.example.php`;
+  - la documentación.
+- **Qué deja fuera:** pruebas, `contracts/`, `vendor/`, `var/`, configuración local y archivos sin versionar.
+- **Cuándo aborta:** si aparece `config/local.php`, algo bajo `var/`, un `.DS_Store` o un archivo `.key`/`.pem`.
+- **Qué genera:** `RELEASE.json`, con el SHA-256 de cada archivo, y el `.sha256` del paquete. En el servidor se ejecuta `composer install --no-dev` con el `composer.lock` incluido.
 
-El ejemplo Nginx permite cuerpos de 96 KiB para el multipart; la aplicación sigue limitando archivos a 64 KiB y JSON de API a 16 KiB. En PHP-FPM configurar `file_uploads=On`, `upload_max_filesize` al menos 64 KiB y `post_max_size` al menos 96 KiB. El directorio temporal de uploads debe ser privado al usuario de PHP. Los límites de Nginx JSON/multipart se comprobaron localmente en etapa 5; repetirlos en el VPS.
+## 11. Revisión de secretos
 
-1. Pedir al cliente su `.licreq`, preferentemente sin clave comercial. Entrar en **Solicitudes offline** e importarlo. Se comprueba firma/formato y queda pendiente; no se ocupan plazas.
-2. Revisar producto, instalación, pública/huella y fecha declarada. Para activar, buscar cliente/licencia, seleccionarla y pulsar **Revisar derechos**. El producto debe coincidir; una clave comercial contenida en el archivo no reemplaza esta asignación.
-3. Aprobar con motivo o rechazar con motivo. Para una renovación se pueden emitir derechos ya contratados; para ampliar una suscripción elegir la ampliación y registrar fecha UTC futura y referencia comercial. El mantenimiento perpetuo se compra/registra por separado en la licencia.
-4. Descargar `.lic` y entregarlo únicamente a su instalación. El archivo es el JWS original de la decisión, sin envoltura y sin nueva firma al descargar. Consultar la licencia si pudo recibir revisiones posteriores. El cliente debe verificarlo con una pública previamente confiable.
-5. Para mover un equipo operativo, aprobar su desactivación firmada (o usar la API online) y luego activar el nuevo equipo. La revisión de salida está revocada; la licencia comercial permanece emitida.
-6. Para equipo averiado, un superadministrador puede aprobar la solicitud de destino marcando la transferencia, con contraseña/TOTP nuevo, motivo y aceptación de que una copia offline no se revoca instantáneamente. Ambas firmas y el cambio de plaza se confirman juntos. Sin archivo de destino, usar **Recuperar plaza por equipo averiado** en el detalle de licencia; la plaza queda disponible para una activación posterior.
+Antes de cada commit:
 
-Ante error 503, no asumir commit fallido: consultar la solicitud y su historial antes de repetir. Reutilizar la operación original cuando corresponda; si ya se decidió, descargar el resultado registrado. Ante 409, recargar/revisar la solicitud o licencia; no cambiar arbitrariamente el request firmado. Ni cleanup ni el operador pueden borrar evidencia, decisiones, transferencias o resultados de idempotencia.
+```sh
+php bin/check-secrets.php
+```
 
+Detalles en [README.md](README.md). Falla con:
+- valores en `DB_PASSWORD` o en claves `*_KEY`;
+- llaves privadas PEM o Ed25519;
+- archivos bajo `var/keys/`, o archivos `.key` o `.pem`.
 
-## 10. Entrega de etapa 5
+## 12. Vigilancia
 
-Para el dominio final consultar [DESPLIEGUE-PRODUCCION.md](DESPLIEGUE-PRODUCCION.md); la alternativa Ubuntu/Nginx está en [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md): licensing.aidex.com.mx, Ubuntu 24.04, Nginx/PHP-FPM y MySQL 8. Toda la validación se realizó localmente; la guía contiene los comandos finales para el operador, sin acceso remoto desde esta sesión.
-
-`configure --output` permite guardar la configuración fuera del release; `--signing-dir` fija las privadas persistentes. No repetir configure en una actualización. `backup.php` crea/verifica archivos cifrados; `restore-empty.php` importa solo a una base vacía; `recovery-config.php` conserva las cinco claves de la copia y solicita la contraseña del destino sin eco; `recovery-check.php --against` verifica historia contra un anclaje previo externo. La guía documenta permisos, mantenimiento, timer, copia externa, rotación y recuperación de una copia atrasada.
-
-Las herramientas no configuran almacenamiento externo ni recuperación de binlogs. La copia diaria entregada no cumple por sí sola el RPO propuesto de 15 minutos. Un anclaje posterior al respaldo debe producir error hasta recuperar o conciliar la historia faltante. El indicador de mantenimiento bloquea tráfico HTTP; detener también tareas y CLI con capacidad de emisión durante una recuperación.
-
-## Actualización comercial fase 1
-
-Para el servidor existente, aplicar el procedimiento de [ACTUALIZACION-FASE1.md](ACTUALIZACION-FASE1.md). No repetir instalación inicial ni regenerar claves. La migración 006 conserva datos históricos y añade documentos/códigos cifrados; otorgar permisos sensibles explícitos a los operadores después de migrar y verificar el respaldo/restauración con el código nuevo.
+- **Registros de error:** PHP escribe en `shared/log/php-error.log`, con el prefijo `adelpos-license [<referencia>]`, o `adelpos-license API [<request_id>]` en la API. Nunca escribe cuerpos de petición, códigos comerciales ni parámetros SQL.
+- **Revisar periódicamente:**
+  - temporizadores (`adelpos-license-maintenance.timer`, `certbot.timer`);
+  - espacio libre;
+  - antigüedad de respaldos y anclajes externos;
+  - caducidad TLS;
+  - sincronización del reloj (NTP);
+  - errores 5xx.
+- **Sin internet:** un equipo desconectado conserva sus derechos según su última licencia firmada; ninguna revocación o transferencia lo alcanza al instante.

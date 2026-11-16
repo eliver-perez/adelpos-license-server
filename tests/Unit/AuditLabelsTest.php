@@ -5,7 +5,7 @@ namespace AdelPos\License\Tests\Unit;
 use AdelPos\License\Http\View;
 use PHPUnit\Framework\TestCase;
 
-/** Every audit operation shown in the panel has a plain-Spanish label, never its internal key. */
+/** Every audit operation shown in the panel (from src/ and bin/) has a plain-Spanish label, never its internal key. */
 final class AuditLabelsTest extends TestCase
 {
     /** Operations whose name is built at run time. */
@@ -17,7 +17,8 @@ final class AuditLabelsTest extends TestCase
     public function testEveryAuditOperationHasASpanishLabel(): void
     {
         $operations = self::COMPUTED;
-        $files = new \RegexIterator(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__, 2) . '/src', \FilesystemIterator::SKIP_DOTS)), '/\.php\z/');
+        $root = dirname(__DIR__, 2);
+        $files = [...new \RegexIterator(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/src', \FilesystemIterator::SKIP_DOTS)), '/\.php\z/'), ...array_map(static fn(string $path): \SplFileInfo => new \SplFileInfo($path), glob($root . '/bin/*.php') ?: [])];
         foreach ($files as $file) {
             $source = (string) file_get_contents($file->getPathname());
             // Literal operations passed to append() or failed(), including both branches of a ternary.

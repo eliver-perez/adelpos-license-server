@@ -1,146 +1,203 @@
-# Seguridad y modelo de amenazas
+# Seguridad
 
-Diseño de seguridad completo por etapas. Autenticación, MFA, sesiones, CSRF, permisos y auditoría administrativa se implementaron en etapa 2; activación/firma online en etapa 3; validación, archivo cifrado y decisión offline en etapa 4. Etapa 5 verifica localmente el cliente real y añade respaldo cifrado, restauración aislada y contraste con anclaje externo. La operación del VPS requiere ejecutar [la guía de despliegue](DEPLOY_UBUNTU_24_04.md). El contrato público se conserva en [LICENSE_CONTRACT.md](LICENSE_CONTRACT.md); los detalles de protocolo están en [API.md](API.md).
+Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados hoy. Las partes marcadas como **Herencia temporal** pertenecen al motor de licencias heredado y se reemplazan en las etapas 2 a 4 según el [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md). La lista de puntos heredados está en [AVANCE.md](AVANCE.md), sección 4.2, y las decisiones en [DECISIONS.md](DECISIONS.md).
 
-## 1. Activos, actores y límites de confianza
+## 1. Modelo de amenazas
 
-Activos: claves de firma, credenciales comerciales, autorizaciones de instalación, credenciales/MFA de administradores, PII mínima de clientes, historia comercial y auditoría. Actores: cliente Go legítimo, administrador por rol, atacante anónimo, usuario con control total de su equipo, operador malicioso y administrador del VPS/BD.
+**Qué se protege:**
+- las llaves privadas de firma;
+- los códigos comerciales de activación;
+- las credenciales y la verificación en dos pasos de los administradores;
+- la historia comercial y la auditoría;
+- los archivos sin internet (`.licreq`) con su evidencia;
+- las constancias PDF;
+- los respaldos.
 
-Límites: Internet → Nginx; navegador → sesión del panel; controladores → dominio; app → MySQL; app → claves; VPS → respaldo externo; servidor → cliente desconectado. Tanto JSON como archivos `.licreq`, nombres, fechas declaradas y `app_version` son entradas no confiables. Los archivos se procesan como datos, nunca instrucciones, código PHP, rutas o comandos.
+**De quién:** visitantes anónimos de Internet, instalaciones que intentan obtener derechos que no les corresponden, administradores con más privilegios de los debidos, y quien obtenga una copia de la base o de un respaldo.
 
-## 2. Matriz de amenazas
+**Límites de confianza:**
+- Internet → Nginx (TLS) → PHP-FPM → MySQL;
+- navegador → sesión del panel;
+- aplicación → archivos de llaves;
+- servidor → respaldo externo.
 
-| Amenaza | Control y prueba esperada | Riesgo residual |
+Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, archivos `.licreq`, formularios, nombres y fechas declaradas.
+
+| Amenaza | Control principal | Riesgo que queda |
 | --- | --- | --- |
-| Falsificar o modificar una licencia | Ed25519, `kid` local autorizado, verificación sobre segmentos exactos; alterar un byte invalida | Compromiso de clave privada o cliente modificado |
-| Confusión de algoritmo/clave | Permitir solo EdDSA/Ed25519, `typ:lic+jws`, propósito y entorno; rechazar `none`, `jku`, `x5u` y claves remotas | Configuración de confianza errónea |
-| Copiar `.lic` a otra instalación | Comparación de producto, IDs, pública y huella; prueba negativa PHP/Go | Copia íntegra de VM, identidad y privada por administrador del equipo |
-| Repetir desafío o solicitud | Caducidad, consumo bajo bloqueo, idempotencia y digest del cuerpo | Request completo capturado puede recuperar su misma respuesta; no crea otros derechos |
-| Dos activaciones simultáneas | Bloqueo de licencia, índice único y commit conjunto | Compromiso directo de BD con privilegios para alterar restricciones |
-| Sustituir pública en renovación offline | Firma válida más comparación con vínculo previo | Clave legítima robada del cliente |
-| Manipular un `.licreq` pendiente | Bytes y firma archivados, revisión al aprobar, decisión atómica | Operador autorizado puede aprobar una solicitud comercialmente equivocada |
-| Enumerar licencias/identidades | Desafíos uniformes, errores genéricos, clave de alta entropía, controles tras autenticación | Diferencias de tiempos se minimizan, no se promete tiempo constante de toda la API |
-| Fuerza bruta, login abusivo y DoS | Límites por IP/cuenta/ruta, tamaños, profundidad, límites PHP-FPM y ventanas persistidas | Ataques volumétricos requieren protección de infraestructura |
-| SQL injection/XSS/CSRF | PDO preparado, listas de columnas permitidas, escape contextual, CSP y tokens CSRF | Error nuevo de programación; pruebas de permisos por operación |
-| Robo/fijación de sesión | Cookie segura, rotación, MFA, reautenticación, expiración y revocación | Equipo del administrador comprometido |
-| Abuso de privilegios internos | Roles, motivos, MFA para acciones críticas y auditoría sin edición | Superadministrador conserva poder comercial deliberado |
-| Exposición de claves en logs/backups | Redacción por allowlist, secretos fuera de web, cifrado y permisos separados | Compromiso simultáneo de proceso y almacén de secretos |
-| Borrar o falsificar auditoría | INSERT-only para app, cadena HMAC y anclaje externo | Root con todos los secretos; alteraciones anteriores al último anclaje |
-| Retroceder reloj/revisión local | Mayor revisión aceptada y última hora confiable persistidas por Go | Restauración completa de snapshots offline por administrador |
-| Revocación offline | JWS revocado al reconectar o importar; mostrar limitación al transferir | Copia desconectada puede seguir usando un JWS anterior |
-| Restaurar BD antigua | Conciliar revisiones, plazas y solicitudes antes de volver a emitir | Sin historia suficiente no se puede reconstruir certeza comercial |
+| Falsificar o alterar una licencia | Firma Ed25519 sobre los bytes exactos; `kid` y entorno registrados | Robo de la llave privada |
+| Usar una licencia en otra instalación | La licencia firma la identidad y la llave pública de la instalación | Clonación completa de la máquina por su administrador |
+| Repetir desafíos o solicitudes | Desafíos de un uso con vencimiento; idempotencia por `request_id` con HMAC del contenido | Un reintento idéntico obtiene la misma respuesta, sin nuevos derechos |
+| Dos activaciones simultáneas | Bloqueo de la fila de licencia e índice único de activación activa | Acceso directo a la base con privilegios de administrador de MySQL |
+| Adivinar códigos o enumerar licencias | Códigos de 74 bits, límites de intentos y errores uniformes | Ataques volumétricos que requieren protección de red |
+| Robo de sesión, CSRF o XSS | Cookies `__Host-` seguras, token CSRF, origen exacto, CSP y escape de salida | Equipo del administrador comprometido |
+| Abuso de privilegios internos | Roles, permisos explícitos, confirmación de identidad y auditoría encadenada | El superadministrador conserva poder comercial deliberado |
+| Secretos en el repositorio o en el paquete | `bin/check-secrets.php`, `.gitignore` y lista explícita del empaquetador | Error humano fuera de git |
+| Fuga de un respaldo | Respaldo cifrado con llave separada | Quien tenga respaldo y llave obtiene todos los secretos |
 
-## 3. Firma y secretos
+## 2. Configuración y secretos de la aplicación
 
-La firma usa `sodium_crypto_sign_detached` y la verificación `sodium_crypto_sign_verify_detached`. No implementar Ed25519 manualmente ni usar Ed25519ph. Se valida tamaño de claves, firmas y base64url antes de llamar a Sodium. [PHP: firmas separadas con Sodium](https://www.php.net/manual/en/function.sodium-crypto-sign-detached.php).
+- **Ubicación.** La configuración vive en `config/local.php` (fuera de git) o en la ruta que indique `ADELPOS_LICENSE_CONFIG`. `bin/configure.php` la crea con permisos 0600. Las variables de proceso tienen prioridad.
+- **Validación (`Config::validate`).**
+  - `APP_ENV` debe ser `production`, `development` o `testing`.
+  - `APP_URL` debe ser un origen sin ruta.
+  - **HTTPS es obligatorio** fuera del desarrollo local en 127.0.0.1, localhost o ::1.
+  - Las cinco llaves de aplicación deben ser válidas.
+- **No deben regenerarse en una instalación existente:** dejarían ilegibles los datos cifrados e inválidos los HMAC.
 
-Claves privadas solo en archivos/secretos protegidos fuera de `public/`, con acceso al usuario de PHP-FPM estrictamente necesario. En BD solo pública, `kid`, propósito, entorno y referencia opaca; si en el futuro se almacenan privadas cifradas, la clave de cifrado deberá estar fuera de BD y del mismo respaldo. El panel no descarga privadas ni recibe rutas arbitrarias para importarlas. La generación y carga se hace mediante herramienta operativa restringida.
+| Llave | Uso |
+| --- | --- |
+| `MFA_KEY` | Cifrado XChaCha20-Poly1305 de los secretos TOTP (contexto `mfa:<administrador>`) y HMAC de los códigos de recuperación |
+| `CREDENTIAL_KEY` | HMAC de los códigos comerciales para buscarlos; raíz HKDF-SHA256 del cifrado de códigos, constancias y evidencia sin internet |
+| `AUDIT_KEY` | HMAC que encadena los eventos de auditoría |
+| `SESSION_KEY` | Token CSRF derivado de la sesión; HMAC de las identidades en los límites de intentos |
+| `OPERATION_KEY` | HMAC del contenido de cada solicitud idempotente (API, archivos sin internet y formularios del panel) |
 
-Separar material para firma de licencias, firma de manifiestos, HMAC comercial, digest de idempotencia, cifrado de MFA, cifrado de evidencia offline, auditoría y respaldo. Separar dev/test/prod mediante credenciales y allowlists de claves distintas. Prohibir en producción las públicas y semillas de fixtures conocidas, además de exigir registro explícito de la clave de producción. `kid` identifica, no demuestra confianza.
+**Contextos HKDF** (`src/Infrastructure/Crypto.php`):
+- registros protegidos: `adelpos-license/<propósito>/v1`, con los propósitos `activation-code` y `document`;
+- evidencia sin internet: `adelpos-license/offline-evidence/v1`.
 
-La rotación normal conserva públicas antiguas indefinidamente mientras existan perpetuas firmadas con ellas. Primero distribuir públicamente la confianza nueva al cliente mediante un mecanismo autorizado, después comenzar a firmar con ella. No borrar la verificación histórica al retirar una privada de firma. Rotación por compromiso es un incidente diferente: no existe invalidación instantánea para clientes desconectados.
+`Crypto::assertPurpose` rechaza el propósito `offline-evidence` y cualquier nombre fuera de `[a-z][a-z0-9-]*`, para que un registro nunca derive la misma llave que la evidencia. Cada cifrado usa un nonce aleatorio de 24 bytes y datos asociados ligados al registro, por ejemplo `credential:<id>` o `document-pdf:<id>`.
 
-La clave comercial propuesta contiene 32 bytes aleatorios codificados de forma transportable. Guardar HMAC-SHA-256 con pepper protegido y versión, no la clave original. Mostrar solo en la respuesta de emisión tras commit; no guardarla en sesiones, idempotencia ni auditoría. Si se pierde esa respuesta, se reemite una credencial y se invalida la anterior con auditoría, sin intentar recuperarla. No se cambia la identidad ni el JWS de una activación existente por reemitir una credencial de activación.
+## 3. Llaves de firma
 
-La rotación del pepper necesita conservar versiones anteriores hasta retirar sus credenciales: sin las claves comerciales originales no es posible recalcular todos sus HMAC. La búsqueda evalúa el conjunto acotado de versiones habilitadas. Aplicar la misma disciplina a digests idempotentes; su secreto no se elimina mientras haya registros verificables que dependan de él.
+- **Algoritmo.** Ed25519 mediante Sodium; no hay implementación propia.
+- **Almacenamiento.** Las llaves privadas viven en archivos JSON 0600, dentro de un directorio 0700 (`SIGNING_KEY_DIR` o `var/keys/<APP_ENV>`), siempre **fuera de `public/`**. El nombre del archivo es una referencia aleatoria; nunca se arma con un `kid` recibido por HTTP.
+- **En la base** solo están la llave pública, el `kid`, el entorno, el propósito, el estado y la referencia opaca.
+- **Comprobaciones al cargar (`SigningKeys::readSecret`):**
+  - ubicación fuera de `public/`;
+  - que no sea un enlace simbólico;
+  - permisos sin acceso de grupo ni de otros;
+  - tamaño máximo;
+  - coincidencia de `kid`, entorno, propósito y llave pública entre archivo y base;
+  - que el par Ed25519 sea consistente.
+- **Llaves públicas de prueba.** En producción se rechazan las cuatro llaves de los archivos de prueba del contrato, derivadas de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`, aunque se les cambie el nombre. Lo verifica `ActivationsTest::testProductionRejectsPublicFixtureKeyEvenWhenRelabeled`.
+- **Generación y rotación** solo por CLI (`bin/signing-key.php`) con una cuenta de MySQL de gestión. La cuenta de la aplicación solo lee `signing_keys` y `signing_scopes`. Rotar deja la llave anterior en `verify_only` y no altera los JWS ya archivados.
 
-## 4. Bootstrap, contraseñas y MFA
+> **Herencia temporal.** Los entornos de las llaves son los de la aplicación (`production`, `development`, `testing`). El contrato exige entornos de firma `test` y `production`, con el campo `environment` en la licencia y una confianza separada en el cliente: etapa 2.
 
-Bootstrap solo por CLI en servidor, sin endpoint público de instalación ni contraseña predeterminada. Crear el primer superadministrador en transacción si no existe ninguno, con exclusión mutua para ejecuciones simultáneas. Pedir contraseña por terminal sin eco; no pasarla en argumentos, historial o logs. El primer acceso solo permite enrolar MFA y guardar códigos de recuperación antes de operar licencias.
+## 4. Acceso al panel
 
-Argon2id mediante `password_hash`, `password_verify` y `password_needs_rehash`. Comprobar disponibilidad en el binario FPM real; si falta, fallar el preflight. Propuesta inicial: memoria de 64 MiB, coste temporal 3 y un hilo; ajustar con medición en el VPS y capacidad de concurrencia. No truncar contraseñas silenciosamente, permitir gestores de contraseñas y aplicar un máximo de longitud razonable antes del hash. [PHP: password_hash](https://www.php.net/manual/en/function.password-hash.php).
+- **Alta inicial.** El primer superadministrador se crea solo por CLI (`bin/bootstrap-admin.php`), con la contraseña pedida sin eco. No hay endpoint de instalación ni cuenta predeterminada. Un cerrojo (`security_state`) impide dos altas simultáneas.
+- **Contraseñas.** Argon2id (64 MiB, coste 3, 1 hilo), con nuevo hash automático si cambian los parámetros. Longitud de 12 a 1024 bytes. El acceso siempre calcula un hash, también para cuentas inexistentes, y muestra un mensaje uniforme. `bin/preflight.php` falla si Argon2id no está disponible.
+- **Verificación en dos pasos (TOTP).** Obligatoria para todos los administradores: pasos de 30 segundos, 6 dígitos y tolerancia de ±1 paso. Un paso ya aceptado no se reutiliza (`last_totp_step`). El secreto se guarda cifrado.
+- **Códigos de recuperación.** 8 por cuenta, de 64 bits cada uno, guardados como HMAC y de un solo uso.
+- **Roles.**
+  - `superadmin`: tiene todos los permisos.
+  - `operator`: necesita permisos explícitos para revelar códigos de activación, generar constancias de entrega y descargar archivos `.lic`.
+  - `viewer`: solo consulta.
+- **Confirmación de identidad** (contraseña más código TOTP nuevo). Se exige para:
+  - revelar un código;
+  - las constancias de entrega y la descarga de `.lic`;
+  - revocar o reemplazar la clave de una licencia;
+  - liberar una instalación por equipo averiado;
+  - forzar una transferencia o una desactivación sin internet;
+  - crear o modificar administradores;
+  - cambiar la propia contraseña.
 
-Se implementa TOTP para todos los administradores desde la etapa 2: periodos de 30 segundos, seis dígitos, ventana de tolerancia acotada y consumo atómico del paso aceptado para impedir reuso. Cifrar el secreto con clave independiente; códigos de recuperación aleatorios, hasheados y de un solo uso. Verificar reloj del VPS. La implementación y sus vectores se basan en [RFC 6238](https://www.rfc-editor.org/rfc/rfc6238.html). WebAuthn puede incorporarse después sin alterar el contrato de licencias.
-
-Restablecer MFA requiere superadministrador reautenticado; no habilitar autorrestablecimiento por correo sin otro factor. Recuperación del último superadministrador requiere acceso operativo al servidor, motivo y auditoría externa, revocando sesiones previas. Mensajes de login uniformes y cálculo de hash de coste equivalente para usuarios inexistentes. [OWASP: autenticación](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html).
+  Las acciones del panel de esta lista que afectan instalaciones o administradores exigen además ser superadministrador.
+- **Recuperación del acceso.** Solo con acceso al servidor (`bin/recover-admin.php`). Revoca las sesiones de la cuenta.
+- **Red.** `ADMIN_NETWORKS` limita el panel a una lista de redes; vacío permite cualquier origen.
 
 ## 5. Sesiones y navegador
 
-Cookie de sesión en producción `__Host-license_admin`: `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`; token aleatorio de 32 bytes y solo su hash en BD. Rotar al autenticarse y completar MFA; invalidar al salir, cambiar contraseña/MFA/rol o bloquear la cuenta. Expiración: 30 minutos de inactividad y 8 horas absolutas. Exigir reautenticación reciente para claves, revocación y transferencia forzada. [OWASP: sesiones](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).
+- **Cookies.** En producción, `__Host-license_admin` (`Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`). En desarrollo, `adelpos_admin_dev`.
+- **Token.** 32 bytes aleatorios; en la base solo se guarda su SHA-256.
+- **Vigencia.** 30 minutos de inactividad y 8 horas como máximo. Una sesión a medio autenticar dura 10 minutos.
+- **Cambios de sesión.** El token se rota al autenticarse. Las sesiones se revocan al salir, al cambiar la contraseña, al modificar la cuenta y en la recuperación por CLI.
+- **CSRF.** Todo POST exige un token derivado de la sesión. Si llega la cabecera `Origin`, debe ser exactamente `APP_URL`, así que `Origin: null` se rechaza. Ningún GET cambia estado.
+- **Cabeceras** (`public/index.php`):
+  - `Content-Security-Policy`: solo recursos propios, imágenes `data:` para el QR, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'` y `form-action 'self'`;
+  - `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`;
+  - `Referrer-Policy: same-origin`;
+  - `Cache-Control: no-store`;
+  - HSTS cuando la conexión es HTTPS.
 
-Los [dispositivos de confianza](DISPOSITIVOS-DE-CONFIANZA.md) permiten omitir TOTP sólo después de validar usuario y contraseña y comprobar una autorización propia de hasta 30 días. Se crean mediante una decisión explícita posterior a TOTP; recuperación y acceso con confianza no habilitan su creación. La cookie independiente `__Host-license_trusted_device` siempre exige HTTPS y usa las mismas protecciones de cookie, con token de 32 bytes y hash SHA-256 en MySQL. La confianza no crea acceso por sí sola, no renueva su plazo por uso y no sustituye la reautenticación sensible. Revocar conserva sesiones y MFA; cambiar contraseña, recuperar o deshabilitar la cuenta invalida autorizaciones. Ante error de consulta se exige TOTP. Las sesiones conservan sus tiempos de expiración.
+  La verificación pública de constancias usa `Referrer-Policy: no-referrer` y `noindex`. Bootstrap y el JavaScript propio se sirven localmente.
+- **Dispositivos de confianza.**
+  - Permiten omitir el código TOTP, nunca la contraseña, durante 30 días sin extensión por uso.
+  - Se ofrecen solo en los 10 minutos posteriores a un TOTP correcto, nunca tras usar un código de recuperación.
+  - Cookie `__Host-adelpos_trusted_device`, siempre `Secure`. En la base se guarda el hash del token.
+  - La autorización queda ligada al hash de la contraseña y al secreto TOTP: cambiar cualquiera de los dos la invalida.
+  - Se pueden revocar una por una o todas. Si no se puede guardar la confianza, el acceso continúa sin ella.
 
-Token CSRF impredecible ligado a sesión para todas las mutaciones del panel, incluidos login y carga de archivos; verificar origen cuando esté disponible como defensa adicional. GET no modifica estado. La API de instalaciones no usa cookies y tiene su propia prueba de posesión. [OWASP: CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
+## 6. Límites de intentos
 
-Escapar HTML por contexto, sin imprimir JSON o motivos en `innerHTML`. Bootstrap y JavaScript propios servidos localmente. CSP con scripts propios o nonce, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`; `X-Content-Type-Options:nosniff`, política restrictiva de referencias y HSTS después de verificar HTTPS. Sin contenido mixto ni fuentes remotas necesarias para administrar.
+Contadores persistentes en `rate_limit_buckets`, confirmados fuera de la transacción de negocio. La IP es `REMOTE_ADDR`; no se confía en cabeceras reenviadas.
 
-## 6. Límites de tasa y errores
+| Ámbito | Límite |
+| --- | --- |
+| Acceso | 20 por IP y 5 por cuenta, cada 15 minutos |
+| Código TOTP | 20 por IP y 10 por cuenta, cada 15 minutos |
+| Confirmación de identidad | 10 por administrador, cada 15 minutos |
+| API: desafíos y operaciones | 30 por minuto por IP (contadores separados) |
+| API: identidad autenticada | 30 por minuto por producto y llave pública |
+| API: código comercial | 10 cada 15 minutos por producto y código |
+| Importación `.licreq` | 30 por minuto por administrador |
+| Generación de constancias | 10 por minuto por administrador |
+| Verificación pública de constancias | 30 por minuto por IP |
 
-Etapa 2: ventanas fijas de 15 minutos; login 5 intentos por cuenta y 20 por IP; MFA 10 por cuenta y 20 por IP; reautenticación 10 por cuenta. Se cuentan todos los intentos, también los correctos. No se implementó espera progresiva. La cuenta puede intentar nuevamente en la ventana siguiente o recurrir a recuperación CLI. Ajustar con medición y monitorizar falsos positivos en IP compartidas. Etapa 3 implementa desafíos y operaciones a 30/min por IP (contadores separados), más 30/min por pública autenticada/producto. La importación offline aplica 30 intentos/min por administrador, antes de leer/verificar el archivo.
+El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_req`. La barrera de red por ruta e IP queda pendiente para el despliegue (etapa 5).
 
-El despliegue final deberá configurar la barrera de Nginx por ruta/IP; en etapa 2 la app aplica ventanas atómicas por cuenta/identidad en MySQL. Los contadores de intentos se confirman fuera de la transacción de negocio para que un rollback no los borre. Etapa 2 utiliza REMOTE_ADDR e ignora encabezados reenviados; termina TLS directamente en Nginx. El soporte de proxy deberá validar explícitamente sus emisores antes de confiar en `X-Forwarded-For`. No usar `installation_id` autoafirmado como única defensa de tasa.
+## 7. API de instalaciones (`/v1`)
 
-Los fallos de infraestructura devuelven 503 uniforme, sin traza pública. Nunca convertir un error de servidor, 404 o timeout en una prueba de revocación local. Ninguna perpetua exige conexión diaria para seguir operando.
+- **Sin cookies del panel.** Solo `POST` con JSON de hasta 16 KiB, limitado en la aplicación y en Nginx. `StrictJson` rechaza claves duplicadas, tipos ambiguos y caracteres de control. Las codificaciones base64url deben ser canónicas.
+- **Prueba de posesión.** El cliente firma con Ed25519 un mensaje que incluye un desafío de un solo uso. El desafío dura poco, queda ligado a la acción y la identidad, y se consume bajo bloqueo. Una prueba inválida no consume un desafío legítimo.
+- **Errores uniformes.** Un código inexistente o incorrecto produce el mismo error. Los detalles comerciales solo se revelan después de autenticar.
+- **Códigos comerciales.** 15 símbolos aleatorios de un alfabeto de 31 (74.31 bits), sin prefijo ni dígito verificador. Se guardan como HMAC y como copia cifrada; nunca aparecen en registros, sesiones, auditoría ni respuestas idempotentes.
+- **Errores técnicos.** Producen un 503 genérico con una referencia de correlación, sin trazas, y no dejan efectos parciales.
 
-## 7. Huella de equipo y recuperación
+> **Herencia temporal.** El protocolo vigente es el heredado: mensajes `LIC-V1` y `LICREQ-V1`, tipo `lic+jws`, rutas `/v1` actuales y huella del equipo (`fingerprint_version` `'1'`). Se reemplaza en la etapa 2 por el del contrato: `ADELPOS-LIC-V1`, `adelpos-lic+jws`, `server_id` y llave de licencias de la instalación, sin huella.
 
-El servidor recibe únicamente versión y hash, los trata como datos de identidad y no puede verificar qué hardware los originó. Se propone coordinar con Go un único ancla estable por SO, combinado con producto e instalación para minimizar correlación. No es un cambio al formato V1 y no debe sustituir un algoritmo ya implementado en el cliente sin revisar sus fixtures.
+## 8. Flujo sin internet
 
-| SO | Componente propuesto del lado Go | Observaciones |
-| --- | --- | --- |
-| Windows | UUID SMBIOS expuesto por `Win32_ComputerSystemProduct.UUID` | Rechazar UUID cero/sentinela; comprobar disponibilidad con permisos del servicio |
-| Ubuntu | ID derivado para la aplicación mediante `sd_id128_get_machine_app_specific` | No transmitir `machine-id` original; clones del sistema pueden compartir su origen |
-| macOS | UUID de plataforma de IOKit, `kIOPlatformUUIDKey` | Validar comportamiento en hardware y VM con la cuenta real del servicio |
+- **Importación.** Los archivos `.licreq` se aceptan solo por el formulario, con un máximo de 64 KiB. Se verifica la firma antes de reservar la solicitud y otra vez, sobre los bytes originales descifrados, al aprobar.
+- **Archivo.** El original se guarda cifrado (`adelpos-license/offline-evidence/v1`, datos asociados `offline:v1:<id>`). La proyección consultable no incluye el código comercial opcional.
+- **Aprobación o rechazo.** Exigen sesión completa, rol, CSRF e idempotencia del formulario. Cada solicitud admite una sola decisión, y la evidencia, la decisión y la transferencia solo se insertan.
+- **Liberación y transferencia forzadas.** Exigen superadministrador, confirmación de identidad, motivo y aceptar explícitamente el límite: una solicitud firmada prueba posesión de la llave, no que se borraron las copias desconectadas. Si falla una firma o escritura, la instalación anterior sigue activa.
 
-Las fuentes describen esos identificadores; su uso combinado aquí es una propuesta propia para el cliente: [Microsoft](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-computersystemproduct), [systemd](https://www.freedesktop.org/software/systemd/man/sd_id128_get_machine.html), [Apple IOKit](https://developer.apple.com/documentation/iokit/kioplatformuuidkey).
+> **Herencia temporal.** Una instalación activa por licencia y la tolerancia de 15 días de las suscripciones: etapas 2 a 4 (contrato: una activación vigente con transferencia por autoservicio, y 5 días de tolerancia). Ajustes del flujo sin internet y alertas: etapa 4.
 
-Propuesta de construcción para acordar: hash SHA-256 de campos UTF-8 con longitud prefijada en bytes, en orden `LIC-FP-V1`, producto, SO, UUID de instalación normalizado y ancla normalizada; salida `sha256:` más 64 hex minúsculas y `fingerprint_version:"1"`. Publicar los bytes exactos y un vector por SO antes de adoptarla. El identificador de aplicación de systemd y la normalización de cada ancla deben acordarse con el repositorio Go; pendiente P-03. No incluir MAC, usuario, hostname, rutas ni números de serie en el protocolo.
+## 9. Constancias y verificación pública
 
-Si el ancla no está disponible, no inventar automáticamente otra huella al arrancar: presentar recuperación y no conceder una activación normal con una huella vacía. Se documentará el caso de VM o hardware sin identificador para una política explícita compartida. Cambios de equipo o pérdida de privada usan transferencia administrada con nueva identidad; conservar consulta/exportación segura según contrato. Una copia completa de VM puede clonar todas estas señales, limitación que se acepta y comunica.
+- **Almacenamiento.** Cada constancia guarda el PDF y una instantánea cifrados, el SHA-256 del PDF y un folio `ADELPOS-…`.
+- **Verificación pública.** Usa un token aleatorio de 256 bits, del que solo se guarda el hash. No requiere sesión ni muestra códigos, datos personales ni la instalación.
+- **Qué acredita la verificación.** El documento histórico, no que una instalación esté activa hoy. Comparar el SHA-256 detecta un QR copiado a otro documento.
+- **Generación (Dompdf).** Sin contenido remoto, sin PHP ni JavaScript, con `chroot` a `public/assets/brand/`. El logo de la constancia se verifica contra su SHA-256 fijo antes de usarse. El PDF no lleva firma PAdES.
 
-## 8. Logs, datos y continuidad
+## 10. Auditoría
 
-Allowlist de logs: correlación, ruta, código, duración, actor interno y referencias opacas. Nunca request/response completos de activación, cabeceras Cookie/Authorization, claves comerciales, privadas, TOTP, códigos de recuperación ni PDFs/rutas/OCR. Los JWS y `.licreq` son registros protegidos de negocio, no mensajes de log.
+- **Cadena.** Cada evento se encadena con el anterior mediante HMAC (`AUDIT_KEY`), bajo el bloqueo de `audit_heads`, y se confirma junto con el cambio. Los intentos fallidos de acceso se registran aparte, sin secretos.
+- **Permisos.** La cuenta de la aplicación solo puede leer e insertar en la auditoría y en las tablas de historia. En producción, `bin/preflight.php` comprueba que no pueda modificarlas ni borrarlas.
+- **Comprobación externa.** `bin/audit-verify.php` recorre la cadena y produce un anclaje (número de eventos y último hash) para guardarlo fuera del servidor. Solo ese anclaje externo detecta que alguien con todos los secretos restauró la base a un pasado válido.
 
-Archivar `.licreq` con AEAD XChaCha20-Poly1305 de Sodium, nonce aleatorio por archivo y versión de cifrado. Los datos asociados son `offline:v1:<UUID interno de evidencia>`; el HMAC de la reserva vincula producto/request y todos los bytes firmados. Esto permite conservar una firma válida si un cliente incluyó una clave comercial opcional sin almacenarla en claro ni exponerla en proyecciones. Recomendar siempre generar archivos sin esa clave. La misma disciplina de cifrado autenticado y nonce único se aplica a los secretos TOTP, con otra clave. [PHP: cifrado autenticado XChaCha20-Poly1305](https://www.php.net/manual/en/function.sodium-crypto-aead-xchacha20poly1305-ietf-encrypt.php).
+## 11. Respaldos y restauración
 
-Motivos administrativos tienen longitud limitada y aviso de no incluir secretos. Auditoría registra emisión, cambios de módulos, mantenimiento, periodos, importación y decisiones offline, transferencias, revocaciones, login/logout, cambios de rol, MFA y claves. Eventos de éxito se confirman con el cambio; intentos fallidos de acceso tienen registro independiente sin secretos.
+- **Formato.** `ADELPOS-LICENSE-BACKUP-V1`, extensión `.adelposbackup`. Es un flujo XChaCha20-Poly1305 (secretstream) con cabecera y bloques autenticados, cierre final obligatorio y fin de archivo exacto.
+- **Contenido.** El volcado de la base, la configuración con sus secretos, las llaves de firma y un manifiesto con el SHA-256 de cada archivo.
+- **Llave.** Es de 32 bytes y vive en un archivo 0600 separado del respaldo. Quien tenga el respaldo y la llave obtiene todos los secretos, así que deben custodiarse por separado.
+- **Extracción.** Va a un directorio nuevo 0700 con archivos 0600. Rechaza datos alterados o truncados, nombres fuera del manifiesto y hashes incorrectos.
+- **Restauración.** Solo en una base vacía. Nunca borra datos y usa un bloqueo por base.
+- **Utilidades de MySQL** (`mysqldump`, `mysql`; `src/Infrastructure/MySqlFiles.php`):
+  - reciben las credenciales en un archivo temporal 0600, nunca en la línea de comandos;
+  - se ejecutan con el entorno vacío, salvo `MYSQL_TEST_LOGIN_FILE` apuntando a una ruta inexistente;
+  - así nunca leen credenciales guardadas en `~/.mylogin.cnf`, que MySQL 8.0 lee incluso con `--defaults-file`.
 
-Política propuesta: logs técnicos/IP 30 días, auditoría y evidencia de derechos durante la vida de la licencia; contactos mínimos y eliminación/anonimización cuando no afecte trazabilidad necesaria. No se afirma un plazo legal: el propietario debe definir su política aplicable. Respaldos cifrados y restauraciones ensayadas según [OPERATIONS.md](OPERATIONS.md).
+## 12. Repositorio, paquete y despliegue
 
-## 9. Controles HTTP y secretos de etapa 2
+- **Revisión de secretos.** `php bin/check-secrets.php` se ejecuta antes de cada commit. Falla con valores en `DB_PASSWORD` o `*_KEY`, llaves privadas PEM o Ed25519, archivos bajo `var/keys/` o archivos `*.key` o `*.pem`, y nunca imprime el valor. `.gitignore` excluye la configuración local, `var/`, las llaves, los respaldos, `vendor/` y `node_modules/`.
+- **Paquete.** `bin/build-release.php` solo empaqueta archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`, más una lista explícita de archivos. Aborta si aparece configuración local, `var/`, `.DS_Store` o una llave. No incluye `vendor/`, pruebas ni `contracts/`. Lo verifica `tests/Unit/ReleasePackageTest.php`.
+- **Nginx** (`deploy/nginx.conf.example`, dominio de pruebas `licensing.sicrat.com`):
+  - TLS 1.2 y 1.3, HSTS, `server_tokens off`;
+  - cuerpo máximo de 96 KiB (16 KiB en `/v1`);
+  - archivos ocultos denegados y ningún `.php` accesible directamente;
+  - bandera de mantenimiento con respuesta 503.
+- **PHP-FPM** (`deploy/php-fpm-pool.conf.example`): pool y usuario propios `adelpos-license`, `clear_env`, errores sin mostrar, `expose_php` apagado y límites de subida de 64 KiB.
 
-CSP sirve scripts y estilos propios; permite imágenes data únicamente para el QR. Las respuestas dinámicas llevan `Cache-Control: no-store`, `nosniff`, prohibición de framing y `Referrer-Policy: same-origin`: conserva Origin en formularios del propio sitio sin enviar referencias a sitios externos. Cada POST valida CSRF y, si viene Origin, exige el origen exacto configurado. Se rechaza `Origin: null`.
+## 13. Fuera del alcance
 
-Producción exige HTTPS y cookie `__Host-license_admin`; solo development/testing permite HTTP de loopback y usa `aibid_admin_dev`. APP_URL es un origen sin subdirectorio. `config/local.php` se genera con permisos 0600 y cinco secretos independientes; la configuración real queda excluida de distribución y no se usa en las pruebas. No reemplazar esas claves al actualizar: MFA, búsquedas comerciales, idempotencia y auditoría dependen de ellas.
-
-La cuenta SQL de aplicación tiene SELECT/INSERT, sin UPDATE/DELETE, sobre auditoría, historial, periodos y mantenimiento. La verificación de cadena por CLI permite exportar un anclaje; su almacenamiento externo y los respaldos del VPS aún deben configurarse. No se afirma resistencia frente a un administrador de BD con acceso conjunto a todos los secretos.
-
-## 10. Firma y API de etapa 3
-
-La API no reutiliza autenticación del panel. Verifica Ed25519 sobre los bytes exactos de LIC-V1; mantiene el texto recibido de UUID para la firma y compara identidad en binario. El proof no cubre todos los campos del cuerpo por diseño V1; se exige TLS y el HMAC de idempotencia cubre todos sus campos y tipos. El parser rechaza JSON duplicado, tipos ambiguos, caracteres de control, base64url no canónico y datos fuera de los límites documentados.
-
-Las claves privadas están en archivos 0600 bajo un directorio absoluto fuera de public/. El registro guarda una referencia aleatoria, sin construir rutas a partir de un kid recibido por HTTP. El cargador comprueba ubicación, permisos, par Ed25519 y coincidencia de kid/entorno/propósito/pública entre archivo y BD. Producción rechaza las cuatro claves deterministas públicas del paquete V1 aunque se les cambie el nombre. La app solo consulta el registro; generación/selección por CLI requieren permisos SQL de gestión separados.
-
-La publicación mantiene bloqueo compartido del ámbito firmante hasta commit. La rotación selecciona la nueva clave bajo bloqueo exclusivo, conserva las públicas antiguas y no cambia JWS ya archivados. Un refresh existente puede responder aunque no esté accesible la privada: no necesita refirmar. Activar, cambiar derechos o retirar una activación requiere guardar su nueva firma; si falla, se revierte incluso la liberación de plaza.
-
-No hay claves de producción generadas en esta entrega ni configuración local reemplazada. Los tests crean claves aleatorias temporales y usuarios SQL aislados. La prueba de rechazo en producción solo cambia la etiqueta de entorno dentro de una fixture; no utiliza servicios productivos.
-
-## 11. Evidencia y autorizaciones offline de etapa 4
-
-El cifrado de evidencia usa una clave de 32 bytes derivada por HKDF-SHA256 desde `CREDENTIAL_KEY`, con info exacta `aibid/offline-evidence/v1`, salt vacío y nonce aleatorio de 24 bytes. Es una clave criptográfica distinta a la del HMAC comercial y al cifrado MFA; comparte raíz de recuperación con `CREDENTIAL_KEY`. Esta decisión permite actualizar sin reemplazar ni generar secretos en la configuración existente. Su compromiso afecta también la evidencia: debe respaldarse/protegerse la raíz y no rotarla sin migrar los originales cifrados y las credenciales. No existe rotación automática en esta entrega.
-
-La app verifica Ed25519 antes de reservar una importación y otra vez sobre los bytes originales descifrados al aprobar. Contrasta el HMAC de la reserva y el vínculo de instalación/clave/huella/licencia/producto. Evidencia, decisión y transferencia solo admiten INSERT en SQL de runtime. Una clave comercial opcional no autoriza ni aparece en las vistas, proof archivado, auditoría o resultado idempotente. El archivo temporal de PHP no se mueve a public/, y el nombre/MIME enviados no determinan rutas ni validez.
-
-Todos los formularios nuevos usan sesión MFA, rol, CSRF y Origin. Multipart solo se admite en importación, con límites propios de cuerpo/archivo y 30 intentos por minuto por administrador. La recuperación y transferencia forzada exigen superadministrador, contraseña y TOTP sin reutilizar, motivo y aceptación explícita de la limitación offline. Si falla alguna firma o escritura, la plaza anterior permanece activa. Las solicitudes terminales no se purgan ni se rehabilitan mediante una segunda decisión.
-
-
-## Respaldo y recuperación implementados en etapa 5
-
-Formato versionado `AIBID-BACKUP-V1`: secretstream XChaCha20-Poly1305, cabeceras y bloques autenticados, cierre final obligatorio y EOF exacto. La clave independiente de 32 bytes está fuera del archivo, en un archivo 0600 accesible al operador de respaldo; el pool FPM no accede a ella en el despliegue propuesto. La extracción rechaza rutas ajenas a la lista de entradas, duplicados, ciphertext alterado/truncado y hashes incorrectos; usa una carpeta nueva 0700 con archivos 0600. No es un tar genérico ni ejecuta la configuración JSON extraída.
-
-El archivo incluye datos SQL y secretos necesarios para recuperar licencias perpetuas, credenciales, MFA y evidencia. La cuenta de quien descifra pasa a tener esos secretos; la copia externa y la clave de recuperación deben tener custodias separadas. Los temporales de staging contienen datos sin cifrar dentro de un directorio privado; un corte abrupto exige revisar sus restos. No se promete borrado seguro de SSD mediante unlink.
-
-El respaldo coordina metadatos de firma y cabecera de auditoría con un dump InnoDB consistente; las migraciones/DDL no deben coincidir. La recuperación SQL exige una base vacía explícita y no borra datos existentes. El verificador detecta JWS alterados, contadores/punteros incongruentes y evidencia inválida, y compara secuencia/hash con el anclaje externo suministrado. El anclaje debe provenir de una copia anterior protegida independientemente; la cadena local sola no detecta restauración conjunta a un pasado válido.
-
-Ni restaurar ni verificar quita mantenimiento o reanuda firmas. No publicar una copia atrasada sin reconciliar operaciones posteriores. La tarea systemd de ejemplo crea copias/anclajes locales, no almacenamiento externo ni binlogs. Procedimiento en [la guía del VPS](DEPLOY_UBUNTU_24_04.md).
-
-## Fase comercial 1: credenciales, documentos y permisos
-
-Las credenciales nuevas usan 15 símbolos aleatorios de un alfabeto de 31 caracteres (74.31 bits), sin prefijo ni checksum que reduzca entropía. Los códigos nuevos y PDF/snapshots se protegen con XChaCha20-Poly1305, HKDF-SHA256 desde CREDENTIAL_KEY, contextos por registro y propósitos distintos; HMAC sigue permitiendo la búsqueda. No regenerar esa raíz al actualizar.
-
-Operador requiere grants adicionales para credentials.reveal, documents.delivery y offline.download; superadmin conserva todos. Revelación, entrega sensible y descarga .lic requieren contraseña/TOTP nuevo, permiso revalidado y auditoría. Una entrega online también exige credentials.reveal; una offline exige offline.download, incluso para históricos. La referencia y nota administrativas son opcionales, con historial separado del JWS.
-
-Verificación pública usa referencia aleatoria de 256 bits, rate limit, sin sesión ni datos personales/códigos/instalación y con SHA-256 del PDF para detectar QR copiados a documentos alterados. No sustituye Ed25519 de los .lic ni acredita una activación vigente. El PDF no incorpora firma PAdES. Dompdf 3.1.6 se configura sin contenido remoto, ejecución PHP/JavaScript ni HTML/SVG suministrado por el usuario.
-
-La liberación de una instalación offline requiere superadmin, reautenticación, motivo y reconocimiento explícito de que una solicitud firmada demuestra posesión, no borrado de clones. Protección de privada/contadores/retiros en los sistemas operativos corresponde al consumidor. No se fuerza conectividad en perpetuas offline.
+- **Protecciones del equipo del restaurante.** Clonar una máquina virtual completa, restaurar instantáneas antiguas o cambiar el reloj: le corresponden a AD-EL POS (contrato, secciones 5.6 y 12).
+- **Copias desconectadas.** No hay borrado remoto de una copia que sigue sin conexión (contrato, sección 9.2).
+- **Ataques volumétricos.** Requieren protección de red, además de los límites de la aplicación.
+- **Administrador de MySQL o del servidor con todos los secretos.** Puede alterar datos. La auditoría lo detecta solo comparando contra un anclaje externo previo.
+- **Firma de instaladores y actualizaciones automáticas.** Fuera de V1 (contrato, sección 15).

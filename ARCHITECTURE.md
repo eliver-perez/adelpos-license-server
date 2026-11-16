@@ -1,175 +1,136 @@
-# Arquitectura del servidor AIDEX
+# Arquitectura del servidor de licencias de AD-EL POS
 
-Estado: diseño e implementación de etapas 1–5. Panel administrativo, firma/API online, solicitudes offline y transferencias disponibles. La etapa 5 comprueba localmente el cliente real mediante HTTPS/Nginx/FPM y añade respaldo cifrado y recuperación verificada. La instalación del VPS queda a cargo del usuario con [esta guía](DEPLOY_UBUNTU_24_04.md). Contrato de referencia: [V1.0](LICENSE_CONTRACT.md). Registro de decisiones: [DECISIONS.md](DECISIONS.md).
+Este documento describe el código tal como queda al cerrar la etapa 1. Cada parte que todavía sigue el protocolo heredado está señalada como **herencia temporal**, con la etapa que la reemplaza según el contrato [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
 
 ## 1. Límites del sistema
 
-Aplicación PHP modular, desplegada en un único VPS Ubuntu con Nginx, PHP-FPM y MySQL 8/InnoDB. API y panel comparten servicios de negocio y transacciones. No necesitan un proceso PHP residente, una cola, Redis ni un instalador de escritorio. Las tareas periódicas de mantenimiento podrán ejecutarse con cron o timers del sistema.
-
-El servidor administra clientes, productos, derechos, activaciones, revisiones, mantenimiento y auditoría. El cliente Go aplica los derechos sobre sus operaciones documentales; React presenta su estado. No se almacenan bibliotecas, documentos, rutas de disco, OCR ni usuarios finales del gestor. No se comparten bases de datos.
-
-```mermaid
-flowchart LR
-    Go["Cliente Go: identidad Ed25519 y verificación local"] -->|"HTTPS /v1"| Nginx
-    Admin["Administrador: navegador privado"] -->|"HTTPS /admin"| Nginx
-    Files["Archivos .licreq / .lic"] --> Admin
-    Nginx --> Api["Controladores API PHP"]
-    Nginx --> Panel["Controladores y vistas Bootstrap"]
-    Api --> Services["Servicios de licencias y transacciones"]
-    Panel --> Services
-    Services --> DB[("MySQL 8 / InnoDB")]
-    Services --> Crypto["Ed25519 / ext-sodium"]
-    Crypto --> Keys["Claves protegidas fuera del directorio público"]
-    DB --> Backup["Respaldo cifrado y auditoría externa"]
-```
-
-`/v1` autentica instalaciones mediante proof; `/admin` tiene restricción de red configurable además de sesión, roles y MFA. Las restricciones del panel no deben impedir la activación de clientes externos. Solo `public/` será raíz web.
-
-## 2. Organización objetivo
-
-```text
-public/                 index.php y assets estáticos propios
-src/Http/Api/           controladores y validadores del contrato V1
-src/Http/Admin/         controladores, sesión, CSRF y autorización
-src/Application/       casos de uso y límites de transacción
-src/Domain/            reglas de licencias, capacidades y vigencias
-src/Infrastructure/    repositorios PDO, Sodium, reloj y auditoría
-templates/             vistas PHP con Bootstrap 5
-assets/                JavaScript y estilos fuente legibles
-config/                configuración sin secretos reales
-database/migrations/   migraciones versionadas y datos iniciales
-bin/                   bootstrap administrativo y tareas operativas
-tests/                 unidades, integración, contrato y panel
-contracts/v1/fixtures/ vectores públicos exclusivamente de prueba
-```
-
-Servicios principales: `IssueLicense`, `ChangeLicenseEntitlements`, `RenewSubscription`, `PurchaseMaintenance`, `ActivateInstallation`, `RefreshActivation`, `DeactivateInstallation`, `ImportOfflineRequest`, `ApproveOfflineRequest`, `TransferLicense`, `RevokeLicense`. Las rutas del panel y de API llaman a los mismos casos de uso. La validación HTTP no sustituye las invariantes del dominio.
-
-`LicenseSigner`, `InstallationProofVerifier`, `OfflineRequestVerifier`, `Clock`, `TransactionManager` y repositorios tendrán interfaces pequeñas. El reloj inyectable permite probar límites temporales sin esperas. Se usará Composer para autoload y dependencias justificadas; no se elegirá una biblioteca de MFA sin evaluar mantenimiento, licencia y pruebas al implementarla. La criptografía Ed25519 utiliza Sodium directamente.
-
-## 3. Entidades y fuentes de verdad
-
-| Concepto | Responsabilidad |
+| Le corresponde | No le corresponde |
 | --- | --- |
-| Licencia comercial | Producto, cliente, modalidad, derechos, estado comercial y contador de revisiones |
-| Credencial comercial | Secreto de alta entropía utilizado exclusivamente para activar |
-| Activación | Identidad de una instalación autorizada, huella y estado de ocupación de plaza |
-| Revisión | Instantánea inmutable del payload y del JWS emitido para una activación |
-| Periodo de suscripción | Operación comercial que establece o extiende `expires_at` explícitamente |
-| Mantenimiento | Compra opcional independiente para una perpetua |
-| Solicitud | Idempotencia y resultado de una operación online u offline |
-| Auditoría | Quién autorizó el cambio, motivo y referencias a sus resultados |
+| Emitir, firmar, renovar, transferir, revocar y auditar licencias | Ejecutar o validar ventas del restaurante |
+| Administrar clientes, productos y módulos | Contar sesiones o aplicar cupos: lo hace el servidor Go de AD-EL POS |
+| Responder la API `/v1` y procesar solicitudes sin internet | Hablar con las terminales del restaurante |
+| Guardar llaves privadas de firma y respaldos cifrados | Actualizar AD-EL POS o firmar sus instaladores |
 
-Una licencia recién emitida puede no tener activación; aún no es posible generar su payload V1, que exige identidad y `activation_id`. Se guarda el derecho comercial y el código nuevo se cifra para recuperación autorizada, además de guardar su digest; su revelación requiere permiso y reautenticación fuera de la presentación inicial autorizada. Al activarse, se emite la primera revisión firmada. Los cambios comerciales sin activación se auditan y se incorporan al siguiente JWS; no se inventa una identidad de instalación para firmarlos.
+El servidor de AD-EL POS verifica cada licencia sin internet, con las llaves públicas. Este servidor nunca recibe datos de operación del restaurante.
 
-Cada emisión de un nuevo JWS toma el siguiente contador global de su licencia bajo bloqueo. El cliente compara revisiones dentro de cada `activation_id`. Se permiten saltos y nunca se reutiliza un número. `refresh` sin cambios devuelve el JWS vigente sin elevar el contador; una renovación, cambio de módulos, mantenimiento o revocación genera una revisión nueva. Un reintento idempotente devuelve los mismos bytes de la respuesta original.
+## 2. Componentes
 
-## 4. Estados y transiciones
-
-| Objeto | Estados internos | Transiciones admitidas |
-| --- | --- | --- |
-| Licencia | `issued`, `revoked` | Emisión → `issued`; revocación comercial → `revoked`. Rehabilitación fuera de V1 del panel inicial |
-| Activación | `active`, `deactivated`, `revoked` | Creación → `active`; salida irreversible de esa activación por desactivación, revocación o transferencia |
-| Solicitud offline | `pending`, `approved`, `rejected` | Importación verificada → `pending`; decisión administrativa → estado terminal |
-| Desafío | disponible, consumido, vencido | Disponible → consumido tras prueba válida; vencimiento derivado de su instante límite |
-| Clave firmante | `staged`, `signing`, `verify_only`, `compromised` | Preparación → firma → solo verificación; incidente → comprometida |
-
-Los estados internos no se agregan al JSON firmado. `license_status` solo toma `active` o `revoked`. Una suscripción vencida mantiene su activación y ocupa la plaza; vencer no autoriza otra instalación. Un producto archivado deja de venderse pero conserva la verificación y el refresh de licencias anteriores.
-
-| Estado derivado en el cliente | Condición | Comportamiento del cliente |
-| --- | --- | --- |
-| Sin activar | No existe JWS válido aceptado | Asistente y recuperación/exportación administrativa segura |
-| Inválida | Firma, producto, identidad o contenido inválidos | Recuperación sin escrituras documentales |
-| Revocada | JWS autenticado `revoked` | Consulta, visualización, descarga y respaldo |
-| Perpetua activa | JWS `active`, `expires_at:null`, `grace_days:0` | Uso indefinido de versiones autorizadas |
-| Suscripción activa | `now < expires_at` | Operación normal |
-| Tolerancia | `expires_at <= now < expires_at + 1296000 segundos` | Operación normal y aviso al administrador |
-| Vencida | `now >= expires_at + 1296000 segundos` | Solo lectura y exportación |
-
-Primero se valida la autenticidad y la identidad, después la revisión y el estado, luego el tiempo y las capacidades. Un error de red no equivale a revocación. El servidor no puede garantizar el reloj ni el borrado de una copia desconectada.
-
-## 5. Flujos y atomicidad
-
-```mermaid
-sequenceDiagram
-    participant C as Cliente Go
-    participant A as API PHP
-    participant D as MySQL
-    C->>A: POST challenge, action=activate
-    A->>D: Registrar desafío con caducidad
-    A-->>C: challenge_id, nonce, expires_at
-    C->>C: Firmar proof exacto V1
-    C->>A: POST activations con request_id y proof
-    A->>A: Validar JSON, límites y prueba de posesión
-    A->>D: BEGIN; reservar request_id; bloquear desafío y licencia
-    A->>D: Comprobar identidad, estado y plaza; consumir desafío
-    A->>D: Crear activación y reservar revisión
-    A->>A: Firmar JWS con Sodium
-    A->>D: Guardar JWS, respuesta y auditoría; COMMIT
-    A-->>C: license_jws, server_time, request_id
-```
-
-Si la firma, persistencia o auditoría falla, se revierte la transacción completa. Nunca se responde con un JWS que no quedó confirmado. Si la respuesta se pierde después del commit, el reintento recupera el resultado por `request_id`. El orden detallado de bloqueos y errores está en [SCHEMA.md](SCHEMA.md).
-
-Offline: importar `.licreq` → comprobar firma y formato → guardar pendiente → mostrar identidad y licencia propuesta → decisión administrativa con motivo → volver a comprobar derechos y plaza bajo bloqueo → emitir y archivar `.lic`. Importar no concede derechos. La renovación conserva licencia/activación e incrementa revisión; no renueva automáticamente por el mero hecho de importar una solicitud. La fecha comercial se selecciona explícitamente.
-
-Transferencia: el superadministrador identifica la activación saliente y el motivo, revoca su autorización y libera la plaza en una transacción. Si se dispone de una solicitud válida del nuevo equipo, puede autorizarse dentro de esa misma operación; de lo contrario, la licencia queda sin plaza ocupada hasta una activación posterior. Nunca se reutiliza el `activation_id` anterior ni se copian su clave o huella al equipo entrante. Véase la interpretación aceptada B-01 para entregar al equipo retirado su resultado firmado.
-
-## 6. Reglas comerciales
-
-- `gestor_documental` es el identificador inicial estable. El catálogo admite productos nuevos sin cambiar el servicio de firma.
-- Una perpetua se crea con `expires_at:null`, `grace_days:0`, `maintenance_until:null`. Su corte de versiones se registra explícitamente al venderla. No hay cortesía ni seis meses incluidos.
-- Mantenimiento requiere una operación de compra separada y auditada; extiende `maintenance_until` y `entitled_release_until` sin limitar el uso de versiones ya adquiridas.
-- Suscripción: fecha de vencimiento obligatoria, `grace_days:15`, mantenimiento nulo. El corte de versiones propuesto coincide con el vencimiento contratado. La tolerancia no extiende ese corte.
-- Renovar establece un nuevo vencimiento explícito superior al anterior; la UI de etapa 2 permite introducir explícitamente el instante UTC final. No hay cobro ni renovación automática.
-- `review_workflow` requiere `expedientes`. Cargar documentos a expedientes requiere también `managed_libraries`; esa condición se comprueba en la operación del cliente. No se convierte unilateralmente en una dependencia general `expedientes → managed_libraries`.
-- El modo híbrido es `linked_libraries:true` y `managed_libraries:true`. No existe `hybrid` en el catálogo, el payload ni el cobro.
-- `limits`: una instalación y los otros tres límites nulos para el primer producto. La extensibilidad no habilita múltiples plazas en esta implementación.
-- Reducir módulos o derechos genera revisión y conserva datos; los controles de consulta/exportación pertenecen al cliente Go.
-
-## 7. Panel administrativo
-
-| Pantalla | Datos y operaciones |
+| Ruta | Función |
 | --- | --- |
-| Acceso | Login, segundo factor, recuperación de acceso; sin registro público |
-| Resumen | Licencias por vencer, solicitudes pendientes, incidentes operativos sin secretos |
-| Clientes | Cliente, contactos mínimos y licencias relacionadas |
-| Productos | `product_id` inmutable, nombre, capacidades y dependencias; archivado sin eliminación histórica |
-| Emisión | Cliente, producto, modalidad, módulos y vigencia; mantenimiento separado y desmarcado |
-| Detalle de licencia | Derechos, plaza actual, revisiones, periodos, mantenimiento e historial |
-| Operaciones offline | Importación, resultado de verificación, asignación, aprobación/rechazo y exportación |
-| Transferencia/revocación | Identidad afectada, efectos, motivo obligatorio y reautenticación |
-| Seguridad | Administradores, roles, MFA y metadatos públicos de claves |
-| Auditoría | Consulta y filtros; sin botones de edición ni borrado |
+| `public/index.php` | Punto de entrada único. Fija cabeceras de seguridad (CSP, `X-Frame-Options`, `Referrer-Policy`, HSTS con HTTPS) y entrega cada petición a `Http\Kernel`. Si algo falla al arrancar, responde 503 con un identificador de referencia y lo registra con el prefijo `adelpos-license`. |
+| `public/router.php` | Solo para el servidor PHP local de desarrollo: sirve los recursos estáticos y envía lo demás a `index.php`. |
+| `public/assets/` | `app.css`, `app.js`, Bootstrap 5 local (sin CDN) y la marca en `brand/` (`adel-pos-tema-claro.png`, `adel-pos-tema-oscuro.png`, `icon.png`). |
+| `src/App.php`, `src/Config.php` | Arranque y composición de servicios. La configuración viene de `ADELPOS_LICENSE_CONFIG` o de `config/local.php`. Las variables de entorno con el mismo nombre tienen prioridad, y `Config::validate()` revisa claves y origen. |
+| `src/Http/` | `Kernel` (panel: rutas, sesión, CSRF, origen, redes permitidas), `ApiKernel` (API `/v1`), `View` (escape, fechas en `America/Monterrey` y etiquetas de auditoría) y `Network` (`ADMIN_NETWORKS`). |
+| `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios), `ActivationService` (API en línea), `OfflineService` (`.licreq`/`.lic`), `RevisionPublisher` (firma de revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias) y `Operations` (idempotencia). |
+| `src/Domain/` | Reglas sin estado: `Protocol`, `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `Input`, `Uuid`, `Problem` y `ApiProblem`. |
+| `src/Infrastructure/` | MySQL (`Database`, `Migrator`, `ReadRepository`, `MySqlFiles`), criptografía (`Crypto`, `SigningKeys`, `Totp`), `Sessions`, `RateLimiter`, `Audit`, respaldos (`Backup`, `EncryptedArchive`, `RecoveryVerifier`), `CertificatePdf` y `Clock`. |
+| `templates/` | Vistas PHP del panel, la verificación pública y la constancia PDF. |
+| `bin/` | CLI de operación: configuración, migración, permisos, administrador inicial, llaves, respaldo y restauración, verificación de auditoría, limpieza, comprobaciones previas, paquete de despliegue y revisión de secretos. |
+| `database/migrations/` | `001_esquema_inicial.sql`: esquema único y producto `adel_pos` sin módulos. |
+| `deploy/` | Ejemplos de Nginx y del pool de PHP-FPM, y el servicio y temporizador `adelpos-license-maintenance.*`. |
+| `contracts/v1/` | Archivos de prueba del contrato heredado, su generador PHP y el verificador independiente en Go. Solo para desarrollo; no entran en el paquete. |
 
-Listados con filtros por cliente, producto, estado y vencimiento; paginación en servidor. La interfaz de etapa 2 muestra y recibe fechas en UTC. La clave comercial solo aparece al emitir; no se recupera desde el detalle. Las descargas `.lic` requieren sesión y permiso, sin enlaces públicos permanentes. Los archivos importados nunca se sirven directamente.
+## 3. Panel administrativo
 
-| Acción | Superadministrador | Operador de licencias | Consulta |
-| --- | --- | --- | --- |
-| Consultar clientes, derechos e historial | Sí | Sí | Sí |
-| Emitir/renovar, módulos, mantenimiento, clientes | Sí | Sí | No |
-| Importar y aprobar activación/renovación offline | Sí | Sí | No |
-| Desactivar con solicitud válida | Sí | Sí | No |
-| Forzar transferencia o revocar comercialmente | Sí | No | No |
-| Administrar productos/catálogos, usuarios o claves | Sí | No | No |
-| Exportar `.lic` | Sí | Sí | No |
+Recorrido de una petición:
 
-Se verifica autorización en cada controlador y caso de uso. Ocultar una acción en la vista no concede protección. MFA TOTP está implementado desde el bootstrap de etapa 2; el restablecimiento de MFA se realiza por CLI y queda auditado.
+1. **Red.** `Kernel` deriva a `ApiKernel` cualquier ruta `/v1/...`, y atiende `/verify/<token>` (verificación pública de constancias, limitada por IP). El resto del panel solo responde a redes de `ADMIN_NETWORKS`.
+2. **Sesión.** Se carga desde la cookie `__Host-license_admin`, o `adelpos_admin_dev` en desarrollo. Las sesiones viven en `admin_sessions`, guardadas como hash del token.
+3. **Formularios.** Cada `POST` exige el token CSRF de la sesión. Si el navegador envía `Origin`, debe coincidir con `APP_URL`.
+4. **Acceso.** Usuario y contraseña (Argon2id), luego la verificación en dos pasos (TOTP) obligatoria y 8 códigos de recuperación de un solo uso. Con HTTPS se puede confiar en el navegador durante 30 días (cookie `__Host-adelpos_trusted_device`); la contraseña sigue siendo obligatoria.
+5. **Roles.**
+   - `superadmin`: todo.
+   - `operator`: escribe, con permisos opcionales (`credentials.reveal`, `documents.delivery` y `offline.download`).
+   - `viewer`: solo consulta.
 
-## 8. Implementación de etapa 3
+   Las acciones sensibles (revelar el código, descargar un `.lic`, constancias de entrega, transferencias) piden de nuevo la contraseña y un código de verificación.
+6. **Idempotencia.** Cada mutación lleva un `operation_id`. `Operations` guarda el resultado, así que un reintento no repite la operación.
 
-`Http/ApiKernel` atiende las cuatro rutas del contrato antes de cargar sesiones administrativas. `ActivationService` valida proofs y administra desafíos/idempotencia; `RevisionPublisher` publica derechos y `SigningKeys` obtiene la clave del propósito/entorno correcto. Las operaciones comparten PDO y el mismo commit de activación, contador, JWS, respuesta y auditoría. La transacción puede reintentarse dos veces únicamente ante deadlock/timeout conocido después de rollback completo; una pérdida de conexión durante commit no se presume fallida.
+## 4. API en línea `/v1`
 
-`LicenseService` llama al publicador al cambiar módulos, renovar, comprar mantenimiento o revocar una licencia con instalación activa. Guardar módulos idénticos y reemplazar una credencial comercial no crea otra firma. Las activaciones terminadas conservan su revisión terminal; una renovación posterior no vuelve a autorizar equipos retirados.
+| Ruta | Acción |
+| --- | --- |
+| `POST /v1/activations/challenge` | Desafío de un solo uso para `activate`, `refresh` o `deactivate` |
+| `POST /v1/activations` | Activar con el código comercial y la prueba de posesión |
+| `POST /v1/activations/refresh` | Devolver la revisión vigente de una activación |
+| `POST /v1/activations/deactivate` | Desactivar y liberar la licencia |
 
-El panel añade instalación activa/histórica y las últimas 50 revisiones descargables. La descarga requiere rol superadministrador u operador y entrega los bytes JWS archivados, sin regenerarlos ni crear una activación. La etapa 4 conecta la aprobación offline y transferencia forzada a este mismo publicador.
+**Condiciones de cada petición:**
+- `POST`;
+- HTTPS (en desarrollo se acepta HTTP desde la propia máquina);
+- `Content-Type: application/json`;
+- 16 KiB como máximo, y JSON estricto: se rechazan claves duplicadas y valores inválidos;
+- límite de 30 peticiones por minuto por IP.
 
-## 9. Implementación de etapa 4
+**Errores:** responden `{"error":{"code","message","request_id"}}`. Una falla interna responde `TEMPORARY_UNAVAILABLE` y se registra con el prefijo `adelpos-license API`.
 
-`Domain/OfflineRequest` verifica formato, firma exacta y campos tipados; devuelve una proyección sin clave comercial. `OfflineService` reserva el espacio compartido de requests, cifra el original, procesa decisiones y recuperaciones. Reutiliza `Operations`, `RevisionPublisher` y la renovación comercial de `LicenseService`, dentro de una sola transacción PDO. Las funciones internas de renovación exigen una transacción; el caso de uso externo aplica rol, idempotencia y bloqueo de producto/licencia antes de invocarlas.
+**Funcionamiento:**
+- La prueba de posesión es una firma Ed25519 de la instalación sobre el desafío.
+- `license_requests` guarda cada `request_id`: un reintento idéntico devuelve la misma respuesta, y uno con otro contenido se rechaza.
+- `ActivationService` registra la activación y `RevisionPublisher` firma una revisión nueva.
 
-`offline_requests` conserva evidencia y proyección inmutables. `offline_decisions` contiene una única decisión por solicitud y referencia a su revisión. El estado pendiente se deriva de la ausencia de decisión; no se sobrescribe el original para aprobarlo. `license_transfers` registra origen/destino, motivo y aceptación del límite offline. El estado interno de una retirada forzada es `revoked`; una desactivación firmada usa `deactivated`. Ambas producen el JWS terminal `revoked` de B-01 y dejan la licencia comercial emitida.
+## 5. Firma de licencias
 
-El panel permite entregar derechos actuales mediante `renew` sin inventar una ampliación. Para ampliar una suscripción exige fecha futura superior a la anterior y referencia comercial explícita; para una perpetua, cualquier compra de mantenimiento sigue siendo una operación comercial separada. Una transferencia desde una solicitud de destino retira origen y activa destino atómicamente. La recuperación sin solicitud de destino solo libera la plaza; una activación posterior vuelve a competir por ella con las reglas normales.
+- **Llaves.** `SigningKeys` guarda cada llave privada Ed25519 en un archivo 0600 de `SIGNING_KEY_DIR`, por omisión `var/keys/<APP_ENV>`. En la base solo están la pública y una referencia.
+- **Estados y entornos.** Las llaves pasan por `staged`, `signing` y `verify_only`. `signing_scopes` marca la activa por entorno y propósito.
+- **Llaves de prueba.** En producción se rechazan las llaves derivadas de las semillas públicas de prueba.
+- **Revisiones.** `RevisionPublisher` arma el contenido, incrementa el contador de revisión de la licencia y firma un JWS compacto (`EdDSA`). Cada revisión queda en `license_revisions` con su SHA-256; nunca se edita.
 
-No se agregaron rutas públicas V1. Las rutas nuevas pertenecen a `/admin/offline` y la recuperación al detalle de licencia. La consulta puede ver historial/proyecciones; únicamente operador/superadministrador importan, deciden y descargan. Transferir forzadamente exige superadministrador y reautenticación con contraseña y TOTP nuevo en cada POST.
+## 6. Flujo sin internet
+
+1. AD-EL POS genera una solicitud `.licreq`: JSON firmado por la instalación, con acción `activate`, `renew` o `deactivate`.
+2. En **Solicitudes sin internet** el panel la importa. `OfflineRequest` verifica la firma y el formato, y el archivo original se guarda cifrado como evidencia.
+3. El propietario revisa la identidad y los derechos, asigna la licencia en una activación y aprueba o rechaza. Aprobar firma la revisión que corresponde.
+4. El `.lic` aprobado (el mismo JWS que en línea) se descarga con el permiso `offline.download`. Volver a descargarlo no crea otra activación.
+5. Desde el panel también se pueden autorizar una transferencia a otra instalación o la recuperación de un equipo averiado. Ambas piden confirmación explícita y nueva autenticación, y quedan en la auditoría.
+
+## 7. Auditoría
+
+- **Registro.** `Audit` encadena cada evento con un HMAC (`AUDIT_KEY`) sobre el hash anterior. La cabeza de la cadena está en `audit_heads`.
+- **Permisos.** La cuenta de la aplicación no puede modificar ni borrar eventos ni la historia comercial; `bin/preflight.php` lo comprueba en producción.
+- **Verificación.** `bin/audit-verify.php` recorre la cadena y emite un anclaje (número de eventos y último hash). Con `--against` lo compara con un anclaje guardado.
+- **Panel.** Muestra cada operación con una etiqueta en español (`View::action`).
+
+## 8. Respaldos y recuperación
+
+- **Crear.** `bin/backup.php --action=create` genera un archivo `.adelposbackup` cifrado por bloques (formato `ADELPOS-LICENSE-BACKUP-V1`) con una clave de respaldo de 32 bytes que se guarda aparte. Contiene `manifest.json` con los SHA-256, el volcado `database.sql`, `config.json` y las llaves de firma del entorno.
+- **Restaurar.** Solo en una base nueva y vacía, con `bin/restore-empty.php`. `bin/recovery-config.php` arma la configuración destino y `bin/recovery-check.php` verifica firmas, evidencias y auditoría restauradas.
+- **Mantenimiento diario.** El servicio `adelpos-license-maintenance` limpia datos temporales, emite el anclaje de auditoría y crea el respaldo cifrado.
+
+## 9. Constancias PDF
+
+- **Generación.** `DocumentService` genera constancias de licenciamiento o de entrega para activación. `CertificatePdf` las dibuja con dompdf: el logo claro de AD-EL POS, verificado por su SHA-256 y reducido solo en memoria, y un QR hacia `/verify/<token>`.
+- **Almacenamiento.** Cada constancia tiene un folio `ADELPOS-…` y una revisión inmutable. Se guarda cifrada junto con la huella SHA-256 del PDF.
+- **Verificación pública.** Confirma folio, revisión y estado, pero no demuestra que un equipo esté activado.
+
+## 10. Datos protegidos
+
+| Dato | Protección |
+| --- | --- |
+| Secretos TOTP y de inscripción | XChaCha20-Poly1305 con `MFA_KEY`, ligados al contexto de la cuenta |
+| Código comercial 3-4-4-4 | HMAC con `CREDENTIAL_KEY` para buscarlo; copia cifrada con un contexto HKDF `adelpos-license/activation-code/v1`, recuperable solo con permiso y nueva autenticación |
+| PDF y datos de constancias | Cifrados con el contexto `adelpos-license/document/v1` |
+| Evidencia de solicitudes sin internet | Cifrada con el contexto propio `adelpos-license/offline-evidence/v1`, que ningún otro propósito puede usar |
+| Tokens de sesión | Se guarda solo su SHA-256 |
+| CSRF y límites de intentos | HMAC con `SESSION_KEY` |
+| Códigos de recuperación | HMAC con `MFA_KEY` |
+| Operaciones idempotentes | HMAC con `OPERATION_KEY` sobre la acción y sus datos |
+| Cadena de auditoría | HMAC con `AUDIT_KEY` |
+
+## 11. Herencia temporal
+
+El motor de licencias recibido se conserva sin cambios de lógica. Las reglas fijas en el código llevan el comentario `HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (<regla>)`, y la lista de ubicaciones está en [AVANCE.md](AVANCE.md), sección 4.2.
+
+| Parte heredada | Cómo funciona hoy | Etapa que la reemplaza |
+| --- | --- | --- |
+| Contenido de la licencia | `installation_id`, huella del equipo, `maintenance_until`, `entitled_release_until`, `features` y `limits` | 2: campos del contrato (`server_id`, `environment`, `license_type`, `billing_period`, `updates_until`, `plan`, cupos) |
+| Rutas y mensajes del protocolo | Las 4 rutas de la sección 4, prueba `LIC-V1`, solicitud `LICREQ-V1`, encabezado `lic+jws` | 2: prueba `ADELPOS-LIC-V1`, `ADELPOS-LICREQ-V1`, `adelpos-lic+jws`, ruta de transferencia |
+| Archivos de prueba del contrato | `contracts/v1/fixtures/` con el producto sintético y el verificador Go actual | 2 |
+| Una instalación por licencia | `max_installations=1` y una sola activación activa | 2 |
+| Tolerancia | 15 días fijos en suscripción | 2 y 3 |
+| Huella del equipo | `fingerprint_version` `'1'` obligatoria | 2 |
+| Lista de límites | `max_users`, `max_libraries`, `max_documents` | 2: `cash_registers`, `order_takers`, `kitchen_displays` |
+| Tipos y fechas | Perpetua o suscripción con vencimiento libre; mantenimiento como compra separada | 3: planes, pruebas, meses de calendario, renovación y propagación de planes |
+| Transferencias | Solo desde el panel, por el propietario | 4: autoservicio y alertas; ajustes del flujo sin internet |
+| Panel y constancias | Pantallas actuales y constancias sin planes ni cupos | 5: pantallas nuevas, contenido de las constancias y despliegue en el VPS |

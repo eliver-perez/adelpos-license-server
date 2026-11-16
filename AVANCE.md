@@ -10,7 +10,7 @@ Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no 
 | 3 — Esquema inicial consolidado | **Cerrada.** 161 pruebas, 20 980 aserciones, todas OK. Equivalencia con la cadena original comprobada. |
 | 4 — Retirar lo exclusivo de AIDEX | **Cerrada.** 163 pruebas, 21 368 aserciones, todas OK. Verificador Go OK. 20 puntos heredados marcados. |
 | 5 — Marca y textos | **Cerrada.** 164 pruebas, 21 370 aserciones, todas OK. Playwright: panel y dispositivos de confianza OK. |
-| 6 — Documentación y cierre | Pendiente |
+| 6 — Documentación y cierre | **Cerrada.** 164 pruebas, 21 384 aserciones, todas OK. Playwright OK. Etapa 1 cerrada. |
 
 ---
 
@@ -714,3 +714,152 @@ Diferencia: +1 prueba y +2 aserciones, de `AuditLabelsTest`. Además: verificado
 **Pendientes del propietario:**
 - un ícono de pestaña, si quiere tenerlo;
 - el logo oscuro tiene píxeles sueltos alrededor de «ADEL» (observación; se usa tal cual).
+
+---
+
+## Fase 6 — Documentación y cierre
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### 6.1 Contrato
+
+`docs/CONTRATO_LICENCIAS_ADEL_POS.md` se copió **sin cambios** (comparado con `cmp`). SHA-256: `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, registrado en `DECISIONS.md`.
+
+### 6.2 `DECISIONS.md`, escrito desde cero
+
+Contiene:
+- la procedencia (fecha de la copia, commit de origen y SHA-256 de su `composer.lock`);
+- el SHA-256 del contrato;
+- las decisiones del propietario, con referencia a la sección 14 del contrato y las tomadas en esta etapa;
+- el endurecimiento del esquema;
+- 13 decisiones técnicas con su motivo;
+- el marcador de herencia;
+- los SHA-256 de los archivos de marca.
+
+### 6.3 Documentos reescritos para AD-EL POS
+
+| Documento | Contenido | Herencia temporal señalada |
+| --- | --- | --- |
+| `README.md` | Requisitos, instalación, llaves de firma, pruebas, revisión de secretos, paquete, índice y procedencia breve | Tabla por etapa, de la 2 a la 5 |
+| `ARCHITECTURE.md` | Límites, componentes, panel, API `/v1`, firma, flujo sin internet, auditoría, respaldos, constancias y datos protegidos | Protocolo `LIC-V1`/`LICREQ-V1`/`lic+jws` y puntos `HEREDADO` (etapa 2); tipos, fechas, renovación y planes (etapa 3); transferencias y alertas (etapa 4); pantallas, constancias y VPS (etapa 5) |
+| `SCHEMA.md` | Las 33 tablas por área, más `schema_migrations`; datos iniciales, endurecimiento, permisos por tabla, transacciones, migrador y prueba de equivalencia | `license_limits`, `chk_license_terms` (15 días), huella, acciones de desafío, entornos de firma y módulos |
+| `SECURITY.md` | Amenazas, secretos y contextos HKDF, llaves de firma, acceso, sesiones, límites de intentos, API, flujo sin internet, constancias, auditoría, respaldos, repositorio y paquete; qué queda fuera del alcance | Entornos de firma `test`/`production` (etapa 2), protocolo y huella (etapa 2), una instalación y 15 días (etapas 2 a 4), alertas (etapa 4) |
+| `OPERATIONS.md` | Configuración, base de datos, administradores, llaves, operación sin internet, mantenimiento, respaldos, revisión previa, paquete, revisión de secretos y vigilancia | Tabla por etapa y puntos `HEREDADO` |
+| `TEST_PLAN.md` | Requisitos, comandos, datos sintéticos y limpieza, qué cubre cada archivo de prueba, Playwright y qué se probará en las etapas 2 a 5. Las cifras remiten a este archivo. | Pruebas del motor heredado y su sustitución por etapa |
+| `DEPLOY_UBUNTU_24_04.md` | **Solo se renombró**: usuario, pool, rutas, servicios, variables, cuentas de MySQL y dominio de pruebas `licensing.sicrat.com`. Tiene una nota de que la revisión completa es de la etapa 5, las versiones del VPS y la sección «Convivencia» con recursos separados. | El ejemplo de configuración del cliente queda como referencial (integración de AD-EL POS) |
+
+- **Cifras y evidencias históricas:** se quitaron todas. Los enlaces apuntan solo a archivos que existen.
+- **Correcciones hechas durante la revisión, contrastando los documentos con el código:**
+  - la guía de despliegue no instalaba `php8.3-gd`, aunque `composer.json` lo exige; ahora sí;
+  - la guía describía las migraciones antiguas; ahora describe la migración única;
+  - la guía citaba las versiones de MySQL de las pruebas del origen; ahora cita MySQL 8.0.46;
+  - dos operaciones de auditoría registradas desde `bin/` no tenían etiqueta en español: `maintenance.cleanup` y `admin.recovered_via_cli`. Ya la tienen, y `AuditLabelsTest` revisa ahora también `bin/`;
+  - dos mensajes de la terminal decían «MFA»; ahora dicen «verificación en dos pasos»;
+  - `npm run test:panel` ejecuta ahora `tests/run-panel-tests.php all`.
+- **Diferencia entre la documentación anterior y el código, que queda pendiente para la etapa 5:** `deploy/nginx.conf.example` no configura `limit_req`. Los límites de intentos los aplica solo la aplicación, y la respuesta JSON de Nginx para 429 nunca se activa.
+
+### 6.4 Ícono de pestaña
+
+**Decisión del propietario (2026-11-16):** usar `logos-adelpos/icon.png`.
+- **Archivo:** se copió sin modificar a `public/assets/brand/icon.png` (1024 × 1024, SHA-256 `241504ff0356a39044862474bf3b071d82418a20763f001ba5e2f6287804456c`).
+- **Dónde se enlaza:** el panel, la verificación de constancias y la página de mantenimiento.
+- **Pruebas:**
+  - `ProductionHttpTest` comprueba el enlace y que el archivo se sirve intacto;
+  - `panel.cjs` comprueba que el enlace existe y carga.
+- **Filtro de `/favicon.ico` en Playwright:** se conserva para las peticiones que Chrome hace por su cuenta, por ejemplo en descargas.
+
+### 6.5 Paquete de despliegue
+
+`bin/build-release.php` y `ReleasePackageTest` incluyen ahora `DECISIONS.md` y `docs/CONTRATO_LICENCIAS_ADEL_POS.md`.
+
+### 6.6 Historial sin secretos
+
+Se revisaron todos los commits de la etapa:
+
+| Comprobación | Resultado |
+| --- | --- |
+| Rutas agregadas alguna vez (`config/local.php`, `var/` salvo `.gitkeep`, `vendor/`, `node_modules/`, `.phpunit.cache/`, `.DS_Store`, `*.key`, `*.pem`) | Ninguna |
+| Llaves privadas PEM en cualquier versión | Ninguna. Solo `SecretsCheckTest` las arma por partes, en memoria. |
+| `bin/check-secrets.php` sobre cada commit, en un árbol de trabajo temporal | Sin hallazgos desde la Fase 2. Los cuatro commits anteriores solo marcan las 4 semillas de `contracts/v1/fixtures/vectors.json`; se verificó que todas son las semillas **públicas** de prueba derivadas del prefijo anterior, que la revisión actual ya no reconoce. |
+
+---
+
+## Cierre de la etapa 1
+
+### Línea base contra resultado final
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Línea base del producto de origen (Fase 0) | 147 | 20 904 | 146 OK, 1 error (respaldos con MySQL 8.0) |
+| **Final de la etapa 1** | **164** | **21 384** | **Todas OK**: unitarias 75/20 576, integración 89/808, sin omisiones ni advertencias |
+
+**Cambios en el número de pruebas, cada uno justificado:**
+
+| Cambio | Pruebas | Detalle |
+| --- | --- | --- |
+| Excluidas desde la Fase 0 | 0 | Las 2 del cliente real nunca estuvieron en `phpunit.xml` (Fase 0). |
+| Nuevas | +22 | `SecretsCheckTest` (14), `ReleasePackageTest` (2), `InitialSchemaTest` (4), `ProtectedRecordTest::testRecordPurposesCannotAliasTheOfflineEvidenceKeyContext` (1) y `AuditLabelsTest` (1). |
+| Eliminadas | −5 | Rutas de actualización de la historia anterior, sustituidas por `InitialSchemaTest` (Fase 3). |
+| **Total** | **147 + 22 − 5 = 164** | |
+
+**Aserciones:** las variaciones se explican fase por fase (secciones 1.6, 2.4, 3.5, 4.4, 5.4 y la marca).
+
+### Otras comprobaciones finales
+
+- **Verificador Go:** «OK: 5 JWS, 3 proofs, 3 offline requests, 3 negative JWS», con los archivos de prueba regenerados.
+- **`php contracts/v1/generate-fixtures.php --check`:** OK.
+- **Playwright:** panel y dispositivos de confianza OK, con la marca nueva y el ícono.
+- **`php bin/check-secrets.php`:** sin hallazgos.
+- **Paquete de despliegue:** 123 archivos más `RELEASE.json`, 1.8 MB; incluye `DECISIONS.md`, el contrato y el ícono; sin `vendor/`, pruebas, `var/`, `contracts/` ni configuración local.
+- **Búsquedas de cierre:**
+  - `git grep -n -i -E 'aibid|aidex' -- . ':!*.md'` da 0 resultados.
+  - En la documentación quedan solo las menciones permitidas: procedencia en `README.md` y `DECISIONS.md`, convivencia en el VPS en `DEPLOY_UBUNTU_24_04.md` y el registro de esta etapa en `AVANCE.md`.
+- **Residuos:** 0 bases y 0 usuarios de prueba en MySQL.
+
+### Criterios de aceptación
+
+- [x] El repositorio es independiente, con un primer commit de la copia limpia y commits por fase. La Fase 1 tiene 4 commits: copia base, compatibilidad con MySQL 8.0 por decisión del propietario, funcionamiento sin los logos anteriores y cierre. Además hay un commit de marca, adelantado por instrucción del propietario.
+- [x] Ningún secreto, llave privada, configuración local ni artefacto del producto anterior está en el historial (6.6).
+- [x] No hay referencias a la identidad del producto anterior fuera de las menciones de procedencia (búsquedas de cierre).
+- [x] Hay un único esquema inicial, con prueba de equivalencia contra la cadena original, y los datos iniciales son solo `adel_pos`, sin módulos (Fase 3).
+- [x] La suite completa pasa. Las pruebas eliminadas y nuevas están justificadas arriba.
+- [x] El verificador en Go pasa con los archivos de prueba regenerados.
+- [x] El paquete de despliegue se genera sin secretos (`ReleasePackageTest`).
+- [x] El panel muestra la marca de AD-EL POS, con logos e ícono (Playwright y capturas revisadas).
+- [x] Los puntos heredados están marcados y listados para las etapas 2 a 4 (Fase 4: 20 puntos).
+- [x] El contrato está copiado sin cambios y su SHA-256 está registrado (6.1).
+
+### Pendientes para etapas posteriores
+
+- **Etapa 2:**
+  - implementar el contrato de AD-EL POS: contenido de la licencia, rutas, prueba de posesión y archivos de prueba nuevos;
+  - separar los entornos de firma `test` y `production`.
+
+  `config/local.example.php` ya usa `licensing.sicrat.com`.
+- **Etapas 2 a 4:** reemplazar los 20 puntos marcados como heredados (Fase 4).
+- **Etapa 5:**
+  - pantallas nuevas del panel y contenido de las constancias (planes y cupos);
+  - revisión completa de `DEPLOY_UBUNTU_24_04.md` y despliegue en el VPS.
+- **Etapa 5:** configurar `limit_req` en Nginx o retirar la respuesta 429 de su ejemplo (6.3).
+- **Observación del propietario:** el logo oscuro tiene píxeles blancos sueltos alrededor de «ADEL».
+
+### Comandos para reproducir la verificación
+
+```sh
+cd adelpos-license
+composer install
+export TEST_MYSQL_DSN='mysql:unix_socket=/tmp/mysql.sock;charset=utf8mb4' TEST_MYSQL_USER=root
+export TEST_MYSQL_PASSWORD='<contraseña de root de pruebas>'
+export TEST_MYSQL_BIN=/usr/local/mysql/bin/mysql TEST_MYSQLDUMP_BIN=/usr/local/mysql/bin/mysqldump
+export TEST_FPM_BIN=/opt/homebrew/sbin/php-fpm TEST_NGINX_BIN=/opt/homebrew/bin/nginx
+export TEST_OPENSSL_BIN=/opt/homebrew/opt/openssl@3/bin/openssl TEST_PDFTOTEXT_BIN=/opt/homebrew/bin/pdftotext
+
+php vendor/bin/phpunit                                  # suite completa (MySQL 8.0 aislado)
+php contracts/v1/generate-fixtures.php --check          # archivos de prueba del contrato
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+npm ci --ignore-scripts --no-audit --no-fund
+php tests/run-panel-tests.php all                       # Playwright, con limpieza garantizada
+php bin/check-secrets.php                               # antes de cada commit
+php bin/build-release.php --output=/ruta/fuera/de/public/adelpos-license.tar.gz
+git grep -n -i -E 'aibid|aidex' -- . ':!*.md'           # debe dar 0 resultados
+```

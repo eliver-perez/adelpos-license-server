@@ -84,6 +84,7 @@ final class View
             'activation.deactivate' => 'Desactivación en línea', 'capability.updated' => 'Módulo actualizado',
             'credential.disclosed_on_issue' => 'Código mostrado al emitir', 'material.access_denied' => 'Acceso a material sensible denegado',
             'signing_key.generated' => 'Llave de firma generada', 'signing_key.activated' => 'Llave de firma activada',
+            'maintenance.cleanup' => 'Limpieza de mantenimiento', 'admin.recovered_via_cli' => 'Acceso de administrador recuperado desde la terminal',
         ][$action] ?? $action;
     }
 }

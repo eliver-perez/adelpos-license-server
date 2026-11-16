@@ -18,7 +18,7 @@ consoleRun(function (): void {
     $listed = stream_get_contents($pipes[1]); stream_get_contents($pipes[2]); fclose($pipes[1]); fclose($pipes[2]);
     if (proc_close($process)!==0) { throw new AdelPos\License\Domain\Problem('El paquete se arma desde el repositorio git del proyecto.'); }
     $files = array_values(array_filter(explode("\0",(string)$listed)));
-    foreach (['composer.json','composer.lock','config/local.example.php','README.md','ARCHITECTURE.md','SCHEMA.md','SECURITY.md','OPERATIONS.md','DEPLOY_UBUNTU_24_04.md','TEST_PLAN.md'] as $file) { $files[]=$file; }
+    foreach (['composer.json','composer.lock','config/local.example.php','README.md','ARCHITECTURE.md','SCHEMA.md','SECURITY.md','OPERATIONS.md','DEPLOY_UBUNTU_24_04.md','TEST_PLAN.md','DECISIONS.md','docs/CONTRATO_LICENCIAS_ADEL_POS.md'] as $file) { $files[]=$file; }
     foreach ($files as $file) {
         // Defence in depth: the secrets check already keeps these out of the repository.
         if ($file==='config/local.php' || str_starts_with($file,'var/') || preg_match('/(?:\A|\/)(?:\.DS_Store|__MACOSX)(?:\/|\z)|\.(?:key|pem)\z/i',$file)) { throw new RuntimeException('Forbidden release file: '.$file); }

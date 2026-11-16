@@ -1,0 +1,122 @@
+# Decisiones — Servidor de licencias de AD-EL POS
+
+Registro de las decisiones que dan forma a este repositorio. El detalle de cada cambio, con sus pruebas, está en [AVANCE.md](AVANCE.md). Las reglas técnicas del producto están en el contrato [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
+
+**Prioridad:**
+1. las decisiones del propietario;
+2. el contrato;
+3. las especificaciones de cada etapa.
+
+---
+
+## 1. Procedencia
+
+Este servidor deriva del servidor de licencias de **AIDEX**. Es la única mención de ese producto en el código y la documentación, junto con la guía de despliegue, que indica que ambos conviven en el mismo VPS.
+
+| Dato | Valor |
+| --- | --- |
+| Fecha de la copia | 2026-11-16 |
+| Commit de origen | `ef537cde356c101e56349bb45cba6e5769fb681c` (2026-11-03) |
+| SHA-256 de `composer.lock` de origen | `7f996783b79412c73ad00d23e5354a5141517ca93da5d294370f353aab9f1730` |
+| Primer commit de este repositorio | `3c0c87b` «Copia base desde AIDEX (sin secretos ni artefactos)» |
+
+- **Qué se copió:** solo una lista de permitidos (código, plantillas, migraciones, CLI, despliegue, contrato heredado, pruebas y siete documentos).
+- **Qué no se copió:** configuración local, datos (`var/`), dependencias instaladas, logos, documentación histórica ni las pruebas que dependían del cliente de origen.
+- **Uso del commit raíz:** conserva la cadena de migraciones original. `tests/Integration/InitialSchemaTest.php` la lee de ahí para comprobar la equivalencia del esquema.
+
+## 2. Contrato
+
+| Documento | Versión | SHA-256 |
+| --- | --- | --- |
+| `docs/CONTRATO_LICENCIAS_ADEL_POS.md` | V1.0, copiado sin cambios | `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb` |
+
+Las **decisiones comerciales del propietario** están en la **sección 14 del contrato**:
+
+1. licencia atada al servidor Go del restaurante;
+2. sin comunicación periódica obligatoria;
+3. suscripciones en meses de calendario;
+4. reglas de renovación;
+5. tolerancia de 5 días;
+6. periodos de prueba;
+7. perpetua con 0, 6 o 12 meses de actualizaciones;
+8. transferencia por autoservicio;
+9. planes básico, elemental y premium;
+10. qué se permite al vencer;
+11. tabla de estados;
+12. `licensing.sicrat.com` solo para pruebas.
+
+**En la etapa 1 no se implementan.** El motor de licencias heredado sigue activo y está marcado para reemplazarse en las etapas 2 a 4 (sección 6).
+
+## 3. Decisiones del propietario durante la etapa 1
+
+Todas son del 2026-11-16.
+
+| # | Decisión |
+| --- | --- |
+| 1 | Versiones del VPS: **PHP 8.3.6, MySQL 8.0.46 (`8.0.46-0ubuntu0.24.04.5`), Nginx 1.24.0**, Ubuntu 24.04. El código se mantiene compatible con ellas. |
+| 2 | Paquete Composer `adelpos/license-server` y paquete npm **`@adelpos/license-server`**: npm no acepta el nombre sin `@`. |
+| 3 | Corregir en la Fase 1, en un commit propio, la incompatibilidad de los respaldos con MySQL 8.0 (sección 5, punto 1). |
+| 4 | **Ningún nombre del producto anterior** en código, plantillas, pruebas ni configuración, y no dejarlos para fases posteriores. Por eso la marca se adelantó a la Fase 3 y el marcador de herencia no nombra el producto anterior (sección 6). |
+| 5 | **Logos** de `logos-adelpos/`, usados **sin modificar sus bytes**:<br>• sin versiones verticales; donde había una, va el horizontal claro sobre fondo claro y el oscuro sobre fondo oscuro;<br>• constancias PDF con el logo claro;<br>• `icon.png` como ícono de pestaña. |
+| 6 | En lo no previsto: «haz lo que creas necesario, es un proyecto nuevo». Las decisiones técnicas de la sección 5 se tomaron bajo esta indicación. |
+
+## 4. Esquema de base de datos
+
+- **Una sola migración:** `database/migrations/001_esquema_inicial.sql`. Equivale al esquema final de la cadena heredada 001-007, sin sus datos ni sus pasos de historia: catálogo del producto anterior, migración de identidad y relleno de datos.
+- **Endurecimiento:** `license_credentials.credential_encrypted` y `code_format` son `NOT NULL`. **Motivo:** no existen credenciales anteriores al formato 3-4-4-4, que exige la copia protegida del código. Es la única diferencia que admite la prueba de equivalencia.
+- **Datos iniciales:**
+  - el producto `adel_pos` («AD-EL POS»), **sin módulos**, que coincide con `features: {}` del contrato;
+  - la fila de `security_state` y la cabeza de auditoría.
+
+  Los planes, límites y reglas de AD-EL POS se crean en la etapa 3.
+- **Sin cambios en el migrador.** Conserva el control por checksum, el bloqueo y la verificación de integridad. El nombre del bloqueo respeta el límite de 64 caracteres de MySQL.
+
+## 5. Decisiones técnicas de la etapa 1
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | Los respaldos ya no pasan `--no-login-paths` a `mysql`/`mysqldump`; los ejecutan con `MYSQL_TEST_LOGIN_FILE` apuntando a una ruta inexistente y sin otras variables de entorno. | Los clientes de MySQL 8.0 no aceptan esa opción. Se comprobó con 8.0.46 que leen `~/.mylogin.cnf` aun con `--defaults-file` y que esta variable lo impide. |
+| 2 | Nombres de bloqueo de MySQL de hasta 64 caracteres: el hash de migraciones va truncado a 32 hexadecimales, y el bloqueo de restauración usa un hash del nombre de la base. | Con el prefijo `adelpos-license-` el nombre anterior superaba el límite. |
+| 3 | Contextos HKDF unificados bajo `adelpos-license/…/v1`. `Crypto` reserva el propósito `offline-evidence`. | Sin esa reserva, un registro con ese propósito derivaría la misma llave que la evidencia sin internet. |
+| 4 | `bin/check-secrets.php` revisa el índice de git y los archivos nuevos. Acepta las semillas públicas de prueba solo si derivan exactamente del prefijo público. | Requisito de la etapa: revisión antes de cada commit. Los archivos de prueba del contrato contienen semillas públicas a propósito. |
+| 5 | `bin/build-release.php` empaqueta solo archivos versionados de su lista. Aborta si aparece configuración local, `var/`, `.DS_Store` o una llave. | Antes recorría las carpetas del disco y habría incluido archivos locales; además buscaba documentos inexistentes. |
+| 6 | Constancias PDF con el logo claro: su SHA-256 se verifica y se reduce **en memoria** a 812 px. Si el archivo falta, se muestra el nombre en texto. | El PNG completo agregaba unos 300 KB a cada constancia guardada (324 KB contra 74.5 KB). El archivo original no se modifica. |
+| 7 | Folio de constancias con prefijo `ADELPOS-`. | El prefijo anterior era la abreviatura del producto de origen. |
+| 8 | Las pruebas y los archivos de prueba del contrato usan un producto sintético: `producto_prueba`, con módulos `prueba_a` a `prueba_e` y una dependencia `prueba_e → prueba_a`. | El catálogo del producto anterior desaparece. Los nombres conservan el orden alfabético de los anteriores. |
+| 9 | Se quitaron de `CatalogService` las reglas fijas del catálogo anterior. | Solo aplicaban a un producto que ya no existe. |
+| 10 | Se eliminaron las pruebas de rutas de actualización de la historia anterior. Las sustituye `InitialSchemaTest`, que incluye pruebas genéricas del migrador. | Con un esquema inicial único esas rutas no existen. El detalle está en AVANCE.md, Fase 3. |
+| 11 | Textos visibles en español claro: «sin internet», «en línea» y «verificación en dos pasos», y todas las operaciones de auditoría con etiqueta (`AuditLabelsTest`). | Requisito de la etapa. |
+| 12 | Pruebas del panel con Playwright, usando el Chrome del equipo, instalado con `npm ci --ignore-scripts`. `tests/run-panel-tests.php` garantiza la limpieza. | Ejecutarlas sin dejar bases, usuarios ni configuraciones de prueba. |
+| 13 | Se corrigió la prueba de renovación sin internet: el panel lee las fechas en `America/Monterrey` y firma en UTC. | Defecto heredado: la conversión entró después de la última actualización de la prueba. El código no cambió. |
+
+## 6. Herencia temporal
+
+El motor de licencias heredado sigue activo hasta las etapas 2 a 4. No se cambió su lógica. Donde la regla está fija en el código lleva el marcador:
+
+```
+HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (<regla>)
+```
+
+Las reglas marcadas son cuatro:
+- una instalación por licencia;
+- tolerancia de 15 días;
+- huella del equipo versión `'1'`;
+- lista de límites.
+
+La especificación pedía un marcador que nombraba el producto de origen; se cambió por la decisión 4 de la sección 3. La lista de los 20 puntos marcados está en AVANCE.md, Fase 4, y se regenera con:
+
+```sh
+git grep -n -o -E "HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS\.md \([^)]*\)"
+```
+
+## 7. Archivos de marca
+
+Copiados sin modificar desde `logos-adelpos/` a `public/assets/brand/`. `ProductionHttpTest` comprueba que se sirven con estos SHA-256:
+
+| Archivo | Uso | SHA-256 |
+| --- | --- | --- |
+| `adel-pos-tema-claro.png` | Fondos claros y constancias PDF | `fece00410137a618703c5921d2ce2aac5ef06227836b75505201e58125e05434` |
+| `adel-pos-tema-oscuro.png` | Fondos oscuros: barra lateral y panel de acceso | `82e1a563a24ebe59fa3676fbb8cae430da4ddc263034583a0f40bbd985e29116` |
+| `icon.png` | Ícono de pestaña | `241504ff0356a39044862474bf3b071d82418a20763f001ba5e2f6287804456c` |
+
+Observación: `adel-pos-tema-oscuro.png` tiene píxeles blancos sueltos alrededor de «ADEL». Se usa tal cual.

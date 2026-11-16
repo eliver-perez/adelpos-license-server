@@ -1,6 +1,6 @@
 {
   "name": "@adelpos/license-server",
   "private": true,
-  "scripts": { "test:panel": "node tests/panel.cjs" },
+  "scripts": { "test:panel": "php tests/run-panel-tests.php all" },
   "devDependencies": { "playwright": "1.63.0" }
 }

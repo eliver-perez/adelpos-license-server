@@ -36,7 +36,8 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         }
     });
     page.on('pageerror', error => errors.push(error.message));
-    // Chrome no longer puts the URL in the message text: the favicon request is recognised by its URL.
+    // Pages declare /assets/brand/icon.png; a browser /favicon.ico probe (e.g. for downloads) is ignored by URL,
+    // because Chrome no longer puts the URL in the message text.
     page.on('console', message => {
         const url = message.location()?.url || '';
         if (message.type() === 'error' && !/\/favicon\.ico(?:$|\?)/.test(url) && !message.text().includes('favicon')) errors.push(message.text() + (url ? ' · ' + url : ''));
@@ -65,6 +66,9 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         const images = await page.locator('img').evaluateAll(list => list.map(img => ({ src: img.getAttribute('src'), loaded: img.complete && img.naturalWidth > 0, visible: img.offsetParent !== null })));
         if (logoVisible) { assert.ok(images.some(image => image.visible && /^\/assets\/brand\/adel-pos-tema-(claro|oscuro)\.png$/.test(image.src)), where + ': logo de AD-EL POS'); }
         for (const image of images.filter(image => image.visible)) { assert.equal(image.loaded, true, where + ': ' + image.src); }
+        assert.equal(await page.locator('link[rel="icon"]').getAttribute('href'), '/assets/brand/icon.png', where + ': ícono de pestaña');
+        const icon = await page.request.get('/assets/brand/icon.png');
+        assert.equal(icon.status(), 200, where + ': ícono de pestaña');
     }
     try {
         await page.goto('/admin/licenses');

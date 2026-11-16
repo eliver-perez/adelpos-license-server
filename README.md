@@ -1,71 +1,100 @@
-# AIDEX · Administración de licencias
+# AD-EL POS — Licencias
 
-**Fase comercial 1:** códigos 3-4-4-4 sin prefijo, credenciales recuperables bajo permiso/MFA, referencia y nota opcionales/editables, constancias PDF con historial y verificación pública. [Informe](LICENCIAMIENTO-COMERCIAL-FASE1.md) · [Integración](INTEGRACION-LICENCIAMIENTO.md) · [Actualizar instalación existente](ACTUALIZACION-FASE1.md).
+Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es un proyecto independiente del punto de venta: emite, firma, renueva, revoca y audita licencias, y ofrece un panel privado para el propietario.
 
-Etapas 1–5 (validación local) · Actualizado el 26 de septiembre de 2026.
+- **Panel administrativo:** clientes, productos, licencias, solicitudes sin internet, constancias PDF, administradores y auditoría.
+- **API `/v1`:** activación en línea con desafío y prueba de posesión, consulta de actualización y desactivación.
+- **Flujo sin internet:** el panel importa una solicitud `.licreq`, el propietario la aprueba y entrega un archivo `.lic` firmado.
 
-Servidor independiente en **PHP 8.3+ y MySQL 8**, con vistas PHP, Bootstrap 5 y JavaScript. El producto inicial se presenta como **AIDEX — Aplicación de Indexación Digital de Expedientes** y conserva el identificador contractual `gestor_documental`. Los cuatro logotipos SVG proporcionados se incluyen sin modificar.
+> **Estado: etapa 1 cerrada.** El código es la copia base renombrada y limpia. El protocolo de licencias todavía es el heredado: se reemplaza por el contrato de AD-EL POS ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)) en las etapas 2 a 4. La sección [Herencia temporal](#herencia-temporal) resume qué cambia y cuándo. El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
 
-El panel permite administrar clientes y su contacto principal, productos, módulos, licencias perpetuas y suscripciones, compras de mantenimiento, renovaciones, credenciales comerciales y auditoría. Incluye bootstrap por CLI, roles, MFA obligatorio, recuperación de un solo uso, protección CSRF, reautenticación para acciones sensibles y transacciones idempotentes.
+## Requisitos
 
-**Alcance actual:** etapas 1–5 completadas para pruebas locales y entrega. Panel comercial, cuatro endpoints V1, firmas Ed25519/JWS, una instalación activa, revisiones e idempotencia. El panel importa `.licreq`, permite asignar licencia, aprobar/rechazar, renovar o desactivar offline y descargar el `.lic` archivado. Incluye transferencia atómica y recuperación de equipo averiado con reautenticación y auditoría. Se verificó el cliente real por HTTPS/Nginx/PHP-FPM y se ensayó respaldo cifrado/restauración. El usuario realizará el despliegue y sus comprobaciones en el VPS.
+| Componente | Versión | Uso |
+| --- | --- | --- |
+| PHP CLI y PHP-FPM | 8.3 o posterior | Extensiones `sodium`, `pdo_mysql`, `mbstring`, `gd`, `xmlwriter`, `dom` e `iconv`, y Argon2id disponible. `bin/preflight.php` lo comprueba. |
+| MySQL | 8.0 (InnoDB) | MariaDB no sirve: el migrador y `bin/preflight.php` lo rechazan. |
+| Composer | 2.x | Dependencias fijadas en `composer.lock`. |
+| Nginx | 1.24 o posterior | Solo en despliegue. Ejemplos en `deploy/`. |
+| Node.js + Playwright, Go, Google Chrome | — | **Solo en desarrollo**, para las pruebas del panel y el verificador del contrato. El servidor no los necesita. |
 
-**Para instalar AIDEX 1.0 en `licensing.aidex.com.mx`: [guía de despliegue manual](DESPLIEGUE-PRODUCCION.md), con [receta Ubuntu 24.04 + Nginx](DEPLOY_UBUNTU_24_04.md).** Incluye paquete de código, PHP-FPM, MySQL, TLS, confianza del cliente, mantenimiento, timer de respaldo y recuperación. No requiere Go ni Node en producción.
+## Instalación local
 
-## Ejecutar el panel
-
-Se requiere PHP con Sodium, PDO MySQL, mbstring, XMLWriter y Argon2id; MySQL 8/InnoDB y Composer. PHP-FPM y HTTPS son necesarios para el despliegue. El PHP 8.1/MariaDB de XAMPP observado no cumple esos requisitos; sus servicios y bases no se modificaron.
-
-1. Instalar dependencias: `composer install` (en producción: `composer install --no-dev --prefer-dist --optimize-autoloader`).
-2. Crear una base vacía y cuentas separadas de migración y aplicación, siguiendo [OPERATIONS.md](OPERATIONS.md#7-instalación-disponible-del-panel).
-3. Generar la configuración y sus claves mediante CLI; la contraseña SQL se solicita de forma oculta:
+1. Dependencias: `composer install`. En producción: `composer install --no-dev --prefer-dist --optimize-autoloader`.
+2. Crea una base vacía y dos cuentas de MySQL: una de migración y otra de aplicación con permisos mínimos. Ver [OPERATIONS.md](OPERATIONS.md).
+3. Genera la configuración y sus claves. La contraseña de MySQL se pide sin mostrarla:
 
    ```sh
-   php bin/configure.php --env=development --url=http://127.0.0.1:8088 --dsn='mysql:host=127.0.0.1;dbname=aidex_licenses_dev;charset=utf8mb4' --user=aidex_dev_app
-   php bin/migrate.php --user=aidex_dev_migrate
-   php bin/grants.php --database=aidex_licenses_dev --user=aidex_dev_app
+   php bin/configure.php --env=development --url=http://127.0.0.1:8088 \
+       --dsn='mysql:host=127.0.0.1;dbname=adelpos_license_dev;charset=utf8mb4' --user=adelpos_license_dev_app
    ```
 
-4. Aplicar los GRANT impresos con una cuenta SQL autorizada. Crear el primer administrador, cuya contraseña también se pide por terminal:
+   Se crea `config/local.php` con permisos 0600. Ese archivo no se versiona: `.gitignore` lo excluye y la revisión de secretos lo detectaría. `config/local.example.php` muestra las claves disponibles, sin valores secretos. Para guardar la configuración fuera del código, apunta la variable `ADELPOS_LICENSE_CONFIG` a otro archivo. Las variables de entorno con el mismo nombre que una clave tienen prioridad.
+4. Aplica el esquema y los permisos:
 
    ```sh
-   php bin/bootstrap-admin.php --login=administrador@example.com --name='Administración AIDEX'
+   php bin/migrate.php --user=adelpos_license_dev_migrate
+   php bin/grants.php --database=adelpos_license_dev --user=adelpos_license_dev_app   # imprime los GRANT; aplícalos con una cuenta autorizada
+   ```
+
+   El esquema es una sola migración, `database/migrations/001_esquema_inicial.sql`, que crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos. El migrador la registra con su checksum. Si repites la migración no cambia nada, y si el archivo se modifica después de aplicarlo, el migrador se detiene.
+5. Crea el primer administrador y comprueba la instalación:
+
+   ```sh
+   php bin/bootstrap-admin.php --login=administrador@example.com --name='Administración'
    php bin/preflight.php
    php -S 127.0.0.1:8088 -t public public/router.php
    ```
 
-5. Abrir `http://127.0.0.1:8088`, configurar TOTP y guardar los códigos de recuperación.
+6. Abre `http://127.0.0.1:8088`, configura la verificación en dos pasos (TOTP) y guarda los códigos de recuperación.
 
-La raíz web debe ser **`public/`** y el sitio debe tener su propio origen, sin subdirectorio. Para producción usar `--env=production`, URL HTTPS y PHP-FPM. La configuración real `config/local.php` se genera con permisos 0600, queda fuera del directorio público y no se versiona; conservar sus claves al actualizar. No hay instalador web ni cuenta predeterminada.
+**Notas:**
+- La raíz web es siempre `public/`, con su propio origen (sin subdirectorio).
+- No hay instalador web ni cuenta predeterminada.
+- En producción se usa `--env=production`, una URL HTTPS y PHP-FPM; la guía es [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md).
+- Con HTTPS, después de la verificación en dos pasos se puede confiar en el navegador durante 30 días. La contraseña sigue siendo obligatoria, y la confianza se revoca en **Mi seguridad**.
 
-Después de verificar TOTP puedes autorizar el navegador durante 30 días. La contraseña sigue siendo obligatoria y puedes revocar la confianza en **Mi seguridad → Dispositivos de confianza**. Requiere HTTPS, la migración `007_trusted_devices.sql` y los permisos nuevos de `bin/grants.php`. Flujo, protecciones, pruebas y actualización en [DISPOSITIVOS-DE-CONFIANZA.md](DISPOSITIVOS-DE-CONFIANZA.md).
+### Llaves de firma
 
-## Habilitar firma y activaciones
-
-En una instalación existente, conservar `config/local.php`, ejecutar la migración `003_online_activations.sql` mediante `bin/migrate.php` y aplicar los nuevos permisos de `bin/grants.php`. No volver a ejecutar bootstrap ni regenerar los secretos existentes.
+Las licencias se firman con llaves Ed25519 que se administran por CLI. La llave privada nunca sale del servidor:
 
 ```sh
-php bin/signing-key.php --action=generate --kid=lic-dev-2026-a --purpose=license --user=aidex_dev_migrate
+php bin/signing-key.php --action=generate --kid=lic-dev-2026-a --purpose=license --user=adelpos_license_dev_migrate
 php bin/signing-key.php --action=list
-# Después de incorporar la pública al cliente por un canal autenticado:
-php bin/signing-key.php --action=activate --kid=lic-dev-2026-a --reason='Pública distribuida a los clientes de este entorno' --trust-confirmed --user=aidex_dev_migrate
+php bin/signing-key.php --action=activate --kid=lic-dev-2026-a --reason='Llave pública entregada a AD-EL POS' --trust-confirmed --user=adelpos_license_dev_migrate
 php bin/preflight.php --require-signer
 ```
 
-El entorno lo determina `APP_ENV`; usar claves y nombres distintos para desarrollo y producción. La CLI solo imprime la pública. `SIGNING_KEY_DIR` permite elegir un directorio absoluto y persistente fuera de `public/`; el valor predeterminado es `var/keys/<APP_ENV>`. Las privadas requieren permisos 0600 y acceso del usuario PHP dedicado. Sin firmante válido, las operaciones que necesitan una nueva firma fallan con 503 y se revierten; el panel y el refresh de una revisión existente siguen disponibles. Ver [OPERATIONS.md](OPERATIONS.md#8-claves-y-api-online-disponibles-en-etapa-3).
+- Las llaves privadas se guardan en `SIGNING_KEY_DIR`, por omisión `var/keys/<APP_ENV>`, con permisos 0600 y fuera de `public/`.
+- `APP_ENV` separa las llaves de cada entorno.
+- Las llaves derivadas de las semillas públicas de prueba se rechazan en producción.
+- Sin una llave activa, las operaciones que necesitan firmar responden 503 y se revierten; el panel sigue disponible.
 
-## Verificación
-
-Para operar offline, entra en **Solicitudes offline**, importa el `.licreq` y revisa su identidad. En una activación inicial selecciona cliente/licencia y pulsa **Revisar derechos** antes de aprobar. Una solicitud aprobada ofrece **Descargar .lic**; importar o volver a descargar no ejecuta otra activación. Actualización desde etapa 3 y recuperación de equipos en [OPERATIONS.md](OPERATIONS.md#9-operación-offline-y-actualización-a-etapa-4).
+## Pruebas
 
 ```sh
-composer test:unit
-composer test:contract
-# Instancia MySQL aislada, con una cuenta autorizada a crear BD/usuarios de prueba:
-env TEST_MYSQL_DSN='mysql:unix_socket=/ruta/mysql.sock;charset=utf8mb4' php vendor/bin/phpunit --testsuite integration
+composer test:unit        # pruebas unitarias
+composer test:contract    # recalcula y compara contracts/v1/fixtures sin sobrescribirlos
+
+# Suite completa contra un MySQL 8 aislado, con una cuenta que pueda crear y borrar bases y usuarios de prueba:
+env TEST_MYSQL_DSN='mysql:unix_socket=/tmp/mysql.sock;charset=utf8mb4' TEST_MYSQL_USER=root TEST_MYSQL_PASSWORD='…' \
+    TEST_MYSQL_BIN=/ruta/mysql TEST_MYSQLDUMP_BIN=/ruta/mysqldump \
+    TEST_FPM_BIN=/ruta/php-fpm TEST_NGINX_BIN=/ruta/nginx TEST_OPENSSL_BIN=/ruta/openssl TEST_PDFTOTEXT_BIN=/ruta/pdftotext \
+    php vendor/bin/phpunit
+
+# Panel con Playwright (Chrome del equipo; CHROME_PATH para otra ruta):
+npm ci --ignore-scripts --no-audit --no-fund
+env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run-panel-tests.php all
+
+# Verificador independiente del contrato heredado:
+go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
 ```
 
-Las pruebas crean bases y usuarios aleatorios `aibid_test_*`, aplican los permisos reales de aplicación y eliminan sus propios datos al finalizar. No apuntarlas a producción. La integración de respaldo necesita `mysql`/`mysqldump` de MySQL en PATH o `TEST_MYSQL_BIN`/`TEST_MYSQLDUMP_BIN` explícitos. [TEST_PLAN.md](TEST_PLAN.md) contiene reproducción y evidencia: 96 pruebas PHP/571 aserciones, más 2 pruebas del cliente real y stack HTTPS/83 aserciones. Go se usa para el oráculo y para ejecutar una copia temporal del cliente AIDEX real: **el servidor no ejecuta Go ni requiere Go en el VPS**.
+- **Bases de prueba:** cada prueba crea su propia base y su propio usuario `adelpos_license_test_*` con los permisos reales de la aplicación, y los elimina al terminar. No las apuntes a una base real.
+- **Producto de prueba:** las pruebas usan el producto sintético `producto_prueba`, con módulos `prueba_a` a `prueba_e`.
+- **Variables `TEST_*_BIN`:** solo hacen falta si esas herramientas no están en el `PATH`.
+- **Sin `TEST_MYSQL_DSN`** se omite la integración, y esa corrida no valida MySQL.
+- **Detalle:** ver [TEST_PLAN.md](TEST_PLAN.md).
 
 ## Revisión de secretos antes de cada commit
 
@@ -81,7 +110,7 @@ Revisa lo que entraría al repositorio: el contenido del índice de git y los ar
 - una llave privada PEM, o una semilla o llave secreta Ed25519;
 - archivos bajo `var/keys/`, o archivos `*.key` o `*.pem`.
 
-Muestra la ubicación de cada hallazgo, nunca su valor. Las llaves de los archivos de prueba del contrato son públicas a propósito: se aceptan solo si su semilla es exactamente la derivada del prefijo público de prueba. No necesita `composer install`. `tests/Unit/SecretsCheckTest.php` comprueba cada caso.
+Muestra la ubicación de cada hallazgo, nunca su valor. Las llaves de los archivos de prueba del contrato son públicas a propósito, así que se aceptan, pero solo si su semilla es exactamente la derivada del prefijo público de prueba. No necesita `composer install`. `tests/Unit/SecretsCheckTest.php` comprueba cada caso.
 
 Para que git la ejecute automáticamente en tu copia (opcional; el gancho no se versiona):
 
@@ -89,21 +118,47 @@ Para que git la ejecute automáticamente en tu copia (opcional; el gancho no se 
 printf '#!/bin/sh\nexec php bin/check-secrets.php\n' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
 ```
 
+## Paquete de despliegue
+
+```sh
+php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
+```
+
+**Qué incluye:**
+- solo los archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`;
+- `composer.json`, `composer.lock` y `config/local.example.php`;
+- la documentación de operación, `DECISIONS.md` y `docs/CONTRATO_LICENCIAS_ADEL_POS.md`.
+
+**Qué genera:** `RELEASE.json`, con el SHA-256 de cada archivo, y el archivo `.sha256` del paquete.
+
+**Qué nunca incluye:** `config/local.php`, `var/`, llaves, pruebas, `contracts/`, `vendor/` ni archivos sin versionar. El comando aborta si alguno aparece en la lista. En el servidor se ejecuta `composer install --no-dev` con el `composer.lock` incluido.
+
+## Herencia temporal
+
+Esta etapa conserva el motor de licencias recibido, sin cambiar su lógica. Cada regla fija en el código lleva el comentario `HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (<regla>)`, y la lista completa está en [AVANCE.md](AVANCE.md), sección 4.2.
+
+| Comportamiento actual | Se reemplaza en |
+| --- | --- |
+| Contenido de la licencia, rutas `/v1`, prueba de posesión (`LIC-V1`), solicitud sin internet (`LICREQ-V1`), encabezado `lic+jws` y archivos de `contracts/v1/fixtures/` | Etapa 2 |
+| Una instalación por licencia, tolerancia de 15 días, huella del equipo versión `'1'` y lista de límites (`max_installations`, `max_users`, `max_libraries`, `max_documents`) | Etapa 2 |
+| Tipos de licencia (hoy perpetua y suscripción con fecha libre), renovación, mantenimiento como compra separada, periodos de prueba, planes y su propagación | Etapa 3 |
+| Transferencias solo desde el panel (sin autoservicio), alertas y detalles del flujo sin internet | Etapa 4 |
+| Pantallas nuevas del panel, contenido de las constancias (planes y cupos) y despliegue en el VPS | Etapa 5 |
+
 ## Documentación
 
 | Documento | Contenido |
 | --- | --- |
-| [STATUS.md](STATUS.md) | Punto de continuación y siguiente etapa |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Arquitectura completa y separación por etapas |
-| [SCHEMA.md](SCHEMA.md) | Esquema físico disponible, diseño futuro y concurrencia |
-| [API.md](API.md) | Diseño de las cuatro rutas V1, firmas y errores |
-| [SECURITY.md](SECURITY.md) | Controles implementados y diseño de seguridad restante |
-| [LICENSE_CONTRACT.md](LICENSE_CONTRACT.md) | Anexo V1.0 literal, sin modificaciones |
-| [OPERATIONS.md](OPERATIONS.md) | Instalación del panel y preparación del VPS |
-| [DESPLIEGUE-PRODUCCION.md](DESPLIEGUE-PRODUCCION.md) | Requisitos, configuración y verificaciones para producción |
-| [INFORME-TRANSICION-AIDEX.md](INFORME-TRANSICION-AIDEX.md) | Auditoría de identidad y pruebas de esta transición |
-| [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Instalación concreta en licensing.aidex.com.mx y recuperación |
-| [DECISIONS.md](DECISIONS.md) | Decisiones aceptadas B-01/B-02 y coordinación pendiente |
-| [TEST_PLAN.md](TEST_PLAN.md) | Comandos, evidencia y pruebas de las próximas etapas |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, flujos y partes heredadas |
+| [SCHEMA.md](SCHEMA.md) | Esquema de base de datos |
+| [SECURITY.md](SECURITY.md) | Modelo de seguridad y controles |
+| [OPERATIONS.md](OPERATIONS.md) | Operación diaria, llaves, respaldos y recuperación |
+| [TEST_PLAN.md](TEST_PLAN.md) | Plan de pruebas y cómo reproducirlas |
+| [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Despliegue en Ubuntu 24.04 con Nginx y PHP-FPM |
+| [DECISIONS.md](DECISIONS.md) | Decisiones del propietario y técnicas, y procedencia |
+| [AVANCE.md](AVANCE.md) | Avance de la etapa 1, línea base y verificación |
+| [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | Contrato de licencias V1.0 entre este servidor y AD-EL POS |
 
-Los requisitos proceden del [documento proporcionado](prompt_2_servidor_licencias_php_v1_2.md); la autorización para avanzar y las decisiones confirmadas constan en la conversación. No se agregan funciones del gestor documental a este servidor.
+## Procedencia
+
+Este repositorio deriva del servidor de licencias de AIDEX. Se copió sin secretos ni artefactos, y en la etapa 1 se renombró y limpió por completo. La fecha de la copia, el commit de origen y el SHA-256 de su `composer.lock` están en [DECISIONS.md](DECISIONS.md).

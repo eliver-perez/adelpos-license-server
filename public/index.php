@@ -31,6 +31,6 @@ try {
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['error' => ['code' => 'TEMPORARY_UNAVAILABLE', 'message' => 'El servicio no está disponible temporalmente.', 'request_id' => $reference]]);
     } else {
-        echo '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AD-EL POS — Licencias · Servicio no disponible</title><link rel="stylesheet" href="/assets/app.css"><main class="service-message"><img src="/assets/brand/adel-pos-tema-claro.png" alt="AD-EL POS"><h1>El panel no está disponible temporalmente</h1><p>Intenta nuevamente en unos minutos. Si persiste, consulta al administrador del servidor.</p><small>Referencia: ' . $reference . '</small></main></html>';
+        echo '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AD-EL POS — Licencias · Servicio no disponible</title><link rel="icon" type="image/png" href="/assets/brand/icon.png"><link rel="stylesheet" href="/assets/app.css"><main class="service-message"><img src="/assets/brand/adel-pos-tema-claro.png" alt="AD-EL POS"><h1>El panel no está disponible temporalmente</h1><p>Intenta nuevamente en unos minutos. Si persiste, consulta al administrador del servidor.</p><small>Referencia: ' . $reference . '</small></main></html>';
     }
 }

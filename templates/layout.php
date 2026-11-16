@@ -6,6 +6,7 @@
     <meta name="application-name" content="AD-EL POS — Licencias">
     <meta name="description" content="AD-EL POS — Licencias. Administración de licencias del punto de venta AD-EL POS.">
     <title><?= V::escape($title) ?> · AD-EL POS — Licencias</title>
+    <link rel="icon" type="image/png" href="/assets/brand/icon.png">
     <link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/assets/app.css">
     <script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js" defer></script>

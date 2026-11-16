@@ -26,7 +26,7 @@ function totp(secret) {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    // There is no tab icon yet, so the browser's own /favicon.ico request is recognised by its URL.
+    // Pages declare /assets/brand/icon.png; a browser /favicon.ico probe (e.g. for non-HTML responses) is ignored by URL.
     page.on('console', message => {
         const url = message.location()?.url || '';
         if (message.type() === 'error' && !message.text().includes('401') && !/\/favicon\.ico(?:$|\?)/.test(url)) errors.push(message.text() + (url ? ' · ' + url : ''));

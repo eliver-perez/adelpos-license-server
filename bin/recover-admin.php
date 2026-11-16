@@ -21,5 +21,5 @@ consoleRun(function (): void {
         $app->audit->append(null, 'admin.recovered_via_cli', 'admin', AdelPos\License\Domain\Uuid::text($user['id']), [], $reason);
     });
     sodium_memzero($password);
-    fwrite(STDOUT, "Contraseña reemplazada, sesiones, dispositivos de confianza y códigos anteriores invalidados. Se requiere enrolar MFA nuevamente; el estado de la cuenta se conserva.\n");
+    fwrite(STDOUT, "Contraseña reemplazada, sesiones, dispositivos de confianza y códigos anteriores invalidados. Hay que configurar de nuevo la verificación en dos pasos; el estado de la cuenta se conserva.\n");
 });

@@ -70,8 +70,9 @@ final class ProductionHttpTest extends TestCase
         self::assertStringNotContainsString('adelpos_admin_dev', $login['headers']);
         self::assertStringContainsString('AD-EL POS — Licencias', $login['body']);
         self::assertStringContainsString('/assets/brand/adel-pos-tema-oscuro.png', $login['body']);
+        self::assertStringContainsString('<link rel="icon" type="image/png" href="/assets/brand/icon.png">', $login['body']);
         // Brand files are served byte for byte and stay exactly as the owner supplied them.
-        foreach (['brand/adel-pos-tema-claro.png' => 'fece00410137a618703c5921d2ce2aac5ef06227836b75505201e58125e05434', 'brand/adel-pos-tema-oscuro.png' => '82e1a563a24ebe59fa3676fbb8cae430da4ddc263034583a0f40bbd985e29116', 'app.css' => null, 'app.js' => null] as $file => $sha256) {
+        foreach (['brand/adel-pos-tema-claro.png' => 'fece00410137a618703c5921d2ce2aac5ef06227836b75505201e58125e05434', 'brand/adel-pos-tema-oscuro.png' => '82e1a563a24ebe59fa3676fbb8cae430da4ddc263034583a0f40bbd985e29116', 'brand/icon.png' => '241504ff0356a39044862474bf3b071d82418a20763f001ba5e2f6287804456c', 'app.css' => null, 'app.js' => null] as $file => $sha256) {
             $asset = $this->stack->request('/assets/'.$file, '', 'GET');
             self::assertSame(200, $asset['status']);
             self::assertSame(file_get_contents(dirname(__DIR__, 2).'/public/assets/'.$file), $asset['body']);

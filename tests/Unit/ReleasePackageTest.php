@@ -12,7 +12,7 @@ use PHPUnit\Framework\TestCase;
 final class ReleasePackageTest extends TestCase
 {
     private const DIRECTORIES = ['bin', 'src', 'public', 'templates', 'database', 'deploy'];
-    private const FILES = ['composer.json', 'composer.lock', 'config/local.example.php', 'README.md', 'ARCHITECTURE.md', 'SCHEMA.md', 'SECURITY.md', 'OPERATIONS.md', 'DEPLOY_UBUNTU_24_04.md', 'TEST_PLAN.md'];
+    private const FILES = ['composer.json', 'composer.lock', 'config/local.example.php', 'README.md', 'ARCHITECTURE.md', 'SCHEMA.md', 'SECURITY.md', 'OPERATIONS.md', 'DEPLOY_UBUNTU_24_04.md', 'TEST_PLAN.md', 'DECISIONS.md', 'docs/CONTRATO_LICENCIAS_ADEL_POS.md'];
     private const PLANTED = [
         'config/local.php' => "<?php return [];\n",
         'var/keys/production/0123456789abcdef0123456789abcdef.json' => '{}',
