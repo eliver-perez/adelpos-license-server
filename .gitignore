@@ -1,0 +1,23 @@
+/vendor/
+/config/local.php
+/.env
+/.phpunit.cache/
+/var/*
+!/var/.gitkeep
+/node_modules/
+/test-results/
+/playwright-report/
+*.log
+.DS_Store
+
+# Llaves privadas y de firma: nunca en el repositorio
+/var/keys/
+*.key
+*.pem
+
+# Respaldos cifrados (formato heredado y formato de AD-EL POS)
+*.aibidbackup
+*.adelposbackup
+
+# Artefactos de archivos comprimidos en macOS
+__MACOSX/
