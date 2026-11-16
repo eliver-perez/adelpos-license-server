@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Http;
 
-use AdelPos\License\Domain\{Problem, Uuid};
+use AdelPos\License\Domain\Uuid;
 
 final class View
 {
@@ -33,21 +33,17 @@ final class View
         return $value === null || $value === '' ? '—' : (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone(self::TIMEZONE))->format('d/m/Y · H:i') . ' ' . self::TIMEZONE;
     }
 
-    public static function dateInput(\DateTimeInterface $instant): string
+    /** Nombre del tipo de licencia en el panel y en las constancias. */
+    public static function licenseType(string $type): string
     {
-        return \DateTimeImmutable::createFromInterface($instant)->setTimezone(new \DateTimeZone(self::TIMEZONE))->format('Y-m-d\TH:i');
+        return ['perpetual' => 'Perpetua', 'subscription' => 'Suscripción', 'trial' => 'Prueba'][$type] ?? $type;
     }
 
-    /** Convert the panel's local wall time at the HTTP boundary; domain inputs remain UTC. */
-    public static function utcDateInput(string $value): string
+    /** Vencimiento de una licencia: las suscripciones y las pruebas no tienen fecha hasta que se activan. */
+    public static function expiry(array $license): string
     {
-        $format = strlen($value) === 16 ? '!Y-m-d\TH:i' : '!Y-m-d\TH:i:s';
-        $date = \DateTimeImmutable::createFromFormat($format, $value, new \DateTimeZone(self::TIMEZONE));
-        $errors = \DateTimeImmutable::getLastErrors();
-        if (!$date || ($errors !== false && ($errors['warning_count'] || $errors['error_count'])) || $date->format(substr($format, 1)) !== $value) {
-            throw new Problem('Introduce una fecha válida en ' . self::TIMEZONE . '.');
-        }
-        return $date->setTimezone(new \DateTimeZone('UTC'))->format(substr($format, 1));
+        if ($license['license_type'] === 'perpetual') { return 'Sin vencimiento'; }
+        return $license['expires_at'] === null ? 'Empieza al activar' : self::date($license['expires_at']);
     }
 
     public static function role(string $role): string

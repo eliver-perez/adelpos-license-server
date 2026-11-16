@@ -69,6 +69,9 @@ final class ReadRepository
         return $this->db->one('SELECT c.*,BIN_TO_UUID(c.id) AS id_text,t.name AS contact_name,t.email,t.phone FROM customers c LEFT JOIN customer_contacts t ON t.customer_id=c.id WHERE c.id=?', [Uuid::bytes($id)]) ?? throw new Problem('No se encontró el cliente.', 404);
     }
 
+    /** Catálogo de planes, del más pequeño al más grande. */
+    public function plans(): array { return $this->db->all('SELECT plan_id,display_name,cash_registers,order_takers,kitchen_displays FROM plans ORDER BY cash_registers,order_takers,kitchen_displays,plan_id'); }
+
     public function products(): array { return $this->db->all('SELECT p.*,(SELECT COUNT(*) FROM licenses l WHERE l.product_id=p.product_id) AS license_count FROM products p ORDER BY p.display_name'); }
 
     public function product(string $id): array
@@ -86,7 +89,7 @@ final class ReadRepository
         $license = $this->db->one('SELECT l.*,BIN_TO_UUID(l.license_id) AS id_text,c.display_name AS customer_name,p.display_name AS product_name FROM licenses l JOIN customers c ON c.id=l.customer_id JOIN products p ON p.product_id=l.product_id WHERE l.license_id=?', [Uuid::bytes($id)]) ?? throw new Problem('No se encontró la licencia.', 404);
         $license['features'] = $this->db->all('SELECT f.capability_key,f.enabled,c.display_name FROM license_features f JOIN product_capabilities c ON c.product_id=f.product_id AND c.capability_key=f.capability_key WHERE f.license_id=? ORDER BY f.capability_key', [Uuid::bytes($id)]);
         $license['history'] = $this->db->all('SELECT c.*,u.display_name AS actor_name FROM license_changes c JOIN admin_users u ON u.id=c.admin_id WHERE c.license_id=? ORDER BY c.version DESC', [Uuid::bytes($id)]);
-        $license['activations'] = $this->db->all('SELECT BIN_TO_UUID(activation_id) AS id_text,BIN_TO_UUID(installation_id) AS installation_text,state,activated_at,ended_at FROM activations WHERE license_id=? ORDER BY activated_at DESC LIMIT 50', [Uuid::bytes($id)]);
+        $license['activations'] = $this->db->all('SELECT BIN_TO_UUID(activation_id) AS id_text,BIN_TO_UUID(server_id) AS installation_text,state,activated_at,ended_at FROM activations WHERE license_id=? ORDER BY activated_at DESC LIMIT 50', [Uuid::bytes($id)]);
         $revisionCount=(int)$this->db->execute('SELECT COUNT(*) FROM license_revisions WHERE license_id=?',[Uuid::bytes($id)])->fetchColumn();
         $license['revision_pages']=max(1,(int)ceil($revisionCount/50));
         $license['revision_page']=min(max(1,$revisionPage),$license['revision_pages']);

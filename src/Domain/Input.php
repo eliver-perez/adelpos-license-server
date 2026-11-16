@@ -26,6 +26,17 @@ final class Input
         return $value;
     }
 
+    /** Entero sin signo escrito con dígitos, o un entero nativo. $label es el nombre que ve el administrador. */
+    public static function integer(array $input, string $key, int $min, int $max, string $label): int
+    {
+        $value = $input[$key] ?? null;
+        if (is_string($value) && preg_match('/\A\d{1,9}\z/', trim($value))) { $value = (int) trim($value); }
+        if (!is_int($value) || $value < $min || $value > $max) {
+            throw new Problem($label . ' debe ser un número entero entre ' . $min . ' y ' . $max . '.');
+        }
+        return $value;
+    }
+
     public static function identifier(string $value): string
     {
         if (!preg_match('/\A[a-z][a-z0-9_]{1,63}\z/', $value)) {

@@ -874,7 +874,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | --- | --- |
 | 0 — Verificación contra el código | **Cerrada.** 164 pruebas, 21 384 aserciones, todas OK. Sin cambios de código. El propietario aprobó las 7 consultas (E2-0.5). |
 | 1 — Entornos de firma | **Cerrada.** 176 pruebas, 21 578 aserciones, todas OK. Verificador Go OK. Playwright OK. |
-| 2 — Modelo de datos | Pendiente |
+| 2 — Modelo de datos | **Cerrada.** 186 pruebas, 21 918 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 14 de las 20 marcas de herencia. |
 | 3 — Motor de fechas | Pendiente |
 | 4 — Contenido y firma de la licencia | Pendiente |
 | 5 — API en línea | Pendiente |
@@ -1237,3 +1237,115 @@ Actualizados solo en lo que cambia esta fase: `README.md` (configuración y llav
 - **Fase 4:** el campo `environment` todavía no está en el contenido firmado. Al agregarlo, la firma debe rechazar un contenido cuyo entorno no sea el de la llave.
 - **Fase 7:** los nombres de las semillas públicas de prueba cambian con los archivos nuevos; hay que actualizar la lista de `SigningKeys` y agregar al verificador Go la confianza por entorno.
 - **Etapa 5:** la guía de despliegue solo se ajustó en la configuración y las llaves.
+
+---
+
+## Etapa 2 · Fase 2 — Modelo de datos
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### E2-2.1 Migración `003_contrato_v1.sql`
+
+| Punto de la especificación | Cómo quedó |
+| --- | --- |
+| 1. Clientes | `customers.time_zone`, con `America/Monterrey` por omisión. `CatalogService` la valida contra la lista de zonas de PHP. |
+| 2. Planes | Tabla `plans` con `basico` (1, 0, 0), `elemental` (3, 3, 3) y `premium` (5, 10, 5), llamados «Plan básico», «Plan elemental» y «Plan premium». Sin editor: la cuenta de aplicación solo la lee. |
+| 3. Licencias | `license_type` con `trial` (lo limita `chk_license_terms`); `billing_period`, `trial_duration` y `updates_months`, cada uno solo en su tipo; copia del plan (`plan_id`, `plan_name`, `plan_custom`); cupos `cash_registers`, `order_takers` y `kitchen_displays` de 0 a 999; periodo vigente (`period_starts_at`, `expires_at`, `anchor_day`, `anchor_local_time`, `updates_until`); y `grace_days` de 5 en suscripción y 0 en prueba y perpetua. Todo con restricciones `CHECK`. |
+| 4. Activaciones | La identidad se llama `server_id`, también en `activation_challenges` y `license_requests`. Columna `app_version`. El estado admite `transferred`. |
+| 5. Revisiones | `status_reason` (`transferred`, `deactivated` o `revoked`, solo en revisiones `revoked`) y `environment`, que es llave foránea compuesta a la llave que firmó. |
+| 6. Módulos | `license_features` y la selección de módulos se conservan sin cambios. |
+| 7. Permisos y documentación | `bin/grants.php`: `plans` de solo lectura y `app_version` entre las columnas actualizables de `activations`. `SCHEMA.md` actualizado. La prueba de permisos cubre las 35 tablas. |
+
+**Lo que no hace todavía, según la decisión 2 del propietario:** la huella (`fingerprint_version`, `fingerprint_hash`), la tabla `license_limits` y las fechas `maintenance_until` y `entitled_release_until` siguen en el esquema hasta la migración `004` de la Fase 4, porque el contenido firmado todavía las usa. `entitled_release_until` pasó a admitir `NULL`, y las dos fechas quedan vacías.
+
+**`001_esquema_inicial.sql`:** se quitó la línea de comentario de herencia de la tolerancia (decisión 1 del propietario). El esquema que produce es el mismo y la prueba de equivalencia sigue pasando.
+
+### E2-2.2 Código
+
+- **Emisión con el modelo del contrato** (`LicenseService::issue`). Recibe el tipo y su condición propia, el plan y, si se quiere, los tres cupos.
+  - Sin cupos, la licencia toma los del plan. Con algún número distinto queda personalizada (`plan_custom`), y conserva el plan del que partió.
+  - **No fija fechas.** El primer periodo se calcula al activar: el motor es de la Fase 3 y su conexión, de las fases 4 a 6. Hasta entonces una licencia activada firma `expires_at` vacío.
+  - Rechaza un dato de otro tipo de licencia en lugar de ignorarlo, por ejemplo un periodo de cobro en una perpetua.
+- **Renovación y mantenimiento deshabilitados.** `LicenseService::change` rechaza `renew` y `maintenance` con «…estará disponible próximamente», antes de registrar ninguna operación. `OfflineService` rechaza igual la ampliación de vigencia al aprobar una solicitud. El código anterior se eliminó (`renewTerms`, `recordOfflineRenewal`, la compra de mantenimiento). Quedan dos marcas `PENDIENTE etapa 3`.
+- **Zona horaria del cliente** (`CatalogService::saveCustomer`, `Domain\TimeZones`).
+- **Dominio:** `Domain\LicenseTerms` reúne tipos, periodos, duraciones, meses de actualizaciones, cupos y tolerancia.
+- **Renombre `server_id`** en `ActivationService`, `OfflineService`, `RevisionPublisher`, `DocumentService` y `ReadRepository`. La API y los `.licreq` siguen recibiendo `installation_id` hasta las fases 5 y 6.
+- **Revisiones:** cada una guarda el entorno de la llave que la firmó.
+
+### E2-2.3 Panel: ajustes que la emisión nueva hace necesarios
+
+Adelantados de la Fase 8, y solo estos (decisión técnica 3 de la fase, en `DECISIONS.md`):
+
+| Pantalla | Cambio |
+| --- | --- |
+| Emitir licencia | Tipo (perpetua, suscripción o prueba), su condición y el plan. Ya no pide fechas. |
+| Detalle de licencia | El formulario de renovación o mantenimiento se sustituye por «Disponible próximamente». Muestra «Empieza al activar» mientras no hay fechas y la tolerancia real. |
+| Listados, resumen, solicitud sin internet, constancia PDF y verificación pública | Reconocen el tipo «Prueba». Una suscripción o prueba sin activar ya no aparece como «Sin vencimiento». |
+
+**Sigue en la Fase 8:** cambiar los cupos desde el formulario con su aviso de licencia personalizada, el selector de zona horaria del cliente, el detalle con plan, cupos y motivo de las revisiones, y el contenido de las constancias.
+
+### E2-2.4 Puntos heredados
+
+Quedan **14** de las 20 marcas. Esta fase resolvió 6:
+
+| Marca | Ubicación |
+| --- | --- |
+| Tolerancia de 15 días | `001_esquema_inicial.sql` (comentario retirado), `LicenseService`, `templates/license-form.php` (2) y `templates/license-detail.php` |
+| Una instalación por licencia, en el formulario | `templates/license-form.php` |
+
+Las cuatro marcas de plantillas estaban clasificadas en la Fase 8 (E2-0.2) y se resolvieron aquí por los ajustes del panel. De las plantillas queda una, «Instalaciones: 1 autorizada», en el detalle de licencia.
+
+### E2-2.5 Pruebas
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 1 | 176 | 21 578 | OK |
+| **Cierre de la Fase 2** | **186** | **21 918** | **OK**: unitarias 82/20 660, integración 104/1 258, sin omisiones ni advertencias |
+
+**Cambios en el número de pruebas (+10):**
+
+| Cambio | Pruebas | Detalle |
+| --- | --- | --- |
+| Nuevas | +4 | `ContractDataModelTest` (archivo nuevo): reglas de la base con escrituras directas |
+| Nuevas | +4 | `AdministrationTest`: los tres tipos con sus condiciones y los cupos de su plan (11 casos); licencia personalizada; 22 entradas inválidas de emisión; zona horaria del cliente |
+| Nuevas | +3 | `RulesTest`: enteros del formulario dentro de su rango, condiciones de licencia del contrato y zonas horarias válidas. No necesitan MySQL |
+| Sustituidas | −2, +1 | `AdministrationTest`: las pruebas de renovación y de compra de mantenimiento se sustituyen por `testRenewalAndMaintenanceAreRejectedUntilTheirStage` |
+
+**Sustituidas una por una, porque probaban reglas que ya no existen:**
+
+| Antes | Ahora |
+| --- | --- |
+| `AdministrationTest::testPerpetualDoesNotIncludeMaintenanceAndKeyIsNeverArchived` | `testPerpetualIsIssuedWithoutDatesAndKeyIsNeverArchived` |
+| `AdministrationTest::testTwoProcessesRenewingSameRequestCommitOnlyOnce` | `testTwoProcessesSendingTheSameChangeCommitOnlyOnce`: la misma concurrencia, con un cambio de módulos |
+| `ActivationsTest::testExpiredSubscriptionRefreshDoesNotExtendDatesOrFreeSlot` | `testSubscriptionRefreshedLaterKeepsItsRevisionAndSlotAndRenewalIsNotAvailableYet`. La parte de fechas vuelve en la Fase 5, cuando el periodo se calcule al activar. |
+| `ActivationsTest::testMissingSigningFileRollsBackActivationAndCommercialRenewal` | `testMissingSigningFileRollsBackActivationAndCommercialChange`: la misma reversión, con un cambio de módulos |
+| `OfflineTest::testRenewExtendsOnlyExplicitDatesAndKeepsIdentity` | `testRenewDeliversCurrentRightsAndRecordingARenewalIsNotAvailableYet` |
+
+**Ajustadas:** las entradas de emisión de los 8 archivos que emiten licencias (`MySqlFixture::terms`), `InitialSchemaTest` (tres migraciones, catálogo de planes y 35 tablas) y `ActivationsTest::testAdministrativeRightsAndRevocationPublishAtomically` (usa dos cambios de módulos en lugar de una compra de mantenimiento).
+
+**Las pruebas que pedía la fase:**
+
+| Prueba pedida | Dónde |
+| --- | --- |
+| La migración se aplica sobre una base vacía y, repetida, no hace nada | `InitialSchemaTest::testEmptyDatabaseGetsOnlyAdelPosWithoutModulesAndRepeatingDoesNothing` |
+| Periodo de cobro en una perpetua; meses de actualización en una suscripción; tolerancia que no corresponde al tipo | `ContractDataModelTest::testTermsMustMatchTheLicenseType` |
+| Un cupo negativo o mayor que 999 | `ContractDataModelTest::testCountsStayBetweenZeroAndNineHundredNinetyNineAndThePlanMustExist` |
+| La prueba de permisos pasa | `InitialSchemaTest::testRuntimeGrantsCoverExactlyTheSchemaTables`, y `ContractDataModelTest` comprueba los permisos nuevos |
+
+**Comprobación de las pruebas.** Se quitó o debilitó cada regla por separado, 38 veces, y en las 38 falló alguna prueba: 24 de la migración (condiciones por tipo, cupos, plan, periodo, motivo y entorno de las revisiones, estados, zona horaria y catálogo inicial), 3 de los permisos y 11 del código (emisión, rechazo de renovación y mantenimiento, zona horaria, tolerancia y entorno de la revisión). El código se restauró idéntico después de cada una.
+
+La primera pasada detectó 37. La que faltaba no era un hueco de las pruebas sino una regla redundante: `chk_license_type` repetía lo que `chk_license_terms` ya exige. Se quitó de la migración en lugar de conservar una regla que ninguna prueba puede distinguir.
+
+**Otras comprobaciones:**
+- Verificador Go y `generate-fixtures.php --check`: OK, con los archivos heredados.
+- `bin/check-secrets.php`: sin hallazgos.
+- Playwright: panel y dispositivos de confianza OK, con los dos scripts adaptados al formulario nuevo y al rechazo de renovación y mantenimiento. Se revisaron las capturas del formulario de emisión y del detalle de licencia.
+- Residuos: 0 bases y 0 usuarios de prueba; ningún archivo temporal.
+
+### E2-2.6 Estado intermedio y pendientes
+
+- **Fechas.** Entre esta fase y la 5, una licencia activada no tiene periodo: el contenido firmado lleva `expires_at` vacío también en suscripciones y pruebas. Es un estado de desarrollo, sin despliegue.
+- **Contenido firmado.** Sigue siendo el heredado, con huella y `limits` anteriores, hasta la Fase 4.
+- **`app_version`.** La columna existe; se empieza a guardar con la API nueva (Fase 5).
+- **Pruebas con `adel_pos`.** Las nuevas ya lo usan; las demás cambian en la Fase 4 (decisión 3 del propietario).
+- **`PENDIENTE etapa 3`:** renovación con fecha de pago, conversión de prueba a pago, compra de mantenimiento, editor de planes y edición del periodo inicial de una licencia sin activar.

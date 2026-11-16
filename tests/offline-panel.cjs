@@ -15,13 +15,6 @@ module.exports = async function offlinePanel({ page, context, secret, totp, fres
         const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
         return Buffer.from(JSON.stringify({ schema_version: '1.0', payload_b64u: encoded, signature_b64u: crypto.sign(null, Buffer.from('LICREQ-V1\n' + encoded), installation.private).toString('base64url') }));
     };
-    // 'YYYY-MM-DDTHH:MM' in the panel time zone to the signed UTC form, using the zone rules.
-    const panelLocalToUtc = local => {
-        const asUtc = new Date(local + ':00Z');
-        const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(asUtc).map(part => [part.type, part.value]));
-        const shown = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
-        return new Date(2 * asUtc.getTime() - shown).toISOString().replace('.000Z', '.000000Z');
-    };
     const submit = async button => Promise.all([page.waitForNavigation({ waitUntil: 'load' }), button.click()]);
     async function upload(bytes) {
         await page.goto('/admin/offline');
@@ -104,15 +97,18 @@ module.exports = async function offlinePanel({ page, context, secret, totp, fres
     await upload(request(subDevice)); await choose(subscriptionId);
     const subscription = await approve();
     await upload(request(subDevice, 'renew', subscription.payload));
-    const until = new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 16);
-    await page.locator('[name="renewal_mode"]').selectOption('extend');
-    await page.locator('[name="until"]').fill(until);
-    await page.locator('[name="reference"]').fill('BROWSER-OFFLINE-RENEW');
+    // A renewal request delivers the current rights; recording a renewal while approving is not offered yet.
+    const renewForm = page.locator('form[action$="/approve"]');
+    assert.equal(await renewForm.locator('select[name="renewal_mode"]').count(), 0);
+    assert.match(await renewForm.innerText(), /estará disponible próximamente/);
+    const renewValues = await renewForm.evaluate(form => Object.fromEntries(new FormData(form)));
+    response = await context.request.post(await renewForm.getAttribute('action'), { form: { ...renewValues, renewal_mode: 'extend', until: '2027-01-01T00:00', reference: 'BROWSER-OFFLINE-RENEW', reason: 'Renovación con las reglas anteriores' }, maxRedirects: 0 });
+    assert.equal(response.status(), 422);
+    assert.match(await response.text(), /La renovación de suscripciones estará disponible próximamente/);
     const renewed = await approve();
-    // The panel reads date inputs in America/Monterrey (shown next to the field) and signs UTC.
-    assert.equal(renewed.payload.expires_at, panelLocalToUtc(until));
     assert.equal(renewed.payload.activation_id, subscription.payload.activation_id);
-    assert.equal(renewed.payload.grace_days, 15);
+    assert.equal(renewed.payload.license_revision, 2);
+    assert.equal(renewed.payload.grace_days, 5);
 
     await upload(request(device()));
     const rejection = page.locator('form[action$="/reject"]');

@@ -2,7 +2,7 @@
 
 Qué se prueba, cómo se ejecuta y qué falta probar en las etapas siguientes. Los conteos actuales de pruebas y aserciones, y la comparación con la línea base, están en [AVANCE.md](AVANCE.md).
 
-> **Herencia temporal.** Varias pruebas verifican el motor de licencias heredado: contenido `LIC-V1`/`lic+jws`, huella del equipo, una instalación por licencia, 15 días de tolerancia y límites heredados. Esas pruebas cambian cuando las etapas 2 a 4 implementen el contrato ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)); ver la sección 7.
+> **Herencia temporal.** Varias pruebas verifican todavía el contenido y el protocolo heredados: `LIC-V1`/`lic+jws`, huella del equipo, una instalación por licencia y límites heredados. Esas pruebas cambian cuando las etapas 2 a 4 implementen el contrato ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)); ver la sección 7.
 
 ## 1. Requisitos
 
@@ -73,7 +73,7 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 | `ProtectedRecordTest` | Registros cifrados ligados a su propósito y contexto; un propósito no puede usar el contexto de la evidencia sin internet |
 | `ProtocolTest` | JSON estricto, base64url canónico, esquema sin conversiones ni campos desconocidos, y JWS publicado idéntico byte a byte a los archivos del contrato |
 | `ReleasePackageTest` | Paquete de despliegue: contenido exacto con archivos locales sembrados, manifiesto, `.sha256`, y aborto si se versiona una llave |
-| `RulesTest` | UUID, fechas inválidas, dependencias y ciclos de módulos, vector TOTP RFC y repetición, cifrado del secreto de verificación, redes IPv4/IPv6 y HTTP de desarrollo |
+| `RulesTest` | UUID, fechas inválidas, dependencias y ciclos de módulos, vector TOTP RFC y repetición, cifrado del secreto de verificación, redes IPv4/IPv6 y HTTP de desarrollo. Del contrato: enteros del formulario dentro de su rango, condiciones de licencia (tipos, periodos, duraciones, meses, cupos y tolerancia) y zonas horarias válidas |
 | `SecretsCheckTest` | `bin/check-secrets.php` en repositorios temporales: cada tipo de hallazgo sin imprimir el valor, contenido del índice, semillas públicas aceptadas y el propio repositorio limpio |
 
 ## 5. Pruebas de integración (`tests/Integration`, MySQL 8)
@@ -81,13 +81,14 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 | Archivo | Qué cubre |
 | --- | --- |
 | `ActivationsTest` | Activación en línea: idempotencia, códigos viejos o mal formados, intentos limitados, desafíos (vencimiento exacto, un solo uso, acción ligada), derechos exactos, refresco, desactivación, revocación atómica, una instalación activa, rotación de llaves, y fallos de firma o auditoría con reversión completa |
-| `AdministrationTest` | Esquema inicial (`adel_pos` sin módulos), creación única del primer administrador, emisión y conflictos, verificación en dos pasos y recuperación, renovación y mantenimiento, dependencias inválidas, permisos de consulta, último superadministrador, historia no editable, unicidad de credenciales y obligatoriedad de su copia protegida, búsqueda sin inyección y concurrencia entre dos procesos |
+| `AdministrationTest` | Esquema inicial (`adel_pos` sin módulos), creación única del primer administrador, emisión y conflictos, emisión de los tres tipos con sus condiciones y los cupos de su plan, licencia personalizada, validaciones de la emisión, zona horaria del cliente, verificación en dos pasos y recuperación, rechazo de renovación y mantenimiento, dependencias inválidas, permisos de consulta, último superadministrador, historia no editable, unicidad de credenciales y obligatoriedad de su copia protegida, búsqueda sin inyección y concurrencia entre dos procesos |
 | `BackupTest` | Respaldo cifrado por CLI con `mysqldump` 8.0, extracción y restauración solo en base vacía, conservando historia, llaves, evidencia, constancias y el entorno de licencias |
+| `ContractDataModelTest` | Reglas de la base para el modelo del contrato, probadas con escrituras directas: condiciones según el tipo de licencia, cupos de 0 a 999, plan existente, periodo completo o vacío y coherente con el tipo, `server_id`, motivo y entorno de firma de las revisiones, y permisos de la cuenta de aplicación sobre planes, activaciones y revisiones |
 | `CommercialDeliveryTest` | Constancias PDF: idempotencia, historial de revisiones, códigos recuperables solo con permiso y verificación en dos pasos, archivo firmado inmutable, y formato de código desconocido no recuperable |
 | `HttpApiTest` | Ciclo en línea por HTTP real sin sesiones del panel; validación, TLS y límites con errores JSON estables; respuesta 503, sin detalles, cuando la llave activa es de otro entorno de licencias o falta `LICENSE_ENVIRONMENT` |
-| `InitialSchemaTest` | Equivalencia de `001_esquema_inicial.sql`, sola, con la cadena original 001-007, leída del primer commit. Solo difieren los dos endurecimientos registrados. También: base vacía con todas las migraciones, repetición sin efecto, entornos de firma `test` y `production` en llaves y ámbitos, migrador (pendientes, modificadas e incompletas) y permisos por tabla |
+| `InitialSchemaTest` | Equivalencia de `001_esquema_inicial.sql`, sola, con la cadena original 001-007, leída del primer commit. Solo difieren los dos endurecimientos registrados. También: base vacía con todas las migraciones y el catálogo de planes, repetición sin efecto, entornos de firma `test` y `production` en llaves y ámbitos, migrador (pendientes, modificadas e incompletas) y permisos por tabla |
 | `SigningEnvironmentsTest` | Entornos de firma del contrato: registro, archivo y carpeta por entorno; identificador sugerido y etiqueta del entorno; el servidor firma solo con la llave activa de su entorno, aunque se cambie la etiqueta en el registro o se copie el archivo; arranque y `bin/preflight.php` detenidos si la llave activa o la carpeta son de otro entorno; semillas públicas rechazadas; exportación de llaves públicas sin nada privado; y entorno visible en cada operación de `bin/signing-key.php` |
-| `OfflineTest` | Flujo sin internet: importación cifrada, bytes alterados, aprobación idempotente, rechazo, renovación, desactivación firmada, transferencia forzada atómica, evidencia alterada, roles, espacio de `request_id` compartido, recuperación por equipo averiado y concurrencia |
+| `OfflineTest` | Flujo sin internet: importación cifrada, bytes alterados, aprobación idempotente, rechazo, solicitud de renovación que entrega los derechos vigentes (registrar una renovación al aprobar se rechaza), desactivación firmada, transferencia forzada atómica, evidencia alterada, roles, espacio de `request_id` compartido, recuperación por equipo averiado y concurrencia |
 | `ProductionHttpTest` | Pila real Nginx + PHP-FPM + TLS: cookies `__Host-`, encabezados de seguridad, marca AD-EL POS (logos servidos con su SHA-256), control de acceso, permisos de los controladores, privacidad de la verificación pública y página de mantenimiento sin secretos |
 | `TrustedDevicesHttpTest` | Dispositivos de confianza sobre HTTPS real: autorización, cierre de sesión, revocación, CSRF y origen ajeno |
 | `TrustedDevicesTest` | Reglas de confianza: verificación en dos pasos, vencimiento a 30 días sin extensión, ligada a la cuenta, revocación, cambio de contraseña, cuenta deshabilitada, fallas de consulta y nueva autenticación |
@@ -98,8 +99,8 @@ Los procesos auxiliares `tests/activation-worker.php`, `tests/offline-worker.php
 
 | Script | Qué recorre |
 | --- | --- |
-| `tests/panel.cjs` | Acceso, verificación en dos pasos, roles, CSRF y origen, emisión, mantenimiento, renovación, navegación en móvil y la marca: título «AD-EL POS — Licencias», logo visible y ninguna imagen rota |
-| `tests/offline-panel.cjs` | Flujo sin internet en el panel: importar, revisar, aprobar, rechazar, descargar `.lic`, transferencia forzada con nueva autenticación, desactivación firmada y renovación con fechas en `America/Monterrey` |
+| `tests/panel.cjs` | Acceso, verificación en dos pasos, roles, CSRF y origen, emisión de los tres tipos de licencia con su plan, rechazo de renovación y mantenimiento, navegación en móvil y la marca: título «AD-EL POS — Licencias», logo visible y ninguna imagen rota |
+| `tests/offline-panel.cjs` | Flujo sin internet en el panel: importar, revisar, aprobar, rechazar, descargar `.lic`, transferencia forzada con nueva autenticación, desactivación firmada y solicitud de renovación sin registrar una renovación |
 | `tests/trusted-devices-panel.cjs` | Dispositivos de confianza en escritorio y móvil sobre HTTPS real |
 
 ## 7. Qué se probará en las etapas siguientes

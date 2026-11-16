@@ -39,7 +39,7 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
    php bin/grants.php --database=adelpos_license_dev --user=adelpos_license_dev_app   # imprime los GRANT; aplícalos con una cuenta autorizada
    ```
 
-   El esquema está en `database/migrations/`. `001_esquema_inicial.sql` crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos; las migraciones siguientes lo adaptan al contrato, empezando por `002_entornos_de_firma.sql`. El migrador registra cada archivo con su checksum. Si repites la migración no cambia nada, y si un archivo se modifica después de aplicarlo, el migrador se detiene.
+   El esquema está en `database/migrations/`. `001_esquema_inicial.sql` crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos; las migraciones siguientes lo adaptan al contrato: `002_entornos_de_firma.sql` y `003_contrato_v1.sql`, que agrega los planes `basico`, `elemental` y `premium`. El migrador registra cada archivo con su checksum. Si repites la migración no cambia nada, y si un archivo se modifica después de aplicarlo, el migrador se detiene.
 5. Crea el primer administrador y comprueba la instalación:
 
    ```sh
@@ -146,8 +146,8 @@ Esta etapa conserva el motor de licencias recibido, sin cambiar su lógica. Cada
 | Comportamiento actual | Se reemplaza en |
 | --- | --- |
 | Contenido de la licencia, rutas `/v1`, prueba de posesión (`LIC-V1`), solicitud sin internet (`LICREQ-V1`), encabezado `lic+jws` y archivos de `contracts/v1/fixtures/` | Etapa 2 |
-| Una instalación por licencia, tolerancia de 15 días, huella del equipo versión `'1'` y lista de límites (`max_installations`, `max_users`, `max_libraries`, `max_documents`) | Etapa 2 |
-| Tipos de licencia (hoy perpetua y suscripción con fecha libre), renovación, mantenimiento como compra separada, periodos de prueba, planes y su propagación | Etapa 3 |
+| Una instalación por licencia, huella del equipo versión `'1'` y lista de límites (`max_installations`, `max_users`, `max_libraries`, `max_documents`) en el contenido firmado | Etapa 2 |
+| Renovación, conversión de prueba a pago y compra de mantenimiento: **deshabilitadas**, el servidor las rechaza. Editor de planes y su propagación | Etapa 3 |
 | Transferencias solo desde el panel (sin autoservicio), alertas y detalles del flujo sin internet | Etapa 4 |
 | Pantallas nuevas del panel, contenido de las constancias (planes y cupos) y despliegue en el VPS | Etapa 5 |
 

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Application;
 
-use AdelPos\License\Domain\{Capabilities, Input, Problem, Uuid};
+use AdelPos\License\Domain\{Capabilities, Input, Problem, TimeZones, Uuid};
 use AdelPos\License\Infrastructure\{Audit, Clock, Database};
 
 final class CatalogService
@@ -18,23 +18,28 @@ final class CatalogService
             'phone' => Input::text($input, 'phone', 60, false),
             'tax_id' => Input::text($input, 'tax_id', 32, false),
             'state' => Input::choice($input, 'state', ['active', 'archived']),
+            // Vacía: la predeterminada al registrar, o la que ya tenía el cliente al actualizar.
+            'time_zone' => Input::text($input, 'time_zone', 64, false),
             'version' => (int) ($input['version'] ?? 0),
         ];
+        if ($values['time_zone'] !== '' && !TimeZones::valid($values['time_zone'])) { throw new Problem('La zona horaria no es válida. Usa un identificador como ' . TimeZones::DEFAULT . '.'); }
         return $this->operations->run($actor, ['superadmin', 'operator'], $operationId, 'customer.save', [$id, $values], function () use ($actor, $id, $values): array {
             $customerId = $id ?? Uuid::create();
             $bytes = Uuid::bytes($customerId);
             if ($id === null) {
-                $this->db->execute('INSERT INTO customers(id,display_name,legal_name,state,created_at,updated_at) VALUES (?,?,?,?,?,?)', [$bytes, $values['name'], $values['legal_name'], $values['state'], $this->clock->sql(), $this->clock->sql()]);
+                $timeZone = $values['time_zone'] ?: TimeZones::DEFAULT;
+                $this->db->execute('INSERT INTO customers(id,display_name,legal_name,state,time_zone,created_at,updated_at) VALUES (?,?,?,?,?,?,?)', [$bytes, $values['name'], $values['legal_name'], $values['state'], $timeZone, $this->clock->sql(), $this->clock->sql()]);
                 $this->db->execute('INSERT INTO customer_contacts(id,customer_id,name,email,phone) VALUES (?,?,?,?,?)', [Uuid::bytes(Uuid::create()), $bytes, $values['contact_name'], $values['email'], $values['phone']]);
             } else {
                 $existing = $this->db->one('SELECT * FROM customers WHERE id=? FOR UPDATE', [$bytes]);
                 if (!$existing) { throw new Problem('No se encontró el cliente.', 404); }
                 if ((int) $existing['row_version'] !== $values['version']) { throw new Problem('Otro operador cambió el cliente. Recarga el formulario.', 409); }
-                $this->db->execute('UPDATE customers SET display_name=?,legal_name=?,state=?,row_version=row_version+1,updated_at=? WHERE id=?', [$values['name'], $values['legal_name'], $values['state'], $this->clock->sql(), $bytes]);
+                $timeZone = $values['time_zone'] ?: $existing['time_zone'];
+                $this->db->execute('UPDATE customers SET display_name=?,legal_name=?,state=?,time_zone=?,row_version=row_version+1,updated_at=? WHERE id=?', [$values['name'], $values['legal_name'], $values['state'], $timeZone, $this->clock->sql(), $bytes]);
                 $this->db->execute('UPDATE customer_contacts SET name=?,email=?,phone=? WHERE customer_id=?', [$values['contact_name'], $values['email'], $values['phone'], $bytes]);
             }
             $this->db->execute('UPDATE customers SET tax_id=? WHERE id=?', [$values['tax_id'], $bytes]);
-            $this->audit->append($actor->id, $id === null ? 'customer.created' : 'customer.updated', 'customer', $customerId, ['state' => $values['state']]);
+            $this->audit->append($actor->id, $id === null ? 'customer.created' : 'customer.updated', 'customer', $customerId, ['state' => $values['state'], 'time_zone' => $timeZone]);
             return ['id' => $customerId];
         });
     }

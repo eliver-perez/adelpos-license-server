@@ -62,13 +62,13 @@ Todas son del 2026-11-16.
 
 ## 4. Esquema de base de datos
 
-- **Una sola migración:** `database/migrations/001_esquema_inicial.sql`. Equivale al esquema final de la cadena heredada 001-007, sin sus datos ni sus pasos de historia: catálogo del producto anterior, migración de identidad y relleno de datos.
+- **Esquema inicial en una sola migración:** `database/migrations/001_esquema_inicial.sql`. Las migraciones `002` en adelante son de la etapa 2 (sección 10). Equivale al esquema final de la cadena heredada 001-007, sin sus datos ni sus pasos de historia: catálogo del producto anterior, migración de identidad y relleno de datos.
 - **Endurecimiento:** `license_credentials.credential_encrypted` y `code_format` son `NOT NULL`. **Motivo:** no existen credenciales anteriores al formato 3-4-4-4, que exige la copia protegida del código. Es la única diferencia que admite la prueba de equivalencia.
 - **Datos iniciales:**
   - el producto `adel_pos` («AD-EL POS»), **sin módulos**, que coincide con `features: {}` del contrato;
   - la fila de `security_state` y la cabeza de auditoría.
 
-  Los planes, límites y reglas de AD-EL POS se crean en la etapa 3.
+  Los planes iniciales se crean en la etapa 2 (migración `003`); su editor y sus reglas, en la etapa 3.
 - **Sin cambios en el migrador.** Conserva el control por checksum, el bloqueo y la verificación de integridad. El nombre del bloqueo respeta el límite de 64 caracteres de MySQL.
 
 ## 5. Decisiones técnicas de la etapa 1
@@ -164,3 +164,22 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 7 | La exportación es un documento JSON con `environment` y `keys`, y cada llave con `kid`, `environment` y `public_key`. Incluye las llaves preparadas, la activa y las anteriores, solo de propósito `license`. | AD-EL POS debe confiar en una llave antes de que se active y seguir verificando licencias firmadas con las anteriores. |
 | 8 | `002_entornos_de_firma.sql` no convierte llaves de los entornos anteriores (`development`, `testing`): se detiene si existen. | No hay instalaciones con datos, y un archivo de llave declara su entorno: no se puede renombrar sin invalidarlo. |
 | 9 | Sin dependencias nuevas de Composer en esta fase. | — |
+
+### Fase 2 — Modelo de datos
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | La emisión pasa al modelo del contrato en esta fase: tipo, su condición propia (periodo, duración de la prueba o meses de actualizaciones), plan y cupos. No fija fechas. | El esquema nuevo no admite una licencia sin plan ni condiciones, y el contrato fija las fechas al activar (sección 5.2). |
+| 2 | Renovación y mantenimiento se rechazan desde esta fase. Su código se eliminó; no quedó desactivado. Lo mismo la ampliación de vigencia al aprobar una solicitud sin internet. | Dependían de las fechas escritas a mano. La especificación pide que no sigan funcionando con las reglas anteriores. |
+| 3 | El panel recibe ya los ajustes que la emisión nueva hace necesarios: formulario con tipo, condición y plan; detalle sin el formulario de renovación, con «Disponible próximamente»; etiqueta «Prueba»; y «Empieza al activar» donde antes había una fecha. El resto de la Fase 8 no cambia: cupos personalizados en el formulario, selector de zona horaria, detalle completo y constancias. | Un formulario que pidiera fechas que el servidor ignora, o un botón que siempre falla, sería peor que adelantar esos ajustes. Así Playwright sigue pasando en cada fase. |
+| 4 | Las restricciones `CHECK` de las condiciones y del periodo comparan primero con `IS NULL` o `IS NOT NULL`. | En MySQL una restricción con resultado nulo se da por válida: sin esa comparación, una perpetua sin meses de actualizaciones pasaría. |
+| 5 | Los cupos son `SMALLINT` con signo y una restricción de 0 a 999. | Así un número negativo lo rechaza la misma restricción que uno mayor que 999, y no un error de rango del tipo. |
+| 6 | `plans` solo tiene identificador, nombre y los tres cupos, y la cuenta de aplicación solo lo lee. | El editor y la propagación son de la etapa 3. |
+| 7 | La licencia guarda una copia del plan (`plan_id`, `plan_name`, `plan_custom`) y además una llave foránea al plan. | El contrato firma números, no paquetes: la copia no cambia si el catálogo cambia. La llave foránea impide borrar un plan en uso y permitirá encontrar las licencias que siguen un plan. |
+| 8 | El periodo se guarda completo o vacío. La hora ancla lleva microsegundos. La licencia no guarda zona horaria: se usa la del cliente. | Contrato, secciones 5.1 y 5.2, y criterio 4 de AVANCE.md E2-0.6. |
+| 9 | `activations.state` admite `transferred`. `license_revisions.status_reason` queda opcional hasta la Fase 4. El entorno de la revisión es llave foránea compuesta `(kid, environment)` a la llave de firma. | El contenido heredado no conoce el motivo hasta la Fase 4. La llave foránea garantiza que el entorno guardado es el de la llave que firmó. |
+| 10 | La identidad se llama `server_id` en `activations`, `activation_challenges` y `license_requests`. La API sigue recibiendo `installation_id` hasta la Fase 5. | El renombre de la base no depende del protocolo. |
+| 11 | La zona horaria del cliente debe estar en la lista de zonas de PHP. No se aceptan abreviaturas ni alias antiguos (`CST`, `US/Pacific`). Sin dato, se usa `America/Monterrey` al registrar y se conserva al actualizar. | Especificación, Fase 2, punto 1. |
+| 12 | Las pruebas existentes siguen con el producto sintético; las nuevas usan `adel_pos`. El paso general a `adel_pos` (decisión 3 del propietario) se hace en la Fase 4. | Es la fase en la que el servidor empieza a negarse a firmar otro producto. |
+| 13 | Se quitó de `001_esquema_inicial.sql` el comentario de herencia de la tolerancia (decisión 1 del propietario). El de `license_limits` se quita en la Fase 4. | La migración `003` reemplaza esa regla. |
+| 14 | Sin dependencias nuevas de Composer en esta fase. | — |

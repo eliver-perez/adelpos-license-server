@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
-use AdelPos\License\Application\Actor;
+use AdelPos\License\Application\{Actor, LicenseService};
 use AdelPos\License\Domain\{Problem, Uuid};
 use AdelPos\License\Infrastructure\Migrator;
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
@@ -35,7 +35,7 @@ final class AdministrationTest extends TestCase
 
     private function issueInput(string $type = 'perpetual'): array
     {
-        return ['customer_id'=>$this->customer(),'product_id'=>'producto_prueba','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['prueba_b','prueba_c','prueba_a','prueba_e'],'reason'=>'Compra de prueba','reference'=>'TEST-001'];
+        return ['customer_id'=>$this->customer(),'product_id'=>'producto_prueba',...MySqlFixture::terms($type),'features'=>['prueba_b','prueba_c','prueba_a','prueba_e'],'reason'=>'Compra de prueba','reference'=>'TEST-001'];
     }
 
     public function testMigrationIsRepeatableAndBootstrapIsSingleUse(): void
@@ -47,21 +47,137 @@ final class AdministrationTest extends TestCase
         $this->fixture->app->auth->bootstrap('other@example.test','Otro','Fixture-Password-Only-2026!');
     }
 
-    public function testPerpetualDoesNotIncludeMaintenanceAndKeyIsNeverArchived(): void
+    public function testPerpetualIsIssuedWithoutDatesAndKeyIsNeverArchived(): void
     {
         $app=$this->fixture->app;
         $result=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput());
         $license=$app->read->license($result['id']);
-        self::assertNull($license['expires_at']); self::assertNull($license['maintenance_until']);
+        // No dates until the license is activated (contract, section 5.2).
+        foreach (['period_starts_at','expires_at','anchor_day','anchor_local_time','updates_until'] as $field) { self::assertNull($license[$field],$field); }
+        self::assertSame(6,(int)$license['updates_months']);
         self::assertSame(0,(int)$license['grace_days']); self::assertSame(0,(int)$license['revision_counter']);
         self::assertMatchesRegularExpression('/\A[2-9A-HJKMNP-Z]{3}(?:-[2-9A-HJKMNP-Z]{4}){3}\z/',$result['secret']);
-        self::assertSame('TEST-001', json_decode($license['history'][0]['snapshot_json'], true, 512, JSON_THROW_ON_ERROR)['commercial_reference']);
+        $snapshot=json_decode($license['history'][0]['snapshot_json'], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('TEST-001', $snapshot['commercial_reference']);
+        self::assertSame(['perpetual',6,'elemental',3], [$snapshot['license_type'],$snapshot['updates_months'],$snapshot['plan_id'],$snapshot['cash_registers']]);
         $stored=$app->db->one('SELECT * FROM license_credentials WHERE license_id=?',[Uuid::bytes($result['id'])]);
         self::assertSame($app->crypto->digest('CREDENTIAL_KEY',$result['secret']),$stored['key_digest']);
         foreach (['admin_operations'=>'result_json','license_changes'=>'snapshot_json','audit_events'=>'payload_json'] as $table=>$column) {
             foreach($app->db->all("SELECT $column AS content FROM $table") as $row) { self::assertStringNotContainsString($result['secret'],$row['content']); }
         }
         self::assertGreaterThanOrEqual(3,$app->audit->verify());
+    }
+
+    public function testEveryLicenseTypeIsIssuedWithItsOwnTermsAndTheCountsOfItsPlan(): void
+    {
+        $app=$this->fixture->app;
+        // Expected: type, billing period, trial duration, updates months, grace days, plan, plan name, custom, cash registers, order takers, kitchen displays.
+        $cases=[
+            'perpetual, default updates'=>[['license_type'=>'perpetual','plan_id'=>'basico'],['perpetual',null,null,6,0,'basico','Plan básico',0,1,0,0]],
+            'perpetual without updates'=>[['license_type'=>'perpetual','updates_months'=>'0','plan_id'=>'premium'],['perpetual',null,null,0,0,'premium','Plan premium',0,5,10,5]],
+            'perpetual, 6 months'=>[['license_type'=>'perpetual','updates_months'=>'6','plan_id'=>'elemental'],['perpetual',null,null,6,0,'elemental','Plan elemental',0,3,3,3]],
+            'perpetual, 12 months'=>[['license_type'=>'perpetual','updates_months'=>12,'plan_id'=>'elemental'],['perpetual',null,null,12,0,'elemental','Plan elemental',0,3,3,3]],
+            'monthly subscription'=>[['license_type'=>'subscription','billing_period'=>'monthly','plan_id'=>'basico'],['subscription','monthly',null,null,5,'basico','Plan básico',0,1,0,0]],
+            'quarterly subscription'=>[['license_type'=>'subscription','billing_period'=>'quarterly','plan_id'=>'elemental'],['subscription','quarterly',null,null,5,'elemental','Plan elemental',0,3,3,3]],
+            'semiannual subscription'=>[['license_type'=>'subscription','billing_period'=>'semiannual','plan_id'=>'premium'],['subscription','semiannual',null,null,5,'premium','Plan premium',0,5,10,5]],
+            'annual subscription'=>[['license_type'=>'subscription','billing_period'=>'annual','plan_id'=>'premium'],['subscription','annual',null,null,5,'premium','Plan premium',0,5,10,5]],
+            '15-day trial'=>[['license_type'=>'trial','trial_duration'=>'15d','plan_id'=>'premium'],['trial',null,'15d',null,0,'premium','Plan premium',0,5,10,5]],
+            '1-month trial'=>[['license_type'=>'trial','trial_duration'=>'1m','plan_id'=>'elemental'],['trial',null,'1m',null,0,'elemental','Plan elemental',0,3,3,3]],
+            '3-month trial'=>[['license_type'=>'trial','trial_duration'=>'3m','plan_id'=>'basico'],['trial',null,'3m',null,0,'basico','Plan básico',0,1,0,0]],
+        ];
+        $customer=$this->customer();
+        foreach ($cases as $name=>[$terms,$expected]) {
+            $issued=$app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer,'product_id'=>'adel_pos']+$terms);
+            $row=$this->fixture->owner->one('SELECT license_type,billing_period,trial_duration,updates_months,grace_days,plan_id,plan_name,plan_custom,cash_registers,order_takers,kitchen_displays,period_starts_at,expires_at,anchor_day,anchor_local_time,updates_until FROM licenses WHERE license_id=?',[Uuid::bytes($issued['id'])]);
+            self::assertSame($expected,array_map(static fn($value)=>is_numeric($value)?(int)$value:$value,array_slice(array_values($row),0,11)),$name);
+            self::assertSame([null,null,null,null,null],array_slice(array_values($row),11),$name.': starts when activated');
+            self::assertMatchesRegularExpression('/\A[2-9A-HJKMNP-Z]{3}(?:-[2-9A-HJKMNP-Z]{4}){3}\z/',$issued['secret'],$name);
+        }
+        self::assertSame(count($cases),(int)$app->db->execute('SELECT COUNT(*) FROM licenses')->fetchColumn());
+        self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM subscription_periods')->fetchColumn());
+    }
+
+    public function testChangingAnyCountOfThePlanMakesTheLicenseCustom(): void
+    {
+        $app=$this->fixture->app;
+        $base=['customer_id'=>$this->customer(),'product_id'=>'adel_pos',...MySqlFixture::terms('subscription','elemental')];
+        $counts=fn(array $issued): array=>array_map('intval',array_values($this->fixture->owner->one('SELECT plan_custom,cash_registers,order_takers,kitchen_displays FROM licenses WHERE license_id=?',[Uuid::bytes($issued['id'])])));
+        // The numbers of the plan written out explicitly are still the plan.
+        self::assertSame([0,3,3,3],$counts($app->licenses->issue($this->actor,Uuid::create(),$base+['cash_registers'=>'3','order_takers'=>'03','kitchen_displays'=>3])));
+        $custom=$app->licenses->issue($this->actor,Uuid::create(),$base+['order_takers'=>'7']);
+        self::assertSame([1,3,7,3],$counts($custom));
+        self::assertSame([1,0,0,999],$counts($app->licenses->issue($this->actor,Uuid::create(),$base+['cash_registers'=>0,'order_takers'=>'0','kitchen_displays'=>'999'])));
+        // A custom license keeps the plan it started from, and its issuance record keeps the signed numbers.
+        $license=$app->read->license($custom['id']);
+        self::assertSame(['elemental','Plan elemental'],[$license['plan_id'],$license['plan_name']]);
+        $snapshot=json_decode($license['history'][0]['snapshot_json'],true,512,JSON_THROW_ON_ERROR);
+        self::assertSame(['subscription','monthly',1,7],[$snapshot['license_type'],$snapshot['billing_period'],(int)$snapshot['plan_custom'],(int)$snapshot['order_takers']]);
+        // Editing the catalog later does not change a license that was already issued.
+        $this->fixture->owner->execute("UPDATE plans SET display_name='Plan renombrado',cash_registers=9 WHERE plan_id='elemental'");
+        self::assertSame([1,3,7,3],$counts($custom));
+        self::assertSame('Plan elemental',$app->read->license($custom['id'])['plan_name']);
+    }
+
+    public function testIssuanceRejectsTermsOfAnotherTypeUnknownPlansAndCountsOutOfRange(): void
+    {
+        $app=$this->fixture->app;
+        $base=['customer_id'=>$this->customer(),'product_id'=>'adel_pos','license_type'=>'perpetual','plan_id'=>'basico'];
+        $invalid=[
+            'no type'=>['license_type'=>''],
+            'unknown type'=>['license_type'=>'lifetime'],
+            'subscription without period'=>['license_type'=>'subscription'],
+            'unknown period'=>['license_type'=>'subscription','billing_period'=>'weekly'],
+            'trial without duration'=>['license_type'=>'trial'],
+            'unknown duration'=>['license_type'=>'trial','trial_duration'=>'30d'],
+            'updates outside 0, 6 or 12'=>['updates_months'=>'3'],
+            'negative updates'=>['updates_months'=>'-6'],
+            'billing period on a perpetual'=>['billing_period'=>'monthly'],
+            'trial duration on a perpetual'=>['trial_duration'=>'15d'],
+            'updates months on a subscription'=>['license_type'=>'subscription','billing_period'=>'monthly','updates_months'=>'6'],
+            'trial duration on a subscription'=>['license_type'=>'subscription','billing_period'=>'monthly','trial_duration'=>'15d'],
+            'billing period on a trial'=>['license_type'=>'trial','trial_duration'=>'1m','billing_period'=>'annual'],
+            'updates months on a trial'=>['license_type'=>'trial','trial_duration'=>'1m','updates_months'=>'0'],
+            'terms sent as a list'=>['updates_months'=>['6']],
+            'no plan'=>['plan_id'=>''],
+            'unknown plan'=>['plan_id'=>'inexistente'],
+            'negative count'=>['cash_registers'=>'-1'],
+            'count above 999'=>['order_takers'=>'1000'],
+            'fractional count'=>['kitchen_displays'=>'1.5'],
+            'count in words'=>['kitchen_displays'=>'diez'],
+            'count sent as a list'=>['cash_registers'=>['1']],
+        ];
+        foreach ($invalid as $name=>$changes) {
+            try { $app->licenses->issue($this->actor,Uuid::create(),array_replace($base,$changes)); self::fail('Accepted: '.$name); }
+            catch (Problem $error) { self::assertContains($error->status,[422],$name); self::assertNotSame('',$error->getMessage()); }
+        }
+        self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM licenses')->fetchColumn());
+        self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM license_credentials')->fetchColumn());
+        // The messages name the field in the administrator's words.
+        try { $app->licenses->issue($this->actor,Uuid::create(),array_replace($base,['order_takers'=>'1000'])); }
+        catch (Problem $error) { self::assertSame('Comanderos debe ser un número entero entre 0 y 999.',$error->getMessage()); }
+        try { $app->licenses->issue($this->actor,Uuid::create(),array_replace($base,['billing_period'=>'monthly'])); }
+        catch (Problem $error) { self::assertSame('El periodo de cobro solo aplica a las suscripciones.',$error->getMessage()); }
+    }
+
+    public function testCustomerTimeZoneDefaultsToMonterreyAndMustBeAnIanaZone(): void
+    {
+        $app=$this->fixture->app;
+        $base=['name'=>'Cliente de prueba','legal_name'=>'','contact_name'=>'Contacto','email'=>'','phone'=>'','state'=>'active'];
+        self::assertSame('America/Monterrey',$app->read->customer($this->customer())['time_zone']);
+        $id=$app->catalog->saveCustomer($this->actor,Uuid::create(),null,$base+['time_zone'=>'America/Tijuana'])['id'];
+        self::assertSame('America/Tijuana',$app->read->customer($id)['time_zone']);
+        // Saving without a zone keeps the one the customer had.
+        $app->catalog->saveCustomer($this->actor,Uuid::create(),$id,$base+['version'=>1]);
+        self::assertSame('America/Tijuana',$app->read->customer($id)['time_zone']);
+        $app->catalog->saveCustomer($this->actor,Uuid::create(),$id,$base+['version'=>2,'time_zone'=>'UTC']);
+        self::assertSame('UTC',$app->read->customer($id)['time_zone']);
+        foreach (['Monterrey','America/Monterey','america/monterrey','US/Pacific','GMT-6','-06:00','CST'] as $zone) {
+            try { $app->catalog->saveCustomer($this->actor,Uuid::create(),null,$base+['time_zone'=>$zone]); self::fail('Accepted time zone: '.$zone); }
+            catch (Problem $error) { self::assertStringContainsString('zona horaria',$error->getMessage()); }
+        }
+        self::assertSame(2,(int)$app->db->execute('SELECT COUNT(*) FROM customers')->fetchColumn());
+        try { $this->fixture->owner->execute("UPDATE customers SET time_zone=''"); self::fail('Empty time zone stored'); }
+        catch (\PDOException $error) { self::assertSame(3819,(int)$error->errorInfo[1]); }
     }
 
     public function testDuplicateIssuanceAndConflictingRequest(): void
@@ -96,25 +212,25 @@ final class AdministrationTest extends TestCase
         $app->auth->verifyMfa($pending3,$recovery,'127.0.0.1');
     }
 
-    public function testSubscriptionRenewalAndDuplicateDoNotAddExtraPeriod(): void
+    public function testRenewalAndMaintenanceAreRejectedUntilTheirStage(): void
     {
-        $app=$this->fixture->app; $issued=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput('subscription'));
-        $input=['version'=>1,'until'=>'2026-11-01T00:00','reason'=>'Renovación comprada','reference'=>'TEST-002']; $operation=Uuid::create();
-        $app->licenses->change($this->actor,$operation,$issued['id'],'renew',$input);
-        $app->licenses->change($this->actor,$operation,$issued['id'],'renew',$input);
-        $license=$app->read->license($issued['id']);
-        self::assertSame(15,(int)$license['grace_days']); self::assertNull($license['maintenance_until']);
-        self::assertSame('2026-11-01 00:00:00.000000',$license['expires_at']);
-        self::assertSame(2,(int)$app->db->execute('SELECT COUNT(*) FROM subscription_periods')->fetchColumn());
-    }
-
-    public function testMaintenanceRequiresSeparateExplicitPurchase(): void
-    {
-        $app=$this->fixture->app; $issued=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput());
-        $app->licenses->change($this->actor,Uuid::create(),$issued['id'],'maintenance',['version'=>1,'until'=>'2027-09-25T12:00','reason'=>'Compra de mantenimiento','reference'=>'TEST-MAINT']);
-        $license=$app->read->license($issued['id']); self::assertNull($license['expires_at']);
-        self::assertSame($license['maintenance_until'],$license['entitled_release_until']);
-        self::assertCount(2,$license['history']);
+        $app=$this->fixture->app;
+        $subscription=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput('subscription'));
+        $perpetual=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput());
+        $trial=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput('trial'));
+        // The operations of the previous engine are refused whatever the license type, even when called directly.
+        foreach ([$subscription,$perpetual,$trial] as $issued) {
+            foreach (['renew','maintenance'] as $action) {
+                try { $app->licenses->change($this->actor,Uuid::create(),$issued['id'],$action,['version'=>1,'until'=>'2027-09-25T12:00','reason'=>'Compra','reference'=>'TEST-002']); self::fail('Accepted: '.$action); }
+                catch (Problem $error) { self::assertSame(LicenseService::PENDING[$action],$error->getMessage()); self::assertStringContainsString('próximamente',$error->getMessage()); }
+            }
+            $license=$app->read->license($issued['id']);
+            self::assertSame(1,(int)$license['row_version']); self::assertCount(1,$license['history']);
+            self::assertNull($license['expires_at']); self::assertNull($license['updates_until']);
+        }
+        foreach (['subscription_periods','maintenance_purchases'] as $table) { self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM '.$table)->fetchColumn(),$table); }
+        self::assertSame(0,(int)$app->db->execute("SELECT COUNT(*) FROM admin_operations WHERE action IN ('license.renew','license.maintenance')")->fetchColumn());
+        self::assertSame(0,(int)$app->db->execute("SELECT COUNT(*) FROM audit_events WHERE operation IN ('license.renew','license.maintenance')")->fetchColumn());
     }
 
     public function testInvalidDependenciesRollbackWithoutKeyOrLicense(): void
@@ -187,14 +303,14 @@ final class AdministrationTest extends TestCase
         self::assertSame(1,$app->read->dashboard()['customers']);
     }
 
-    public function testTwoProcessesRenewingSameRequestCommitOnlyOnce(): void
+    public function testTwoProcessesSendingTheSameChangeCommitOnlyOnce(): void
     {
         $app=$this->fixture->app;
         $issued=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput('subscription'));
-        $input=['version'=>1,'until'=>'2026-11-01T00:00','reason'=>'Concurrent renewal','reference'=>'RACE'];
+        $input=['version'=>1,'features'=>['prueba_b'],'reason'=>'Concurrent change','reference'=>'RACE'];
         $file=tempnam(sys_get_temp_dir(),'adelpos-license-race-');
         chmod($file,0600);
-        file_put_contents($file,json_encode(['config'=>$this->fixture->values,'actor'=>$this->actor->id,'operation'=>Uuid::create(),'license'=>$issued['id'],'input'=>$input],JSON_THROW_ON_ERROR));
+        file_put_contents($file,json_encode(['config'=>$this->fixture->values,'actor'=>$this->actor->id,'operation'=>Uuid::create(),'license'=>$issued['id'],'action'=>'features','input'=>$input],JSON_THROW_ON_ERROR));
         $workers=[];
         $this->fixture->owner->pdo->beginTransaction();
         $this->fixture->owner->one('SELECT license_id FROM licenses WHERE license_id=? FOR UPDATE',[Uuid::bytes($issued['id'])]);
@@ -223,8 +339,9 @@ final class AdministrationTest extends TestCase
             }
             self::assertSame($results[0]['id'],$results[1]['id']);
             self::assertNotSame($results[0]['replayed'],$results[1]['replayed']);
-            self::assertSame(2,(int)$app->db->execute('SELECT COUNT(*) FROM subscription_periods')->fetchColumn());
-            self::assertCount(2,$app->read->license($issued['id'])['history']);
+            $license=$app->read->license($issued['id']);
+            self::assertCount(2,$license['history']); self::assertSame(2,(int)$license['row_version']);
+            self::assertSame(['prueba_b'],array_column(array_filter($license['features'],fn($feature)=>(bool)$feature['enabled']),'capability_key'));
         } finally {
             if($this->fixture->owner->pdo->inTransaction())$this->fixture->owner->pdo->rollBack();
             unlink($file);

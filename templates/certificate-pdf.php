@@ -26,9 +26,9 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 <?php if ($d['legal_name']): ?><tr><th>Razón social</th><td><?= V::escape($d['legal_name']) ?></td></tr><?php endif; ?>
 <?php if ($d['tax_id']): ?><tr><th>RFC</th><td><?= V::escape($d['tax_id']) ?></td></tr><?php endif; ?>
 <tr><th>Producto</th><td><?= V::escape($d['product']) ?></td></tr>
-<tr><th>Modalidad</th><td><?= $d['license_type']==='perpetual'?'Perpetua · Uso sin vencimiento':'Suscripción' ?></td></tr>
+<tr><th>Modalidad</th><td><?= V::escape(['perpetual'=>'Perpetua · Uso sin vencimiento','subscription'=>'Suscripción','trial'=>'Prueba'][$d['license_type']]) ?></td></tr>
 <tr><th>Emisión de licencia</th><td><?= V::escape(V::date($d['issued_at'])) ?></td></tr>
-<tr><th>Vencimiento</th><td><?= $d['expires_at']===null?'Sin vencimiento':V::escape(V::date($d['expires_at'])) ?></td></tr>
+<tr><th>Vencimiento</th><td><?= V::escape($d['license_type']==='perpetual'?'Sin vencimiento':($d['expires_at']===null?'Empieza al activar la licencia':V::date($d['expires_at']))) ?></td></tr>
 <tr><th>Instalaciones autorizadas</th><td><?= (int)$d['limits']['max_installations'] ?></td></tr>
 <?php if ($d['reference']!==''): ?><tr><th>Referencia comercial</th><td><?= V::escape($d['reference']) ?></td></tr><?php endif; ?>
 </table>

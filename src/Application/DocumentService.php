@@ -36,7 +36,7 @@ final class DocumentService
                 $credentialId = $credential['id']; $snapshot['activation_code'] = $credential['secret'];
             } elseif ($method === 'offline') {
                 $current->requirePermission('offline.download');
-                $offline = $this->db->one('SELECT r.*,BIN_TO_UUID(a.installation_id) AS installation FROM license_revisions r JOIN activations a ON a.activation_id=r.activation_id WHERE r.license_id=? AND r.revision_id=?',[$license['license_id'],Uuid::bytes($revisionId)]) ?? throw new Problem('Selecciona un archivo firmado de esta licencia.',404);
+                $offline = $this->db->one('SELECT r.*,BIN_TO_UUID(a.server_id) AS installation FROM license_revisions r JOIN activations a ON a.activation_id=r.activation_id WHERE r.license_id=? AND r.revision_id=?',[$license['license_id'],Uuid::bytes($revisionId)]) ?? throw new Problem('Selecciona un archivo firmado de esta licencia.',404);
                 if (!hash_equals($offline['jws_sha256'],hash('sha256',$offline['license_jws']))) { throw new \RuntimeException('Artifact checksum mismatch.'); }
                 $offlineRevision = $offline['revision_id'];
                 $snapshot += ['offline_filename'=>'license-'.$licenseId.'-r'.$offline['license_revision'].'.lic','offline_sha256'=>$offline['jws_sha256'],'installation'=>$offline['installation'],'license_revision'=>(int)$offline['license_revision'],'artifact_status'=>$offline['license_status']];

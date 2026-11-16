@@ -2,55 +2,103 @@
 declare(strict_types=1);
 namespace AdelPos\License\Application;
 
-use AdelPos\License\Domain\{ActivationCode, Capabilities, Input, Problem, Uuid};
+use AdelPos\License\Domain\{ActivationCode, Capabilities, Input, LicenseTerms, Problem, Uuid};
 use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class LicenseService
 {
+    // PENDIENTE etapa 3: renovación con fecha de pago y regla de tolerancia, conversión de prueba a pago y compra de mantenimiento (contrato, secciones 5.3 a 5.5).
+    public const PENDING = [
+        'renew' => 'La renovación de suscripciones estará disponible próximamente.',
+        'maintenance' => 'La compra de mantenimiento estará disponible próximamente.',
+    ];
+
     public function __construct(private Database $db, private Operations $operations, private Audit $audit, private Clock $clock, private Crypto $crypto, private RevisionPublisher $publisher) {}
 
+    /**
+     * Emite una licencia con las condiciones del contrato. No fija fechas: el primer periodo
+     * empieza al activar en línea o al aprobar la solicitud sin internet (contrato, sección 5.2).
+     */
     public function issue(Actor $actor, string $operationId, array $input): array
     {
         $customerId = Input::text($input, 'customer_id');
         $productId = Input::text($input, 'product_id', 64);
-        $type = Input::choice($input, 'license_type', ['perpetual', 'subscription']);
-        $date = Input::date(Input::text($input, $type === 'perpetual' ? 'entitled_release_until' : 'expires_at'));
+        $terms = $this->termsInput($input);
+        $planId = Input::text($input, 'plan_id', 64, false);
+        if ($planId === '') { throw new Problem('Elige el plan de la licencia.'); }
+        $limits = [];
+        foreach (LicenseTerms::LIMITS as $key => $label) {
+            // Vacío: el cupo del plan. Un número distinto al del plan deja la licencia personalizada.
+            $limits[$key] = ($input[$key] ?? '') === '' ? null : Input::integer($input, $key, 0, LicenseTerms::MAX_LIMIT, $label);
+        }
         $features = $this->featureInput($input);
         $reason = Input::text($input, 'reason', 500, false);
         $reference = Input::text($input, 'reference', 190, false);
-        if ($type === 'subscription' && $date <= $this->clock->now()) { throw new Problem('El vencimiento debe ser posterior al momento actual.'); }
-        $data = [$customerId, $productId, $type, $date->format(DATE_ATOM), $features, $reason, $reference];
-        return $this->operations->run($actor, ['superadmin', 'operator'], $operationId, 'license.issue', $data, function () use ($actor, $customerId, $productId, $type, $date, $features, $reason, $reference): array {
+        $data = [$customerId, $productId, $terms, $planId, $limits, $features, $reason, $reference];
+        return $this->operations->run($actor, ['superadmin', 'operator'], $operationId, 'license.issue', $data, function () use ($actor, $customerId, $productId, $terms, $planId, $limits, $features, $reason, $reference): array {
             $customer = $this->db->one('SELECT * FROM customers WHERE id=? FOR SHARE', [Uuid::bytes($customerId)]);
             $product = $this->db->one('SELECT * FROM products WHERE product_id=? FOR SHARE', [$productId]);
             if (!$customer || $customer['state'] !== 'active' || !$product || $product['state'] !== 'active') { throw new Problem('Selecciona un cliente y un producto activos.'); }
+            $plan = $this->db->one('SELECT * FROM plans WHERE plan_id=? FOR SHARE', [$planId]);
+            if (!$plan) { throw new Problem('El plan elegido no existe en el catálogo.'); }
+            $custom = false;
+            foreach (array_keys(LicenseTerms::LIMITS) as $key) {
+                $limits[$key] ??= (int) $plan[$key];
+                $custom = $custom || $limits[$key] !== (int) $plan[$key];
+            }
             $catalog = $this->validateFeatures($productId, $features);
             $id = Uuid::create();
             $bytes = Uuid::bytes($id);
-            $instant = $date->format('Y-m-d H:i:s.u');
-            // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (tolerancia de 15 días en suscripción)
-            $this->db->execute('INSERT INTO licenses(license_id,customer_id,product_id,license_type,expires_at,grace_days,maintenance_until,entitled_release_until,created_at,updated_at) VALUES (?,?,?,?,?,?,NULL,?,?,?)', [$bytes, Uuid::bytes($customerId), $productId, $type, $type === 'subscription' ? $instant : null, $type === 'subscription' ? 15 : 0, $instant, $this->clock->sql(), $this->clock->sql()]);
-            $this->db->execute('UPDATE licenses SET commercial_reference=?,authorization_note=? WHERE license_id=?', [$reference,$reason,$bytes]);
+            $this->db->execute('INSERT INTO licenses(license_id,customer_id,product_id,license_type,billing_period,trial_duration,updates_months,grace_days,plan_id,plan_name,plan_custom,cash_registers,order_takers,kitchen_displays,commercial_reference,authorization_note,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', [$bytes, Uuid::bytes($customerId), $productId, $terms['license_type'], $terms['billing_period'], $terms['trial_duration'], $terms['updates_months'], LicenseTerms::graceDays($terms['license_type']), $plan['plan_id'], $plan['display_name'], $custom ? 1 : 0, $limits['cash_registers'], $limits['order_takers'], $limits['kitchen_displays'], $reference, $reason, $this->clock->sql(), $this->clock->sql()]);
             // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación por licencia y lista de límites)
             $this->db->execute('INSERT INTO license_limits(license_id,max_installations,max_users,max_libraries,max_documents) VALUES (?,1,NULL,NULL,NULL)', [$bytes]);
             $this->writeFeatures($bytes, $productId, $catalog, $features);
-            if ($type === 'subscription') { $this->period($actor, $bytes, null, $instant, $reference, $reason); }
             $secret = $this->credential($bytes);
             $this->record($actor, $id, 'license.issued', $reason, $reference);
             return $this->credentialResult($actor, $id, $secret);
         });
     }
 
+    /** Tipo de licencia con su único dato propio: periodo, duración de la prueba o meses de actualizaciones. */
+    private function termsInput(array $input): array
+    {
+        $type = Input::choice($input, 'license_type', LicenseTerms::TYPES);
+        $sent = [];
+        foreach (['billing_period', 'trial_duration', 'updates_months'] as $field) {
+            $value = $input[$field] ?? '';
+            if (!is_string($value) && !is_int($value)) { throw new Problem('Revisa las condiciones de la licencia.'); }
+            $sent[$field] = trim((string) $value);
+        }
+        $terms = ['license_type' => $type, 'billing_period' => null, 'trial_duration' => null, 'updates_months' => null];
+        if ($type === 'subscription') {
+            if (!in_array($sent['billing_period'], LicenseTerms::BILLING_PERIODS, true)) { throw new Problem('Elige el periodo de la suscripción: mensual, trimestral, semestral o anual.'); }
+            $terms['billing_period'] = $sent['billing_period'];
+        } elseif ($type === 'trial') {
+            if (!in_array($sent['trial_duration'], LicenseTerms::TRIAL_DURATIONS, true)) { throw new Problem('Elige la duración de la prueba: 15 días, 1 mes o 3 meses.'); }
+            $terms['trial_duration'] = $sent['trial_duration'];
+        } else {
+            $months = $sent['updates_months'] === '' ? (string) LicenseTerms::DEFAULT_UPDATES_MONTHS : $sent['updates_months'];
+            if (!in_array($months, array_map('strval', LicenseTerms::UPDATES_MONTHS), true)) { throw new Problem('Elige los meses de actualizaciones de la licencia perpetua: 0, 6 o 12.'); }
+            $terms['updates_months'] = (int) $months;
+        }
+        // Un dato de otro tipo de licencia nunca se ignora en silencio.
+        if ($type !== 'subscription' && $sent['billing_period'] !== '') { throw new Problem('El periodo de cobro solo aplica a las suscripciones.'); }
+        if ($type !== 'trial' && $sent['trial_duration'] !== '') { throw new Problem('La duración de prueba solo aplica a las licencias de prueba.'); }
+        if ($type !== 'perpetual' && $sent['updates_months'] !== '') { throw new Problem('Los meses de actualizaciones solo aplican a las licencias perpetuas.'); }
+        return $terms;
+    }
+
     public function change(Actor $actor, string $operationId, string $id, string $action, array $input): array
     {
-        if (!in_array($action, ['features', 'renew', 'maintenance', 'reissue', 'revoke'], true)) { throw new Problem('La operación no existe.', 404); }
+        // Estas dos operaciones del motor anterior no siguen funcionando con sus reglas viejas: se rechazan siempre.
+        if (isset(self::PENDING[$action])) { throw new Problem(self::PENDING[$action]); }
+        if (!in_array($action, ['features', 'reissue', 'revoke'], true)) { throw new Problem('La operación no existe.', 404); }
         $reason = Input::text($input, 'reason', 500);
-        $reference = Input::text($input, 'reference', 190, $action === 'maintenance');
+        $reference = Input::text($input, 'reference', 190, false);
         $features = $action === 'features' ? $this->featureInput($input) : [];
-        $date = in_array($action, ['renew', 'maintenance'], true) ? Input::date(Input::text($input, 'until')) : null;
         $version = (int) ($input['version'] ?? 0);
         $roles = $action === 'revoke' ? ['superadmin'] : ['superadmin', 'operator'];
-        return $this->operations->run($actor, $roles, $operationId, 'license.' . $action, [$id, $reason, $reference, $features, $date?->format(DATE_ATOM), $version], function () use ($actor, $id, $action, $reason, $reference, $features, $date, $version): array {
+        return $this->operations->run($actor, $roles, $operationId, 'license.' . $action, [$id, $reason, $reference, $features, $version], function () use ($actor, $id, $action, $reason, $reference, $features, $version): array {
             $bytes = Uuid::bytes($id);
             // Product lock precedes license locks, as in catalog dependency changes.
             $productId = $this->db->execute('SELECT product_id FROM licenses WHERE license_id=?', [$bytes])->fetchColumn();
@@ -67,14 +115,6 @@ final class LicenseService
                 $previous = array_column($this->db->all('SELECT capability_key FROM license_features WHERE license_id=? AND enabled=1 ORDER BY capability_key', [$bytes]), 'capability_key');
                 $rightsChanged = $previous !== $features;
                 $this->writeFeatures($bytes, $productId, $catalog, $features);
-            } elseif ($action === 'renew') {
-                $this->renewTerms($actor, $license, $date, $reference, $reason);
-            } elseif ($action === 'maintenance') {
-                if ($license['license_type'] !== 'perpetual') { throw new Problem('El mantenimiento separado corresponde a licencias perpetuas.'); }
-                $instant = $date->format('Y-m-d H:i:s.u');
-                if ($instant <= $license['entitled_release_until'] || ($license['maintenance_until'] !== null && $instant <= $license['maintenance_until'])) { throw new Problem('La compra debe extender la fecha de versiones autorizadas.'); }
-                $this->db->execute('INSERT INTO maintenance_purchases(id,license_id,previous_until,new_until,purchased_at,commercial_reference,admin_id,reason) VALUES (?,?,?,?,?,?,?,?)', [Uuid::bytes(Uuid::create()), $bytes, $license['maintenance_until'], $instant, $this->clock->sql(), $reference, Uuid::bytes($actor->id), $reason]);
-                $this->db->execute('UPDATE licenses SET maintenance_until=?,entitled_release_until=? WHERE license_id=?', [$instant, $instant, $bytes]);
             } elseif ($action === 'reissue') {
                 $this->db->execute("UPDATE license_credentials SET state='retired',retired_at=? WHERE license_id=? AND state='active'", [$this->clock->sql(), $bytes]);
                 $result = $this->credentialResult($actor, $id, $this->credential($bytes));
@@ -87,24 +127,6 @@ final class LicenseService
             $this->record($actor, $id, 'license.' . $action, $reason, $reference);
             return $result;
         });
-    }
-
-    /** Internal transaction primitive: caller authorizes and locks product/license first. */
-    public function renewTerms(Actor $actor, array $license, \DateTimeImmutable $date, string $reference, string $reason): void
-    {
-        if (!$this->db->pdo->inTransaction()) { throw new \LogicException('Renewal requires a transaction.'); }
-        if ($license['license_type'] !== 'subscription') { throw new Problem('Solo las suscripciones tienen renovación de vigencia.'); }
-        $instant = $date->format('Y-m-d H:i:s.u');
-        if ($instant <= $license['expires_at'] || $date <= $this->clock->now()) { throw new Problem('El nuevo vencimiento debe extender la vigencia anterior y ser futuro.'); }
-        $this->db->execute('UPDATE licenses SET expires_at=?,entitled_release_until=? WHERE license_id=?', [$instant, $instant, $license['license_id']]);
-        $this->period($actor, $license['license_id'], $license['expires_at'], $instant, $reference, $reason);
-    }
-
-    /** Called last, after offline publication and decision, with the license still locked. */
-    public function recordOfflineRenewal(Actor $actor, string $id, string $reason, string $reference): void
-    {
-        if (!$this->db->pdo->inTransaction()) { throw new \LogicException('Renewal history requires a transaction.'); }
-        $this->record($actor, $id, 'license.renew', $reason, $reference);
     }
 
     private function featureInput(array $input): array
@@ -179,14 +201,9 @@ final class LicenseService
         });
     }
 
-    private function period(Actor $actor, string $licenseId, ?string $previous, string $until, string $reference, string $reason): void
-    {
-        $this->db->execute('INSERT INTO subscription_periods(id,license_id,previous_expires_at,new_expires_at,effective_at,commercial_reference,admin_id,reason) VALUES (?,?,?,?,?,?,?,?)', [Uuid::bytes(Uuid::create()), $licenseId, $previous, $until, $this->clock->sql(), $reference, Uuid::bytes($actor->id), $reason]);
-    }
-
     private function record(Actor $actor, string $id, string $action, string $reason, string $reference): void
     {
-        $license = $this->db->one('SELECT product_id,license_type,commercial_status,expires_at,grace_days,maintenance_until,entitled_release_until,row_version FROM licenses WHERE license_id=?', [Uuid::bytes($id)]);
+        $license = $this->db->one('SELECT product_id,license_type,billing_period,trial_duration,updates_months,commercial_status,grace_days,plan_id,plan_name,plan_custom,cash_registers,order_takers,kitchen_displays,period_starts_at,expires_at,updates_until,row_version FROM licenses WHERE license_id=?', [Uuid::bytes($id)]);
         $license['features'] = $this->db->all('SELECT capability_key,enabled FROM license_features WHERE license_id=? ORDER BY capability_key', [Uuid::bytes($id)]);
         $license['commercial_reference'] = $reference;
         $this->db->execute('INSERT INTO license_changes(id,license_id,version,action,admin_id,snapshot_json,reason,created_at) VALUES (?,?,?,?,?,?,?,?)', [Uuid::bytes(Uuid::create()), Uuid::bytes($id), (int) $license['row_version'], $action, Uuid::bytes($actor->id), json_encode($license, JSON_THROW_ON_ERROR), $reason, $this->clock->sql()]);

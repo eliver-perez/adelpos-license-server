@@ -1,6 +1,6 @@
 # Modelo de datos
 
-Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido, que no se modifica, y [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
+Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido, que no se modifica, [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, y [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
 Las partes marcadas como **Herencia temporal** provienen del motor de licencias heredado. Siguen vigentes, pero se reemplazan en las etapas 2 a 4 según el [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md). En el código están señaladas con `HEREDADO:`; la lista completa está en [AVANCE.md](AVANCE.md), sección 4.2.
 
@@ -40,9 +40,10 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 
 | Tabla | Propósito | Restricciones clave | Escribe |
 | --- | --- | --- | --- |
-| `customers` | Clientes (nombre, razón social, RFC opcional en `tax_id`) | `state` en `active`, `archived`; `row_version` para formularios obsoletos | `CatalogService` |
+| `customers` | Clientes (nombre, razón social, RFC opcional en `tax_id`) y su zona horaria IANA en `time_zone`, con la que se calculan las fechas de sus licencias | `state` en `active`, `archived`; `row_version` para formularios obsoletos; `time_zone` no vacía, `America/Monterrey` por omisión (el servicio la valida contra la lista de zonas de PHP) | `CatalogService` |
 | `customer_contacts` | Contacto principal | Uno por cliente | `CatalogService` |
 | `products` | Productos que se licencian | `state` en `active`, `archived` | `CatalogService` |
+| `plans` | Catálogo de planes del contrato (sección 11): nombre y cupos de cajas, comanderos y KDS | Cupos de 0 a 999 (`chk_plan_limits`); nombre no vacío. Un plan usado por una licencia no se puede borrar | Solo lectura en la etapa 2; su editor llega en la etapa 3 |
 | `product_capabilities` | Módulos de cada producto | PK producto y clave | `CatalogService` |
 | `capability_dependencies` | Dependencias entre módulos del mismo producto | Llaves foráneas al mismo catálogo; un módulo no puede requerirse a sí mismo. El servicio impide los ciclos. | `CatalogService` |
 
@@ -50,15 +51,30 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 
 | Tabla | Propósito | Restricciones clave | Escribe |
 | --- | --- | --- | --- |
-| `licenses` | Derechos comerciales: cliente, producto, tipo, vencimiento, tolerancia, mantenimiento, versiones autorizadas y contador de revisiones firmadas | `chk_license_status`; `chk_license_terms` (ver herencia); `(license_id, product_id)` único para las llaves compuestas | `LicenseService`, `OfflineService`, `RevisionPublisher` |
+| `licenses` | Derechos comerciales: cliente, producto, tipo y sus condiciones, copia del plan, cupos, periodo vigente y contador de revisiones firmadas. Ver «Condiciones de una licencia» | `chk_license_status`, `chk_license_terms`, `chk_license_plan`, `chk_license_limits`, `chk_license_period`; llave foránea al plan; `(license_id, product_id)` único para las llaves compuestas | `LicenseService`, `OfflineService`, `RevisionPublisher` |
 | `license_features` | Módulos habilitados por licencia | Llaves compuestas: el módulo pertenece al producto de la licencia | `LicenseService` |
-| `license_limits` | Límites del contenido heredado de la licencia | Ver herencia | `LicenseService` |
+| `license_limits` | Límites del contenido heredado de la licencia. Los cupos del contrato ya están en `licenses` | Ver herencia: se elimina en la Fase 4 de la etapa 2 | `LicenseService` |
 | `license_credentials` | Códigos comerciales 3-4-4-4: HMAC para buscar y copia cifrada para consulta autorizada | Una credencial activa por licencia (columna generada `active_license_id` con índice único); `(digest_key_version, key_digest)` único; `credential_encrypted` y `code_format` **NOT NULL** | `LicenseService` |
 | `license_changes` | Historial comercial con instantánea JSON | Versión única por licencia; solo inserción | `LicenseService` |
 | `license_administrative_changes` | Cambios de referencia y nota administrativa | Único por licencia, versión y campo; solo inserción | `LicenseService` |
-| `subscription_periods` | Renovaciones de suscripciones | Solo inserción | `LicenseService` |
-| `maintenance_purchases` | Compras de mantenimiento de perpetuas | Solo inserción | `LicenseService` |
+| `subscription_periods` | Renovaciones de suscripciones | Solo inserción. **Sin escrituras en la etapa 2:** la renovación está deshabilitada hasta la etapa 3 | Ninguno |
+| `maintenance_purchases` | Compras de mantenimiento de perpetuas | Solo inserción. **Sin escrituras en la etapa 2:** el mantenimiento está deshabilitado hasta la etapa 3 | Ninguno |
 | `license_documents` | Constancias PDF: folio, digest de verificación, datos públicos, instantánea y PDF cifrados, SHA-256 del PDF | Folio y digest únicos; `document_type` en `licensing`, `delivery`; solo inserción | `DocumentService` |
+
+#### Condiciones de una licencia
+
+| Columna | Contenido | Regla en la base |
+| --- | --- | --- |
+| `license_type` | `perpetual`, `subscription` o `trial` | `chk_license_terms`: cada tipo con sus condiciones, y ningún otro valor |
+| `billing_period` | `monthly`, `quarterly`, `semiannual` o `annual` | Solo en suscripción, y obligatorio en ella |
+| `trial_duration` | `15d`, `1m` o `3m` | Solo en prueba, y obligatorio en ella |
+| `updates_months` | `0`, `6` o `12` | Solo en perpetua, y obligatorio en ella. El servicio usa 6 si no se indica |
+| `grace_days` | Días de tolerancia | 5 en suscripción; 0 en prueba y perpetua |
+| `plan_id`, `plan_name`, `plan_custom` | Copia del plan al emitir. `plan_custom` vale 1 si algún cupo se cambió | Llave foránea a `plans`; nombre no vacío |
+| `cash_registers`, `order_takers`, `kitchen_displays` | Cupos que se firman | De 0 a 999 (`chk_license_limits`) |
+| `period_starts_at`, `expires_at`, `anchor_day`, `anchor_local_time`, `updates_until` | Periodo vigente. **Vacío hasta que la licencia se activa.** El día y la hora ancla son los del inicio, en la zona horaria del cliente, con microsegundos | `chk_license_period`: todo vacío o todo completo. En perpetua no hay vencimiento y las actualizaciones no terminan antes del inicio. En suscripción y prueba el vencimiento es posterior al inicio y las actualizaciones terminan con él |
+
+Las tres restricciones de condiciones comparan primero con `IS NULL` o `IS NOT NULL`: en MySQL una restricción `CHECK` da por válido un resultado nulo.
 
 ### Firma
 
@@ -71,8 +87,8 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 
 | Tabla | Propósito | Restricciones clave | Escribe |
 | --- | --- | --- | --- |
-| `activations` | Vínculo de una licencia con una instalación: llave pública, huella, estado y revisión vigente | Una activación activa por licencia (columna generada `active_license_id` con índice único); `chk_activation_end`; `fk_current_revision` apunta a una revisión de la misma activación | `ActivationService`, `OfflineService`, `RevisionPublisher` |
-| `license_revisions` | Revisiones firmadas: contador global por licencia, `kid`, contenido y JWS exactos | `(license_id, license_revision)` único; revisión mayor que cero; solo inserción | `RevisionPublisher` |
+| `activations` | Vínculo de una licencia con una instalación: identidad `server_id`, llave pública, estado, revisión vigente y `app_version` de su última operación. La huella heredada sigue hasta la Fase 4 | `state` en `active`, `deactivated`, `revoked`, `transferred`. Una activación activa por licencia (columna generada `active_license_id` con índice único); `chk_activation_end`; `fk_current_revision` apunta a una revisión de la misma activación | `ActivationService`, `OfflineService`, `RevisionPublisher` |
+| `license_revisions` | Revisiones firmadas: contador global por licencia, `kid`, entorno de la llave que firmó (`environment`), contenido y JWS exactos, y `status_reason` en las revisiones de cierre | `(license_id, license_revision)` único; revisión mayor que cero; solo inserción. `(kid, environment)` es llave foránea a la llave de firma. `status_reason` solo en revisiones `revoked`: `transferred`, `deactivated` o `revoked` | `RevisionPublisher` |
 | `activation_challenges` | Desafíos de un solo uso con vencimiento | La identidad de la acción es coherente; consumo atómico. Sin llave foránea a activaciones, para no revelar si existen. | `ActivationService`, `bin/cleanup.php` |
 | `license_requests` | Idempotencia de la API y de las solicitudes sin internet: digest HMAC, identidad, respuesta exacta | PK `(product_id, request_id)`; la respuesta queda completa o vacía | `ActivationService`, `OfflineService` |
 
@@ -90,7 +106,15 @@ La migración inicial solo inserta:
 
 - `security_state`: la fila `1`.
 - `audit_heads`: la cabeza `admin` con secuencia 0 y hash de 64 ceros.
-- `products`: **`adel_pos`** («AD-EL POS», «Punto de venta para restaurantes»), **sin módulos**. Coincide con `features: {}` del contrato. Los planes, límites y reglas de AD-EL POS no existen todavía (etapa 3).
+- `products`: **`adel_pos`** («AD-EL POS», «Punto de venta para restaurantes»), **sin módulos**. Coincide con `features: {}` del contrato.
+
+`003_contrato_v1.sql` agrega el catálogo de planes de la sección 11 del contrato:
+
+| `plan_id` | Nombre | Cajas | Comanderos | KDS |
+| --- | --- | --- | --- | --- |
+| `basico` | Plan básico | 1 | 0 | 0 |
+| `elemental` | Plan elemental | 3 | 3 | 3 |
+| `premium` | Plan premium | 5 | 10 | 5 |
 
 No hay administradores, llaves de firma ni licencias. El primer superadministrador se crea por CLI (ver [OPERATIONS.md](OPERATIONS.md)). Las pruebas no usan `adel_pos`: `tests/MySqlFixture.php` crea un producto sintético, `producto_prueba`, con cinco módulos y una dependencia.
 
@@ -104,13 +128,13 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 
 | Permiso | Tablas |
 | --- | --- |
-| Solo `SELECT` | `schema_migrations`, `signing_keys`, `signing_scopes` |
+| Solo `SELECT` | `schema_migrations`, `signing_keys`, `signing_scopes`, `plans` |
 | `SELECT, INSERT` | `audit_events`, `license_changes`, `subscription_periods`, `maintenance_purchases`, `license_revisions`, `offline_requests`, `offline_decisions`, `license_transfers`, `license_administrative_changes`, `license_documents` |
 | `SELECT, UPDATE` | `security_state`, `audit_heads` |
 | `SELECT, INSERT, UPDATE` | `admin_users`, `admin_recovery_codes`, `admin_trusted_devices`, `admin_operations`, `customers`, `customer_contacts`, `products`, `product_capabilities`, `licenses`, `license_features`, `license_limits`, `license_credentials`, `license_requests` |
 | `SELECT, INSERT, DELETE` | `capability_dependencies`, `admin_permission_grants` |
 | `SELECT, INSERT, UPDATE, DELETE` | `admin_sessions`, `rate_limit_buckets`, `activation_challenges` |
-| `SELECT, INSERT` y `UPDATE` solo de `state`, `ended_at`, `current_revision_id` | `activations` |
+| `SELECT, INSERT` y `UPDATE` solo de `state`, `ended_at`, `current_revision_id`, `app_version` | `activations` |
 
 - En producción, `bin/preflight.php` comprueba que la cuenta **no** pueda modificar ni borrar las tablas de historia.
 - `tests/Integration/InitialSchemaTest.php` comprueba que los permisos cubren exactamente las tablas del esquema.
@@ -154,9 +178,10 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 
 | Elemento del esquema | Regla heredada | Se reemplaza en |
 | --- | --- | --- |
-| `license_limits` (`max_installations`, `max_users`, `max_libraries`, `max_documents`) y `chk_limit_installations` (`max_installations=1`) | Contenido de licencia anterior: una instalación y límites que no aplican a AD-EL POS | Etapa 2 (contenido del contrato: `limits` de cajas, comanderos y KDS) y etapa 3 (planes) |
-| `licenses.license_type` y `chk_license_terms` | Solo `perpetual` y `subscription`; suscripción con `grace_days=15` | Etapa 3 (prueba, periodos de calendario, tolerancia de 5 días) |
-| `licenses.maintenance_until`, `entitled_release_until`, `maintenance_purchases` | Mantenimiento y versiones autorizadas | Etapa 3 (`updates_until` del contrato) |
-| `activations.installation_id`, `fingerprint_version`, `fingerprint_hash` | Identidad con huella del equipo, versión `'1'` | Etapa 2 (`server_id` y llave de licencias de la instalación; la huella queda fuera de V1) |
-| `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | Etapas 2 y 4 (transferencia por autoservicio) |
+| `license_limits` (`max_installations`, `max_users`, `max_libraries`, `max_documents`) y `chk_limit_installations` (`max_installations=1`) | Contenido de licencia anterior: una instalación y límites que no aplican a AD-EL POS. Los cupos nuevos ya están en `licenses` | Etapa 2, Fase 4: la migración `004` elimina la tabla cuando el contenido firmado deja de usarla |
+| `licenses.maintenance_until`, `entitled_release_until` | Fechas del motor anterior. Quedan vacías: las sustituye `updates_until` | Etapa 2, Fase 4 (migración `004`) |
+| `activations.fingerprint_version`, `fingerprint_hash` | Huella del equipo, versión `'1'`, que la API todavía recibe | Etapa 2, Fase 4 (migración `004`); la API deja de recibirla en las fases 5 y 6 |
+| `license_revisions.status_reason` | Admite quedar vacío en una revisión `revoked` | Etapa 2, Fase 4: obligatorio cuando el contenido firmado lo incluya |
+| `subscription_periods`, `maintenance_purchases` | Historia de renovaciones y mantenimiento del motor anterior, sin escrituras | Etapa 3 (renovación con fecha de pago y compra de mantenimiento) |
+| `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | Etapa 4 (transferencia por autoservicio) |
 | `product_capabilities`, `capability_dependencies`, `license_features` | Módulos genéricos | Se conservan como `features` del contrato (vacío en V1); su uso comercial se define en la etapa 3 |

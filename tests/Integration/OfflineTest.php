@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
 use AdelPos\License\App;
-use AdelPos\License\Application\Actor;
+use AdelPos\License\Application\{Actor, LicenseService};
 use AdelPos\License\Domain\{ApiProblem, OfflineRequest, Problem, Protocol, Uuid};
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
@@ -30,7 +30,7 @@ final class OfflineTest extends TestCase
     private function issue(string $type = 'perpetual'): array
     {
         $customer = $this->app->catalog->saveCustomer($this->actor,Uuid::create(),null,['name'=>'Offline tests','contact_name'=>'Test','email'=>'offline@example.test','state'=>'active']);
-        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['prueba_a','prueba_e'],'reason'=>'Offline tests']);
+        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...MySqlFixture::terms($type),'features'=>['prueba_a','prueba_e'],'reason'=>'Offline tests']);
     }
     private function device(): array
     {
@@ -122,18 +122,19 @@ final class OfflineTest extends TestCase
         $this->expectException(Problem::class); $this->approve($id);
     }
 
-    public function testRenewExtendsOnlyExplicitDatesAndKeepsIdentity(): void
+    public function testRenewDeliversCurrentRightsAndRecordingARenewalIsNotAvailableYet(): void
     {
         $this->license = $this->issue('subscription'); $active = $this->activate();
         $id = $this->import($this->envelope('renew',$active));
-        try { $this->approve($id,['renewal_mode'=>'extend','until'=>'2026-09-26T00:00','reference'=>'TEST']); self::fail('Backwards renewal accepted'); }
-        catch (Problem $error) { self::assertSame(422,$error->status); }
-        $result = $this->approve($id,['renewal_mode'=>'extend','until'=>'2027-10-01T00:00','reference'=>'OFFLINE-PURCHASE']);
-        $renewed = $this->payload($result);
+        // Extending the term while approving belonged to the previous engine; the contract rules arrive in stage 3.
+        try { $this->approve($id,['renewal_mode'=>'extend','until'=>'2027-10-01T00:00','reference'=>'OFFLINE-PURCHASE']); self::fail('Renewal recorded with the previous rules'); }
+        catch (Problem $error) { self::assertSame(LicenseService::PENDING['renew'],$error->getMessage()); }
+        self::assertSame('pending',$this->app->read->offline($id)['status']); self::assertSame(1,$this->rowCount('license_revisions'));
+        $renewed = $this->payload($this->approve($id));
         self::assertSame($active['activation_id'],$renewed['activation_id']); self::assertSame(2,$renewed['license_revision']);
-        self::assertSame('2027-10-01T00:00:00.000000Z',$renewed['expires_at']); self::assertSame(15,$renewed['grace_days']); self::assertNull($renewed['maintenance_until']);
-        self::assertSame(2,(int)$this->app->read->license($this->license['id'])['row_version']);
-        self::assertSame(2,$this->rowCount('subscription_periods'));
+        self::assertNull($renewed['expires_at']); self::assertSame(5,$renewed['grace_days']); self::assertNull($renewed['maintenance_until']);
+        self::assertSame(1,(int)$this->app->read->license($this->license['id'])['row_version']);
+        self::assertSame(0,$this->rowCount('subscription_periods'));
     }
 
     public function testPerpetualRenewUsesCurrentRightsWithoutGrantingMaintenance(): void

@@ -29,7 +29,7 @@ final class RevisionPublisher
         $payload = [
             'schema_version'=>'1.0','product_id'=>$license['product_id'],
             'license_id'=>Uuid::text($licenseId),'activation_id'=>Uuid::text($activationId),
-            'installation_id'=>Uuid::text($activation['installation_id']),
+            'installation_id'=>Uuid::text($activation['server_id']),
             'installation_public_key'=>Protocol::encode($activation['installation_public_key']),
             // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo en el contenido de la licencia)
             'fingerprint_version'=>$activation['fingerprint_version'],'fingerprint_hash'=>$activation['fingerprint_hash'],
@@ -43,7 +43,7 @@ final class RevisionPublisher
         ];
         $signed = $this->keys->sign($payload);
         $revisionId = Uuid::bytes(Uuid::create());
-        $this->db->execute('INSERT INTO license_revisions(revision_id,license_id,activation_id,license_revision,kid,license_status,issued_at,payload_json,license_jws,jws_sha256) VALUES (?,?,?,?,?,?,?,?,?,?)', [$revisionId,$licenseId,$activationId,$revision,$signed['kid'],$payload['license_status'],$now,Protocol::json($payload),$signed['jws'],hash('sha256',$signed['jws'])]);
+        $this->db->execute('INSERT INTO license_revisions(revision_id,license_id,activation_id,license_revision,kid,environment,license_status,issued_at,payload_json,license_jws,jws_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [$revisionId,$licenseId,$activationId,$revision,$signed['kid'],$signed['environment'],$payload['license_status'],$now,Protocol::json($payload),$signed['jws'],hash('sha256',$signed['jws'])]);
         $this->db->execute('UPDATE licenses SET revision_counter=? WHERE license_id=?', [$revision,$licenseId]);
         $this->db->execute('UPDATE activations SET current_revision_id=? WHERE activation_id=?', [$revisionId,$activationId]);
         return ['revision'=>$revision,'revision_id'=>Uuid::text($revisionId),'jws'=>$signed['jws']];

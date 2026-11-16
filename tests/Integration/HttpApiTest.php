@@ -72,7 +72,7 @@ final class HttpApiTest extends TestCase
         $app=$this->fixture->app;$keys=$this->fixture->signingKeys();$keys->generate('http-random-key','license');$keys->activate('http-random-key','HTTP fixture');
         $actor=new Actor($app->auth->bootstrap('admin@example.test','HTTP test','Fixture-Password-Only-2026!'),'superadmin');
         $customer=$app->catalog->saveCustomer($actor,Uuid::create(),null,['name'=>'HTTP client','contact_name'=>'Test','email'=>'','state'=>'active']);
-        $license=$app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>'2026-09-25T12:00','features'=>['prueba_d'],'reason'=>'HTTP flow']);
+        $license=$app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...MySqlFixture::terms(),'features'=>['prueba_d'],'reason'=>'HTTP flow']);
         $device=['id'=>Uuid::create(),'pair'=>sodium_crypto_sign_keypair()];
         $request=$this->signed('activate',$device,$license['secret']);
         $activated=$this->http('/v1/activations',Protocol::json($request));$payload=$this->payload($activated);

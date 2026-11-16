@@ -25,7 +25,7 @@ final class CommercialDeliveryTest extends TestCase
         $this->actor = new Actor($app->auth->bootstrap('delivery@example.test','Entrega sintética',self::PASSWORD),'superadmin');
         $this->enroll($this->actor);
         $customer=$app->catalog->saveCustomer($this->actor,Uuid::create(),null,['name'=>'Organismo sintético','legal_name'=>'Organismo de pruebas','tax_id'=>'AAA010101AAA','contact_name'=>'Prueba','email'=>'','state'=>'active']);
-        $this->license=$app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>'2026-10-21T12:00','features'=>['prueba_d']]);
+        $this->license=$app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...MySqlFixture::terms(),'features'=>['prueba_d']]);
     }
 
     protected function tearDown(): void { if (isset($this->fixture)) { $this->fixture->destroy(); } }

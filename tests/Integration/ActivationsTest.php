@@ -3,8 +3,8 @@ declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
 use AdelPos\License\App;
-use AdelPos\License\Application\Actor;
-use AdelPos\License\Domain\{ApiProblem, ApiResponse, Protocol, Uuid};
+use AdelPos\License\Application\{Actor, LicenseService};
+use AdelPos\License\Domain\{ApiProblem, ApiResponse, Problem, Protocol, Uuid};
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
@@ -32,7 +32,7 @@ final class ActivationsTest extends TestCase
     private function issue(string $type='perpetual'): array
     {
         $customer=$this->app->catalog->saveCustomer($this->actor,Uuid::create(),null,['name'=>'API test','contact_name'=>'Test','email'=>'api@example.test','state'=>'active']);
-        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['prueba_b','prueba_a','prueba_e'],'reason'=>'Protocol test']);
+        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...MySqlFixture::terms($type),'features'=>['prueba_b','prueba_a','prueba_e'],'reason'=>'Protocol test']);
     }
     private function device(): array
     {
@@ -164,28 +164,31 @@ final class ActivationsTest extends TestCase
     public function testAdministrativeRightsAndRevocationPublishAtomically(): void
     {
         $first=$this->activate();
-        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'maintenance',['version'=>1,'until'=>'2027-09-25T12:00','reference'=>'PURCHASE','reason'=>'Explicit maintenance']);
+        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['prueba_b','prueba_a'],'reason'=>'First module change']);
         $current=$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
-        self::assertSame(2,$current['license_revision']);self::assertNull($current['expires_at']);self::assertNotNull($current['maintenance_until']);
+        self::assertSame(2,$current['license_revision']);self::assertNull($current['expires_at']);self::assertTrue($current['features']['prueba_a']);self::assertFalse($current['features']['prueba_e']);
         $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>2,'features'=>['prueba_b'],'reason'=>'Module change']);
         $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'revoke',['version'=>3,'reason'=>'Commercial revocation']);
         $revoked=$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
-        self::assertSame('revoked',$revoked['license_status']);self::assertSame(4,$revoked['license_revision']);self::assertFalse($revoked['features']['prueba_e']);
+        self::assertSame('revoked',$revoked['license_status']);self::assertSame(4,$revoked['license_revision']);self::assertFalse($revoked['features']['prueba_a']);
         self::assertSame(403,$this->app->activations->execute('activate',$this->request('activate',$this->device()))->status);
         self::assertGreaterThan(0,$this->app->audit->verify());
     }
-    public function testExpiredSubscriptionRefreshDoesNotExtendDatesOrFreeSlot(): void
+    public function testSubscriptionRefreshedLaterKeepsItsRevisionAndSlotAndRenewalIsNotAvailableYet(): void
     {
         $this->issued=$this->issue('subscription');$first=$this->activate();
         $this->clock->instant=new \DateTimeImmutable('2026-11-01T00:00:00Z');
-        $current=$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
-        self::assertSame($first,$current);self::assertSame(15,$current['grace_days']);self::assertSame('active',$current['license_status']);
+        $refresh=fn()=>$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
+        $current=$refresh();
+        self::assertSame($first,$current);self::assertSame(5,$current['grace_days']);self::assertSame('active',$current['license_status']);
         self::assertSame(409,$this->app->activations->execute('activate',$this->request('activate',$this->device()))->status);
-        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'renew',['version'=>1,'until'=>'2026-12-01T00:00','reason'=>'Purchased renewal']);
-        $renewed=$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
-        self::assertSame(2,$renewed['license_revision']);self::assertSame($first['activation_id'],$renewed['activation_id']);self::assertSame('2026-12-01T00:00:00.000000Z',$renewed['expires_at']);
+        // The renewal of the previous engine is gone; the contract rules arrive in stage 3.
+        try{$this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'renew',['version'=>1,'until'=>'2026-12-01T00:00','reason'=>'Purchased renewal']);self::fail('Renewal accepted');}
+        catch(Problem $e){self::assertSame(LicenseService::PENDING['renew'],$e->getMessage());}
+        self::assertSame($first,$refresh());
+        self::assertSame(1,(int)$this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
     }
-    public function testMissingSigningFileRollsBackActivationAndCommercialRenewal(): void
+    public function testMissingSigningFileRollsBackActivationAndCommercialChange(): void
     {
         $key=$this->app->db->one('SELECT private_ref FROM signing_keys WHERE kid=\'random-test-a\'');
         $path=$this->fixture->values['SIGNING_KEY_DIR'].'/'.$key['private_ref'];
@@ -198,16 +201,18 @@ final class ActivationsTest extends TestCase
         } finally {rename($path.'.unavailable',$path);}
         $this->app->activations->execute('activate',$input);rename($path,$path.'.unavailable');
         try {
-            try{$this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'maintenance',['version'=>1,'until'=>'2027-09-25T12:00','reference'=>'ROLLBACK','reason'=>'Must roll back']);self::fail('Unsigned maintenance accepted');}catch(\RuntimeException){}
-            self::assertNull($this->app->read->license($this->issued['id'])['maintenance_until']);
-            self::assertSame(0,(int)$this->app->db->execute('SELECT COUNT(*) FROM maintenance_purchases')->fetchColumn());
+            try{$this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['prueba_d'],'reason'=>'Must roll back']);self::fail('Unsigned change accepted');}
+            catch(\RuntimeException $e){self::assertSame('License signing material unavailable.',$e->getMessage());}
+            $license=$this->app->read->license($this->issued['id']);
+            self::assertSame(1,(int)$license['row_version']);
+            self::assertSame(['prueba_a','prueba_b','prueba_e'],array_column(array_filter($license['features'],fn($feature)=>(bool)$feature['enabled']),'capability_key'));
             self::assertSame(1,(int)$this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
         } finally {rename($path.'.unavailable',$path);}
     }
     public function testDatabaseEnforcesOneSlotAndPreventsIdentityOrRevisionEdits(): void
     {
         $this->activate();$activation=$this->app->db->one('SELECT * FROM activations');
-        try{$this->fixture->owner->execute("INSERT INTO activations(activation_id,license_id,product_id,installation_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)",[Uuid::bytes(Uuid::create()),$activation['license_id'],$activation['product_id'],$activation['installation_id'],$activation['installation_public_key'],'1',$activation['fingerprint_hash'],$this->clock->sql()]);self::fail('Duplicate active slot accepted');}catch(\PDOException $e){self::assertSame(1062,(int)$e->errorInfo[1]);}
+        try{$this->fixture->owner->execute("INSERT INTO activations(activation_id,license_id,product_id,server_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)",[Uuid::bytes(Uuid::create()),$activation['license_id'],$activation['product_id'],$activation['server_id'],$activation['installation_public_key'],'1',$activation['fingerprint_hash'],$this->clock->sql()]);self::fail('Duplicate active slot accepted');}catch(\PDOException $e){self::assertSame(1062,(int)$e->errorInfo[1]);}
         foreach(['UPDATE activations SET installation_public_key=installation_public_key WHERE 1=0','UPDATE license_revisions SET license_jws=license_jws WHERE 1=0','DELETE FROM license_revisions WHERE 1=0'] as $sql) {
             try{$this->app->db->execute($sql);self::fail('Immutable data can be changed');}catch(\PDOException $e){self::assertContains((int)$e->errorInfo[1],[1142,1143]);}
         }

@@ -107,7 +107,6 @@ CREATE TABLE licenses (
  FOREIGN KEY(customer_id) REFERENCES customers(id), FOREIGN KEY(product_id) REFERENCES products(product_id),
  UNIQUE KEY uq_license_product(license_id,product_id),
  CONSTRAINT chk_license_status CHECK (commercial_status IN ('issued','revoked')),
- -- HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (tolerancia de 15 días en suscripción)
  CONSTRAINT chk_license_terms CHECK (
   (license_type='perpetual' AND expires_at IS NULL AND grace_days=0)
   OR (license_type='subscription' AND expires_at IS NOT NULL AND grace_days=15 AND maintenance_until IS NULL)

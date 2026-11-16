@@ -164,7 +164,7 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 - **Aprobación o rechazo.** Exigen sesión completa, rol, CSRF e idempotencia del formulario. Cada solicitud admite una sola decisión, y la evidencia, la decisión y la transferencia solo se insertan.
 - **Liberación y transferencia forzadas.** Exigen superadministrador, confirmación de identidad, motivo y aceptar explícitamente el límite: una solicitud firmada prueba posesión de la llave, no que se borraron las copias desconectadas. Si falla una firma o escritura, la instalación anterior sigue activa.
 
-> **Herencia temporal.** Una instalación activa por licencia y la tolerancia de 15 días de las suscripciones: etapas 2 a 4 (contrato: una activación vigente con transferencia por autoservicio, y 5 días de tolerancia). Ajustes del flujo sin internet y alertas: etapa 4.
+> **Herencia temporal.** Una instalación activa por licencia, sin transferencia por autoservicio: etapas 2 a 4. La tolerancia ya es la del contrato: 5 días en suscripción y 0 en prueba y perpetua. Ajustes del flujo sin internet y alertas: etapa 4.
 
 ## 9. Constancias y verificación pública
 

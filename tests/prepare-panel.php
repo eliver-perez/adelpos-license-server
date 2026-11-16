@@ -12,7 +12,7 @@ $adminId = $app->auth->bootstrap('admin@example.test', 'Administración de prueb
 $actor = new AdelPos\License\Application\Actor($adminId, 'superadmin', 'Administración de pruebas');
 foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index => $name) {
     $customer = $app->catalog->saveCustomer($actor, AdelPos\License\Domain\Uuid::create(), null, ['name'=>$name,'legal_name'=>'','contact_name'=>'Contacto de prueba','email'=>'contacto'.$index.'@example.test','phone'=>'','state'=>'active']);
-    $issued=$app->licenses->issue($actor, AdelPos\License\Domain\Uuid::create(), ['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>$index===0?'perpetual':'subscription','entitled_release_until'=>gmdate('Y-m-d\TH:i'),'expires_at'=>gmdate('Y-m-d\TH:i',time()+($index===1?15:45)*86400),'features'=>['prueba_b','prueba_c','prueba_d'],'reason'=>'Datos sintéticos para verificar el panel','reference'=>'TEST-PANEL']);
+    $issued=$app->licenses->issue($actor, AdelPos\License\Domain\Uuid::create(), ['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...AdelPos\License\Tests\MySqlFixture::terms($index===0?'perpetual':'subscription'),'features'=>['prueba_b','prueba_c','prueba_d'],'reason'=>'Datos sintéticos para verificar el panel','reference'=>'TEST-PANEL']);
     if ($index===0) {
         $pair=sodium_crypto_sign_keypair();$installation=AdelPos\License\Domain\Uuid::create();
         $challenge=json_decode($app->activations->challenge(['action'=>'activate','product_id'=>'producto_prueba','installation_id'=>$installation,'activation_id'=>null])->body,true);

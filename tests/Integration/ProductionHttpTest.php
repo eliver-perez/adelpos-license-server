@@ -30,7 +30,7 @@ final class ProductionHttpTest extends TestCase
         $actor=new \AdelPos\License\Application\Actor($app->auth->bootstrap('http-doc@example.test','Responsable',$password),'superadmin');
         $app->db->execute('UPDATE admin_users SET mfa_secret_encrypted=? WHERE id=?',[$app->crypto->encrypt($mfa,'mfa:'.$actor->id),\AdelPos\License\Domain\Uuid::bytes($actor->id)]);
         $customer=$app->catalog->saveCustomer($actor,\AdelPos\License\Domain\Uuid::create(),null,['name'=>'Titular privado','contact_name'=>'Contacto','email'=>'','state'=>'active']);
-        $license=$app->licenses->issue($actor,\AdelPos\License\Domain\Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>gmdate('Y-m-d\TH:i')]);
+        $license=$app->licenses->issue($actor,\AdelPos\License\Domain\Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...\AdelPos\License\Tests\MySqlFixture::terms()]);
         $token=$app->sessions->create('authenticated',$actor->id);
         $headers=['Content-Type: application/x-www-form-urlencoded','Cookie: __Host-license_admin='.$token];
         $form=['csrf'=>$app->sessions->csrf($token),'operation_id'=>\AdelPos\License\Domain\Uuid::create(),'document_type'=>'licensing'];

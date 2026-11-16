@@ -44,7 +44,7 @@ function updateLicenseForm() {
     licenseForm.querySelectorAll('[data-license-type]').forEach(group => {
         const selected = group.dataset.licenseType === type;
         group.hidden = !selected;
-        group.querySelectorAll('input').forEach(input => { input.disabled = !selected; input.required = selected; });
+        group.querySelectorAll('input, select').forEach(input => { input.disabled = !selected; input.required = selected; });
     });
 }
 licenseForm?.querySelector('[name="product_id"]').addEventListener('change', updateLicenseForm);

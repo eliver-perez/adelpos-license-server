@@ -130,9 +130,9 @@ El motor de licencias recibido se conserva sin cambios de lógica. Las reglas fi
 | Rutas y mensajes del protocolo | Las 4 rutas de la sección 4, prueba `LIC-V1`, solicitud `LICREQ-V1`, encabezado `lic+jws` | 2: prueba `ADELPOS-LIC-V1`, `ADELPOS-LICREQ-V1`, `adelpos-lic+jws`, ruta de transferencia |
 | Archivos de prueba del contrato | `contracts/v1/fixtures/` con el producto sintético y el verificador Go actual | 2 |
 | Una instalación por licencia | `max_installations=1` y una sola activación activa | 2 |
-| Tolerancia | 15 días fijos en suscripción | 2 y 3 |
 | Huella del equipo | `fingerprint_version` `'1'` obligatoria | 2 |
 | Lista de límites | `max_users`, `max_libraries`, `max_documents` | 2: `cash_registers`, `order_takers`, `kitchen_displays` |
-| Tipos y fechas | Perpetua o suscripción con vencimiento libre; mantenimiento como compra separada | 3: planes, pruebas, meses de calendario, renovación y propagación de planes |
+| Fechas | La emisión ya usa los tipos, planes y cupos del contrato y no fija fechas. El cálculo del primer periodo al activar todavía no está conectado | 2: motor de fechas (Fase 3) y su uso al activar (fases 4 a 6) |
+| Renovación y mantenimiento | Deshabilitados: el servidor los rechaza | 3: renovación con fecha de pago, conversión de prueba a pago, compra de mantenimiento, editor de planes y propagación |
 | Transferencias | Solo desde el panel, por el propietario | 4: autoservicio y alertas; ajustes del flujo sin internet |
 | Panel y constancias | Pantallas actuales y constancias sin planes ni cupos | 5: pantallas nuevas, contenido de las constancias y despliegue en el VPS |

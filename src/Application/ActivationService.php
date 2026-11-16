@@ -14,7 +14,7 @@ final class ActivationService
         $input = Protocol::input('challenge', $input);
         $id = Uuid::create(); $nonce = Crypto::token();
         $expires = $this->clock->now()->modify('+5 minutes')->format('Y-m-d H:i:s.u');
-        $this->db->execute('INSERT INTO activation_challenges(challenge_id,action,product_id,installation_id,activation_id,nonce,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?)', [Uuid::bytes($id),$input['action'],$input['product_id'],Uuid::bytes($input['installation_id']),$input['activation_id'] === null ? null : Uuid::bytes($input['activation_id']),$nonce,$this->clock->sql(),$expires]);
+        $this->db->execute('INSERT INTO activation_challenges(challenge_id,action,product_id,server_id,activation_id,nonce,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?)', [Uuid::bytes($id),$input['action'],$input['product_id'],Uuid::bytes($input['installation_id']),$input['activation_id'] === null ? null : Uuid::bytes($input['activation_id']),$nonce,$this->clock->sql(),$expires]);
         return ApiResponse::data(['challenge_id'=>$id,'nonce'=>$nonce,'expires_at'=>Protocol::utc($expires)]);
     }
 
@@ -43,7 +43,7 @@ final class ActivationService
         $this->limitIdentity($input, $public);
 
         return $this->db->transaction(function () use ($action, $input, $requestBytes, $digest, $public, $message): ApiResponse {
-            $this->db->execute("INSERT INTO license_requests(product_id,request_id,channel,action,input_digest,installation_id,activation_id,public_key,proof_message,created_at) VALUES (?,?,'online',?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE request_id=request_id", [$input['product_id'],$requestBytes,$action,$digest,Uuid::bytes($input['installation_id']),isset($input['activation_id']) ? Uuid::bytes($input['activation_id']) : null,$public,$message,$this->clock->sql()]);
+            $this->db->execute("INSERT INTO license_requests(product_id,request_id,channel,action,input_digest,server_id,activation_id,public_key,proof_message,created_at) VALUES (?,?,'online',?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE request_id=request_id", [$input['product_id'],$requestBytes,$action,$digest,Uuid::bytes($input['installation_id']),isset($input['activation_id']) ? Uuid::bytes($input['activation_id']) : null,$public,$message,$this->clock->sql()]);
             $record = $this->db->one('SELECT * FROM license_requests WHERE product_id=? AND request_id=? FOR UPDATE', [$input['product_id'],$requestBytes]);
             $this->authenticateSaved($record, $input, $action, $digest);
             if ($record['response_body'] !== null) { return new ApiResponse((int)$record['response_status'], $record['response_body']); }
@@ -75,7 +75,7 @@ final class ActivationService
         // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación activa por licencia)
         if ($this->db->one("SELECT activation_id FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [$license['license_id']])) { return $this->failure('ACTIVATION_LIMIT', 409, $input); }
         $id = Uuid::bytes(Uuid::create());
-        $this->db->execute("INSERT INTO activations(activation_id,license_id,product_id,installation_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)", [$id,$license['license_id'],$input['product_id'],Uuid::bytes($input['installation_id']),Protocol::decode($input['installation_public_key'],32),$input['fingerprint_version'],$input['fingerprint_hash'],$this->clock->sql()]);
+        $this->db->execute("INSERT INTO activations(activation_id,license_id,product_id,server_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)", [$id,$license['license_id'],$input['product_id'],Uuid::bytes($input['installation_id']),Protocol::decode($input['installation_public_key'],32),$input['fingerprint_version'],$input['fingerprint_hash'],$this->clock->sql()]);
         $revision = $this->publisher->publish($license['license_id'], $id);
         return $this->licenseResponse($revision['jws'], $input);
     }
@@ -102,13 +102,13 @@ final class ActivationService
 
     private function identity(array $input, bool $lock = false): array
     {
-        $record = $this->db->one('SELECT * FROM activations WHERE activation_id=? AND product_id=? AND installation_id=?' . ($lock ? ' FOR UPDATE' : ''), [Uuid::bytes($input['activation_id']),$input['product_id'],Uuid::bytes($input['installation_id'])]);
+        $record = $this->db->one('SELECT * FROM activations WHERE activation_id=? AND product_id=? AND server_id=?' . ($lock ? ' FOR UPDATE' : ''), [Uuid::bytes($input['activation_id']),$input['product_id'],Uuid::bytes($input['installation_id'])]);
         return $record ?? throw new ApiProblem('INVALID_PROOF', 401);
     }
 
     private function matchChallenge(?array $challenge, array $input, string $action, bool $checkTime): void
     {
-        if (!$challenge || $challenge['action'] !== $action || $challenge['product_id'] !== $input['product_id'] || $challenge['installation_id'] !== Uuid::bytes($input['installation_id']) || $challenge['activation_id'] !== (isset($input['activation_id']) ? Uuid::bytes($input['activation_id']) : null)) { throw new ApiProblem('INVALID_PROOF', 401); }
+        if (!$challenge || $challenge['action'] !== $action || $challenge['product_id'] !== $input['product_id'] || $challenge['server_id'] !== Uuid::bytes($input['installation_id']) || $challenge['activation_id'] !== (isset($input['activation_id']) ? Uuid::bytes($input['activation_id']) : null)) { throw new ApiProblem('INVALID_PROOF', 401); }
         if ($checkTime && ($challenge['expires_at'] <= $this->clock->sql() || $challenge['consumed_at'] !== null)) { throw new ApiProblem('INVALID_PROOF', 401); }
     }
 

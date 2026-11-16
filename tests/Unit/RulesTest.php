@@ -70,6 +70,40 @@ final class RulesTest extends TestCase
         self::assertFalse(Network::allows('0.0.0.0/33', '10.8.0.20'));
     }
 
+    public function testCountsAreWholeNumbersWithinTheirRange(): void
+    {
+        foreach ([['0', 0], ['7', 7], ['007', 7], [' 999 ', 999], [0, 0], [999, 999]] as [$value, $expected]) {
+            self::assertSame($expected, \AdelPos\License\Domain\Input::integer(['cupo' => $value], 'cupo', 0, 999, 'Cajas'));
+        }
+        foreach (['', ' ', '-1', '1000', '1.5', '1e2', '0x10', '+5', 'diez', '１２', 1000, -1, 1.0, null, true, ['1']] as $value) {
+            try { \AdelPos\License\Domain\Input::integer(['cupo' => $value], 'cupo', 0, 999, 'Cajas'); self::fail('Accepted: ' . var_export($value, true)); }
+            catch (Problem $error) { self::assertSame('Cajas debe ser un número entero entre 0 y 999.', $error->getMessage()); }
+        }
+    }
+
+    public function testLicenseTermsOfTheContract(): void
+    {
+        $terms = \AdelPos\License\Domain\LicenseTerms::class;
+        self::assertSame(['perpetual', 'subscription', 'trial'], $terms::TYPES);
+        self::assertSame(['monthly', 'quarterly', 'semiannual', 'annual'], $terms::BILLING_PERIODS);
+        self::assertSame(['15d', '1m', '3m'], $terms::TRIAL_DURATIONS);
+        self::assertSame([0, 6, 12], $terms::UPDATES_MONTHS);
+        self::assertSame(6, $terms::DEFAULT_UPDATES_MONTHS);
+        self::assertSame(['cash_registers', 'order_takers', 'kitchen_displays'], array_keys($terms::LIMITS));
+        self::assertSame(999, $terms::MAX_LIMIT);
+        // Only subscriptions have grace days: 5.
+        self::assertSame([0, 5, 0], array_map([$terms, 'graceDays'], $terms::TYPES));
+    }
+
+    public function testCustomerTimeZonesAreCurrentIanaIdentifiers(): void
+    {
+        $zones = \AdelPos\License\Domain\TimeZones::class;
+        self::assertSame('America/Monterrey', $zones::DEFAULT);
+        foreach (['America/Monterrey', 'America/Tijuana', 'America/Mexico_City', 'America/Cancun', 'UTC'] as $zone) { self::assertTrue($zones::valid($zone), $zone); }
+        foreach (['', 'Monterrey', 'america/monterrey', 'America/Monterey', 'US/Pacific', 'Mexico/General', 'CST', 'GMT-6', '-06:00', 'America/Monterrey '] as $zone) { self::assertFalse($zones::valid($zone), $zone); }
+        self::assertContains($zones::DEFAULT, $zones::all());
+    }
+
     public function testDevelopmentHttpCannotBeUsedOnPublicOrigin(): void
     {
         $values=['APP_ENV'=>'development','LICENSE_ENVIRONMENT'=>'test','APP_URL'=>'http://public.example'];

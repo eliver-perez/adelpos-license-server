@@ -44,7 +44,7 @@ final class App
         $operations = new Operations($db, $this->crypto, $this->clock);
         $this->catalog = new CatalogService($db, $operations, $this->audit, $this->clock);
         $this->licenses = new LicenseService($db, $operations, $this->audit, $this->clock, $this->crypto, $this->publisher);
-        $this->offline = new OfflineService($db, $operations, $this->audit, $this->clock, $this->crypto, $this->publisher, $this->licenses);
+        $this->offline = new OfflineService($db, $operations, $this->audit, $this->clock, $this->crypto, $this->publisher);
         $this->admins = new AdminService($db, $operations, $this->auth, $this->audit, $this->clock, $this->trustedDevices);
         $this->read = new ReadRepository($db, $this->clock);
         $this->access = new Access($db);

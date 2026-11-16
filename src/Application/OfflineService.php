@@ -7,7 +7,7 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class OfflineService
 {
-    public function __construct(private Database $db, private Operations $operations, private Audit $audit, private Clock $clock, private Crypto $crypto, private RevisionPublisher $publisher, private LicenseService $licenses) {}
+    public function __construct(private Database $db, private Operations $operations, private Audit $audit, private Clock $clock, private Crypto $crypto, private RevisionPublisher $publisher) {}
 
     public function import(Actor $actor, string $operationId, string $envelope): array
     {
@@ -18,7 +18,7 @@ final class OfflineService
         return $this->operations->run($actor, ['superadmin','operator'], $operationId, 'offline.import', [$digest], function () use ($actor, $envelope, $verified, $payload, $digest): array {
             $requestId = Uuid::bytes($payload['request_id']);
             // No proof_message plaintext: the signed segment may contain a credential.
-            $this->db->execute("INSERT INTO license_requests(product_id,request_id,channel,action,input_digest,installation_id,activation_id,public_key,proof_message,created_at) VALUES (?,?,'offline',?,?,?,?,?,'',?) ON DUPLICATE KEY UPDATE request_id=request_id", [$payload['product_id'],$requestId,$payload['action'],$digest,Uuid::bytes($payload['installation_id']),isset($payload['activation_id']) ? Uuid::bytes($payload['activation_id']) : null,$verified['public'],$this->clock->sql()]);
+            $this->db->execute("INSERT INTO license_requests(product_id,request_id,channel,action,input_digest,server_id,activation_id,public_key,proof_message,created_at) VALUES (?,?,'offline',?,?,?,?,?,'',?) ON DUPLICATE KEY UPDATE request_id=request_id", [$payload['product_id'],$requestId,$payload['action'],$digest,Uuid::bytes($payload['installation_id']),isset($payload['activation_id']) ? Uuid::bytes($payload['activation_id']) : null,$verified['public'],$this->clock->sql()]);
             $record = $this->db->one('SELECT * FROM license_requests WHERE product_id=? AND request_id=? FOR UPDATE', [$payload['product_id'],$requestId]);
             if ($record['channel'] !== 'offline' || (int)$record['digest_key_version'] !== 1 || !hash_equals($record['input_digest'], $digest)) { throw new Problem('El identificador ya pertenece a otra solicitud o canal.',409); }
             $existing = $this->db->one('SELECT id FROM offline_requests WHERE product_id=? AND request_id=?', [$payload['product_id'],$requestId]);
@@ -42,16 +42,15 @@ final class OfflineService
         $reason = Input::text($input, 'reason', 500);
         $licenseId = $decision === 'approved' ? Input::text($input, 'license_id',36) : '';
         $version = $decision === 'approved' ? (int)($input['version'] ?? 0) : 0;
-        $mode = $decision === 'approved' ? Input::choice($input, 'renewal_mode', ['current','extend']) : 'current';
-        $until = $mode === 'extend' ? Input::date(Input::text($input, 'until')) : null;
-        $reference = $mode === 'extend' ? Input::text($input, 'reference',190,true) : '';
+        // PENDIENTE etapa 3: registrar una renovación al aprobar la solicitud (contrato, sección 5.3). Hasta entonces, «renew» solo entrega los derechos vigentes.
+        if ($decision === 'approved' && Input::choice($input, 'renewal_mode', ['current','extend']) === 'extend') { throw new Problem(LicenseService::PENDING['renew']); }
         $outgoing = $decision === 'approved' ? Input::text($input, 'force_activation_id',36,false) : '';
         $accepted = ($input['accept_offline_limit'] ?? '') === '1';
         $projection = $this->db->one('SELECT projection_json FROM offline_requests WHERE id=?',[Uuid::bytes($id)]) ?? throw new Problem('No se encontró la solicitud.',404);
         $deactivating = $decision==='approved' && (json_decode($projection['projection_json'],true,16,JSON_THROW_ON_ERROR)['action'] ?? '')==='deactivate';
         if (($outgoing !== '' || $deactivating) && !$accepted) { throw new Problem('Confirma el límite de la revocación sin internet: la firma no demuestra el borrado de copias del equipo anterior.'); }
         $roles = $outgoing === '' && !$deactivating ? ['superadmin','operator'] : ['superadmin'];
-        return $this->operations->run($actor, $roles, $operationId, 'offline.' . $decision, [$id,$reason,$licenseId,$version,$mode,$until?->format(DATE_ATOM),$reference,$outgoing,$accepted], function () use ($actor,$id,$decision,$reason,$licenseId,$version,$mode,$until,$reference,$outgoing): array {
+        return $this->operations->run($actor, $roles, $operationId, 'offline.' . $decision, [$id,$reason,$licenseId,$version,$outgoing,$accepted], function () use ($actor,$id,$decision,$reason,$licenseId,$version,$outgoing): array {
             $offline = $this->db->one('SELECT * FROM offline_requests WHERE id=?', [Uuid::bytes($id)]) ?? throw new Problem('No se encontró la solicitud.',404);
             $request = $this->db->one('SELECT * FROM license_requests WHERE product_id=? AND request_id=? FOR UPDATE', [$offline['product_id'],$offline['request_id']]);
             if ($request['completed_at'] !== null) { throw new Problem('La solicitud ya fue decidida. Consulta su resultado.',409); }
@@ -68,31 +67,25 @@ final class OfflineService
             if ($payload['action'] !== 'activate' && Uuid::bytes($licenseId) !== Uuid::bytes($payload['license_id'])) { throw new Problem('La licencia debe coincidir con la solicitud firmada.'); }
             $license = $this->lockLicense($licenseId, $payload['product_id']);
             if ((int)$license['row_version'] !== $version) { throw new Problem('Los derechos cambiaron. Revisa nuevamente la licencia.',409); }
-            if ($mode === 'extend' && $payload['action'] !== 'renew') { throw new Problem('La ampliación comercial requiere una solicitud de renovación.'); }
             if ($outgoing !== '' && $payload['action'] !== 'activate') { throw new Problem('La transferencia requiere una activación de destino.'); }
             if ($payload['action'] === 'activate') {
                 $active = $this->db->one("SELECT * FROM activations WHERE license_id=? AND state='active' ORDER BY activation_id FOR UPDATE", [$license['license_id']]);
                 if ($outgoing !== '') {
                     if (!$active || $active['activation_id'] !== Uuid::bytes($outgoing)) { throw new Problem('La instalación de origen cambió. Revisa la transferencia.',409); }
-                    if ($active['installation_id'] === Uuid::bytes($payload['installation_id'])) { throw new Problem('El destino debe ser otra instalación.'); }
+                    if ($active['server_id'] === Uuid::bytes($payload['installation_id'])) { throw new Problem('El destino debe ser otra instalación.'); }
                     $this->retire($license['license_id'], $active['activation_id'], true);
                 // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación activa por licencia)
                 } elseif ($active) { throw new Problem('La licencia ya tiene una instalación activa. Desactívala o solicita transferencia.',409); }
                 $activationId = Uuid::bytes(Uuid::create());
-                $this->db->execute("INSERT INTO activations(activation_id,license_id,product_id,installation_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)", [$activationId,$license['license_id'],$payload['product_id'],Uuid::bytes($payload['installation_id']),$verified['public'],$payload['fingerprint_version'],$payload['fingerprint_hash'],$this->clock->sql()]);
+                $this->db->execute("INSERT INTO activations(activation_id,license_id,product_id,server_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)", [$activationId,$license['license_id'],$payload['product_id'],Uuid::bytes($payload['installation_id']),$verified['public'],$payload['fingerprint_version'],$payload['fingerprint_hash'],$this->clock->sql()]);
             } else {
                 $activationId = $this->boundActivation($payload, $license)['activation_id'];
                 if ($payload['action'] === 'deactivate') { $this->db->execute("UPDATE activations SET state='deactivated',ended_at=? WHERE activation_id=?", [$this->clock->sql(),$activationId]); }
-                if ($mode === 'extend') {
-                    $this->licenses->renewTerms($actor, $license, $until, $reference, $reason);
-                    $this->db->execute('UPDATE licenses SET row_version=row_version+1,updated_at=? WHERE license_id=?', [$this->clock->sql(),$license['license_id']]);
-                }
             }
             $revision = $this->publisher->publish($license['license_id'], $activationId);
             if ($outgoing !== '') { $this->transferRecord($actor, $license['license_id'], Uuid::bytes($outgoing), $activationId, $reason); }
             $result = $this->complete($actor, $offline, $decision, $reason, $license['license_id'], Uuid::bytes($revision['revision_id']));
             // Audit head is always the last lock; every earlier effect still rolls back on audit failure.
-            if ($mode === 'extend') { $this->licenses->recordOfflineRenewal($actor, $licenseId, $reason, $reference); }
             $this->audit->append($actor->id, $outgoing === '' ? 'offline.approved' : 'offline.transferred', 'offline_request', $id, ['license_id'=>Uuid::text($license['license_id']),'activation_id'=>Uuid::text($activationId),'revision'=>$revision['revision'],'action'=>$payload['action'],'forced'=>$outgoing !== ''], $reason);
             return $result;
         });
@@ -134,7 +127,7 @@ final class OfflineService
     private function boundActivation(array $payload, array $license): array
     {
         $activation = $this->db->one('SELECT * FROM activations WHERE activation_id=? AND license_id=? FOR UPDATE',[Uuid::bytes($payload['activation_id']),$license['license_id']]);
-        if (!$activation || $activation['state'] !== 'active' || $activation['product_id'] !== $payload['product_id'] || $activation['installation_id'] !== Uuid::bytes($payload['installation_id']) || !hash_equals($activation['installation_public_key'],Protocol::decode($payload['installation_public_key'],32)) || $activation['fingerprint_version'] !== $payload['fingerprint_version'] || $activation['fingerprint_hash'] !== $payload['fingerprint_hash']) { throw new Problem('La identidad firmada no coincide con una instalación activa de esta licencia.',409); }
+        if (!$activation || $activation['state'] !== 'active' || $activation['product_id'] !== $payload['product_id'] || $activation['server_id'] !== Uuid::bytes($payload['installation_id']) || !hash_equals($activation['installation_public_key'],Protocol::decode($payload['installation_public_key'],32)) || $activation['fingerprint_version'] !== $payload['fingerprint_version'] || $activation['fingerprint_hash'] !== $payload['fingerprint_hash']) { throw new Problem('La identidad firmada no coincide con una instalación activa de esta licencia.',409); }
         return $activation;
     }
 

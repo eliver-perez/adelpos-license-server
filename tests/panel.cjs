@@ -125,6 +125,12 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         assert.equal(await page.locator('[value="prueba_a"]').isChecked(), true);
         assert.equal(await page.locator('[value="prueba_c"]').isChecked(), false);
         assert.equal(await page.locator('#reason').getAttribute('required'), null);
+        // A perpetual license is the default: only its own field is enabled, with 6 months of updates.
+        assert.equal(await page.locator('#updates_months').inputValue(), '6');
+        assert.equal(await page.locator('#billing_period').isDisabled(), true);
+        assert.equal(await page.locator('#trial_duration').isDisabled(), true);
+        assert.deepEqual(await page.locator('#plan_id option').evaluateAll(options => options.map(option => option.value)), ['basico', 'elemental', 'premium']);
+        await page.locator('#plan_id').selectOption('premium');
         await screenshot('license-form-desktop');
         await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
         const commercialKey = await page.locator('#commercial-key').inputValue();
@@ -133,15 +139,20 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
         const licenseURL = page.url();
         assert.match(await page.locator('main').innerText(), /Sin vencimiento/);
-        assert.match(await page.locator('main').innerText(), /No contratado/);
+        // No dates until the license is activated, and the operations of the previous engine are not offered.
+        assert.match(await page.locator('main').innerText(), /Empieza al activar/);
+        assert.match(await page.locator('main').innerText(), /Disponible próximamente/);
+        assert.equal(await page.locator('#until').count(), 0);
         assert.equal((await page.content()).includes(commercialKey), false);
-        await page.locator('#until').fill(future(365));
-        await page.locator('#reference').fill('BROWSER-MAINT');
-        await page.locator('#term_reason').fill('Compra separada de mantenimiento');
-        await submit(page.getByRole('button', { name: 'Registrar compra' }));
-        assert.equal(page.url(), licenseURL);
-        assert.match(await page.locator('main').innerText(), /Sin vencimiento/);
-        assert.equal((await page.locator('main').innerText()).includes('No contratado'), false);
+        // The server refuses them even when the request is sent directly.
+        const pendingForm = { csrf: await page.locator('[name="csrf"]').first().inputValue(), version: '1', until: future(365), reference: 'BROWSER-MAINT', reason: 'Compra separada de mantenimiento' };
+        for (const [operation, message] of [['maintenance', /La compra de mantenimiento estará disponible próximamente/], ['renew', /La renovación de suscripciones estará disponible próximamente/]]) {
+            const pending = await context.request.post(licenseURL + '/' + operation, { form: { ...pendingForm, operation_id: crypto.randomUUID() }, maxRedirects: 0 });
+            assert.equal(pending.status(), 422, operation);
+            assert.match(await pending.text(), message);
+        }
+        await page.reload();
+        assert.equal(await page.locator('tbody tr').count(), 1);
         await screenshot('license-detail-desktop');
         const metadata = page.locator('form[action$="/administrative"]');
         await metadata.locator('[name="reference"]').fill('Contrato sintético BROWSER-084');
@@ -166,18 +177,30 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         await page.goto('/admin/licenses/new');
         await page.locator('#customer_id').selectOption(customerId);
         await page.locator('#product_id').selectOption('producto_prueba');
+        await page.locator('[value="trial"]').check();
+        assert.equal(await page.locator('#updates_months').isDisabled(), true);
+        assert.equal(await page.locator('#billing_period').isDisabled(), true);
+        await page.locator('#trial_duration').selectOption('1m');
+        await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
+        await page.getByRole('link', { name: 'Ya la guardé · Ver licencia' }).click();
+        await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
+        assert.match(await page.locator('main').innerText(), /Licencia de prueba/);
+        assert.match(await page.locator('main').innerText(), /0 días/);
+
+        await page.goto('/admin/licenses/new');
+        await page.locator('#customer_id').selectOption(customerId);
+        await page.locator('#product_id').selectOption('producto_prueba');
         await page.locator('[value="subscription"]').check();
-        assert.equal(await page.locator('#entitled_release_until').isDisabled(), true);
-        await page.locator('#expires_at').fill(future(30));
+        assert.equal(await page.locator('#updates_months').isDisabled(), true);
+        assert.equal(await page.locator('#trial_duration').isDisabled(), true);
+        await page.locator('#billing_period').selectOption('quarterly');
         await page.locator('#reason').fill('Suscripción de prueba');
         await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
         await page.getByRole('link', { name: 'Ya la guardé · Ver licencia' }).click();
         await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
-        assert.match(await page.locator('main').innerText(), /15 días/);
-        await page.locator('#until').fill(future(60));
-        await page.locator('#term_reason').fill('Renovación de prueba');
-        await submit(page.getByRole('button', { name: 'Confirmar renovación' }));
-        assert.equal(await page.locator('tbody tr').count(), 2);
+        assert.match(await page.locator('main').innerText(), /5 días/);
+        assert.match(await page.locator('main').innerText(), /Empieza al activar/);
+        assert.equal(await page.locator('tbody tr').count(), 1);
         const offlineDownload = await require('./offline-panel.cjs')({ page, context, secret, totp, freshCode, sensitiveDownload, licenseURL, subscriptionURL: page.url(), commercialKey, screenshot });
 
         for (const route of ['/admin/customers', '/admin/products', '/admin/products/producto_prueba', '/admin/licenses', '/admin/offline', '/admin/audit', '/admin/users', '/admin/security']) {
@@ -219,7 +242,7 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         assert.equal(response.status(), 403);
         await viewer.close();
         assert.deepEqual(errors, [], 'No JavaScript or console errors');
-        console.log('Panel OK: login, MFA, roles, CSRF/origin, issuance, maintenance, renewal, offline upload/review/approval/rejection/download, forced transfer with reauthentication, signed deactivation and responsive navigation.');
+        console.log('Panel OK: login, MFA, roles, CSRF/origin, issuance of the three license types, renewal and maintenance refused, offline upload/review/approval/rejection/download, forced transfer with reauthentication, signed deactivation and responsive navigation.');
         console.log('Screenshots: var/screenshots (synthetic data, no credentials).');
     } catch (error) {
         if (process.env.PANEL_DEBUG && new URL(page.url()).pathname === '/login') console.error(await page.locator('main').innerText());

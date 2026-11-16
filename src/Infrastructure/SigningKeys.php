@@ -92,7 +92,7 @@ final class SigningKeys
         $key = $this->activeKey();
         try { $secret = $this->readSecret($key); }
         catch (\Throwable $error) { throw new \RuntimeException('License signing material unavailable.', 0, $error); }
-        try { return ['kid'=>$key['kid'],'jws'=>Jws::sign($payload, $key['kid'], $secret)]; }
+        try { return ['kid'=>$key['kid'],'environment'=>$key['environment'],'jws'=>Jws::sign($payload, $key['kid'], $secret)]; }
         finally { sodium_memzero($secret); }
     }
 

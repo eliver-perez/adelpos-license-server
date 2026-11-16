@@ -2,7 +2,7 @@
 
 Cómo configurar, operar, respaldar y verificar el servidor. La instalación paso a paso en Ubuntu 24.04 está en [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md); las decisiones, en [DECISIONS.md](DECISIONS.md); el contrato con AD-EL POS, en [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
 
-> **Herencia temporal.** El motor de licencias todavía es el heredado: contenido `LIC-V1`/`lic+jws`, huella del equipo, una instalación por licencia, 15 días de tolerancia y límites heredados. Cada regla fija está marcada en el código con `HEREDADO:` y listada en [AVANCE.md](AVANCE.md) (Fase 4, 4.2). Se reemplaza según el contrato así:
+> **Herencia temporal.** La emisión ya usa el modelo del contrato (tipo, plan y cupos, sin fechas hasta activar). El contenido firmado y el protocolo todavía son los heredados: `LIC-V1`/`lic+jws`, huella del equipo, una instalación por licencia y límites heredados. Cada regla fija está marcada en el código con `HEREDADO:` y listada en [AVANCE.md](AVANCE.md) (Fase 4, 4.2). Se reemplaza según el contrato así:
 >
 > | Etapa | Qué cambia en la operación |
 > | --- | --- |
@@ -106,7 +106,11 @@ Cada comando muestra primero el entorno de licencias en el que opera (`Entorno d
 ## 6. Licencias y operación sin internet
 
 Todo se hace en el panel:
-- **Licencias:** emitir (muestra el código 3-4-4-4 una sola vez), renovar, registrar mantenimiento, cambiar módulos, reemplazar la clave, revocar y generar constancias en PDF.
+- **Licencias:** emitir (muestra el código 3-4-4-4 una sola vez), cambiar módulos, reemplazar la clave, revocar y generar constancias en PDF.
+  - **Al emitir** se elige el tipo y su condición: perpetua con 0, 6 o 12 meses de actualizaciones; suscripción mensual, trimestral, semestral o anual; o prueba de 15 días, 1 mes o 3 meses. También el plan, que fija los cupos de cajas, comanderos y KDS.
+  - **Las fechas empiezan al activar.** Una licencia emitida no tiene vencimiento asignado; el panel muestra «Empieza al activar».
+  - **Renovar y registrar mantenimiento: disponibles próximamente.** El panel no los ofrece y el servidor los rechaza aunque se pidan directamente (etapa 3).
+- **Clientes:** cada cliente tiene una zona horaria (por omisión `America/Monterrey`), con la que se calculan las fechas de sus licencias.
 - **Solicitudes sin internet:**
   - importar un `.licreq` (máximo 64 KiB);
   - revisar la identidad del equipo;

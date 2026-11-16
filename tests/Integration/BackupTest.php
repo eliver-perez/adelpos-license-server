@@ -29,7 +29,7 @@ final class BackupTest extends TestCase
             $mfa = 'JBSWY3DPEHPK3PXP';
             $app->db->execute('UPDATE admin_users SET mfa_secret_encrypted=? WHERE id=?',[$app->crypto->encrypt($mfa,'mfa:'.$actor->id),Uuid::bytes($actor->id)]);
             $customer = $app->catalog->saveCustomer($actor,Uuid::create(),null,['name'=>'Recovery fixture','contact_name'=>'Test','email'=>'backup@example.test','state'=>'active']);
-            $license = $app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>'2026-09-26T12:00','features'=>['prueba_a'],'reason'=>'Recovery fixture']);
+            $license = $app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba',...MySqlFixture::terms(),'features'=>['prueba_a'],'reason'=>'Recovery fixture']);
             $document = $app->documents->generate($actor,Uuid::create(),$license['id'],['document_type'=>'licensing']);
             $documentPdf = $app->documents->download($actor,$document['document_id'])['bytes'];
             $pair = sodium_crypto_sign_keypair();

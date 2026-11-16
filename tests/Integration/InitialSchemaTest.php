@@ -19,7 +19,7 @@ final class InitialSchemaTest extends TestCase
         'column license_credentials.credential_encrypted IS_NULLABLE: YES -> NO',
     ];
     /** Every migration, in order. Only the first one is compared with the inherited chain. */
-    private const MIGRATIONS = ['001_esquema_inicial.sql', '002_entornos_de_firma.sql'];
+    private const MIGRATIONS = ['001_esquema_inicial.sql', '002_entornos_de_firma.sql', '003_contrato_v1.sql'];
     private \PDO $server;
     private string $dsn;
     /** @var list<string> */
@@ -67,6 +67,9 @@ final class InitialSchemaTest extends TestCase
         foreach (['product_capabilities', 'capability_dependencies', 'licenses', 'admin_users', 'signing_keys'] as $table) {
             self::assertSame(0, (int) $db->execute('SELECT COUNT(*) FROM ' . $table)->fetchColumn(), $table);
         }
+        // The plan catalog of the contract (section 11): the only other seeded data.
+        self::assertSame([['basico','Plan básico',1,0,0],['elemental','Plan elemental',3,3,3],['premium','Plan premium',5,10,5]], array_map(static fn(array $plan): array => array_map(static fn($value) => is_numeric($value) ? (int) $value : $value, array_values($plan)), $db->all('SELECT plan_id,display_name,cash_registers,order_takers,kitchen_displays FROM plans ORDER BY plan_id')));
+        self::assertCount(35, $schema['tables']);
         self::assertSame(1, (int) $db->execute('SELECT COUNT(*) FROM security_state')->fetchColumn());
         self::assertSame(['admin', 0], array_values(array_map(static fn($v) => is_numeric($v) ? (int) $v : $v, $db->one('SELECT stream_id,last_sequence FROM audit_heads'))));
         self::assertSame([], (new Migrator($db, self::migrations()))->migrate());
