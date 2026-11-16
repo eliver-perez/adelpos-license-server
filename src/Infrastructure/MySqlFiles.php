@@ -48,11 +48,16 @@ final class MySqlFiles
                 if (in_array($name,['host','port','unix_socket'],true)) { $connection[] = '--'.($name==='unix_socket'?'socket':$name).'='.$value; if ($name==='unix_socket') { $connection[]='--protocol=SOCKET'; } }
             }
             if (!$connection) { throw new \RuntimeException('An explicit MySQL host/socket is required.'); }
-            $command = [$binary,'--defaults-file='.$credentials,'--no-login-paths',...$connection,...$arguments,$database];
+            // MySQL 8.0 clients lack --no-login-paths and read ~/.mylogin.cnf even with
+            // --defaults-file. MYSQL_TEST_LOGIN_FILE points at a path that does not exist,
+            // so stored login paths are never used; the rest of the environment stays empty.
+            $loginFile = sys_get_temp_dir().'/'.bin2hex(random_bytes(16)).'.no-login-path';
+            if (file_exists($loginFile) || is_link($loginFile)) { throw new \RuntimeException('Cannot isolate MySQL login paths.'); }
+            $command = [$binary,'--defaults-file='.$credentials,...$connection,...$arguments,$database];
             $mask = umask(0077);
             try {
                 if ($output!==null && (file_exists($output) || is_link($output))) { throw new \RuntimeException('Dump destination already exists.'); }
-                $process = proc_open($command,[0=>$input===null?['pipe','r']:['file',$input,'r'],1=>$output===null?['pipe','w']:['file',$output,'w'],2=>['pipe','w']],$pipes,null,[]);
+                $process = proc_open($command,[0=>$input===null?['pipe','r']:['file',$input,'r'],1=>$output===null?['pipe','w']:['file',$output,'w'],2=>['pipe','w']],$pipes,null,['MYSQL_TEST_LOGIN_FILE'=>$loginFile]);
             } finally { umask($mask); }
             if (!is_resource($process)) { throw new \RuntimeException('MySQL utility unavailable.'); }
             if ($input===null) { fclose($pipes[0]); }
