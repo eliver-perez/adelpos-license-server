@@ -1,3 +1,21 @@
 <?php use AdelPos\License\Http\View as V; ?>
-<div class="page-heading"><div><span class="eyebrow">CUENTA PROTEGIDA</span><h1>Guarda tus códigos de recuperación</h1><p>Te permitirán entrar si pierdes tu aplicación de autenticación. Cada código funciona una sola vez.</p></div></div>
-<section class="panel recovery-panel"><div class="alert alert-warning">Esta es la única vez que se muestran. Guárdalos en un lugar seguro antes de continuar.</div><div class="recovery-grid"><?php foreach ($codes as $code): ?><code><?= V::escape($code) ?></code><?php endforeach; ?></div><a href="<?= V::escape($continueUrl ?? '/admin') ?>" class="btn btn-primary mt-4">Ya los guardé · Continuar</a></section>
+<div class="page-heading">
+	<div>
+		<span class="eyebrow">CUENTA PROTEGIDA</span>
+		<h1>Guarda tus códigos de recuperación</h1>
+		<p>
+			Te permitirán entrar si pierdes tu aplicación de autenticación. Cada código funciona una sola vez.
+		</p>
+	</div>
+</div>
+<section class="panel recovery-panel">
+	<div class="alert alert-warning">
+		Esta es la única vez que se muestran. Guárdalos en un lugar seguro antes de continuar.
+	</div>
+	<div class="recovery-grid">
+		<?php foreach ($codes as $code): ?>
+			<code><?= V::escape($code) ?></code>
+		<?php endforeach; ?>
+	</div>
+	<a href="<?= V::escape($continueUrl ?? '/admin') ?>" class="btn btn-primary mt-4">Ya los guardé · Continuar</a>
+</section>

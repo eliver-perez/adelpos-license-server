@@ -6,13 +6,15 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 $fixture = new AdelPos\License\Tests\MySqlFixture();
 $stack = null;
 try {
-    $stack = new AdelPos\License\Tests\NativeStackFixture($fixture);
-    $stack->app->auth->bootstrap('browser@example.test', 'Prueba visual', 'Fixture-Password-Only-2026!');
-    echo 'Panel sintético listo: ' . $stack->origin . PHP_EOL;
-    echo 'En otra terminal: TRUST_PANEL_ORIGIN=' . $stack->origin . ' node tests/trusted-devices-panel.cjs' . PHP_EOL;
-    echo 'Pulsa Enter al terminar para cerrar el panel y eliminar sus datos.' . PHP_EOL;
-    fgets(STDIN);
+	$stack = new AdelPos\License\Tests\NativeStackFixture($fixture);
+	$stack->app->auth->bootstrap('browser@example.test', 'Prueba visual', 'Fixture-Password-Only-2026!');
+	echo 'Panel sintético listo: ' . $stack->origin . PHP_EOL;
+	echo 'En otra terminal: TRUST_PANEL_ORIGIN=' . $stack->origin . ' node tests/trusted-devices-panel.cjs' . PHP_EOL;
+	echo 'Pulsa Enter al terminar para cerrar el panel y eliminar sus datos.' . PHP_EOL;
+	fgets(STDIN);
 } finally {
-    if ($stack !== null) { $stack->destroy(); }
-    $fixture->destroy();
+	if ($stack !== null) {
+		$stack->destroy();
+	}
+	$fixture->destroy();
 }

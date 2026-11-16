@@ -27,6 +27,7 @@ composer test:integration                # integración (requiere TEST_MYSQL_DSN
 composer test:contract                   # recalcula y compara contracts/v1/fixtures sin sobrescribir
 env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
   go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+npm run format:check                     # formato del código (npm run format lo aplica)
 php bin/check-secrets.php                # antes de cada commit
 ```
 
@@ -68,6 +69,7 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 | `ActivationCodeTest` | Códigos 3-4-4-4: alfabeto, aleatoriedad, normalización y rechazo estricto de formatos inválidos |
 | `CalendarPeriodTest` | Motor de fechas del contrato, con resultados calculados a mano: día ancla y último día del mes, años bisiestos y 29 de febrero, cambio de año, las cuatro duraciones de suscripción, pruebas de 15 días, 1 mes y 3 meses, perpetua con 0, 6 y 12 meses, día local cerca de la medianoche UTC en `America/Monterrey`, y hora inexistente y hora repetida en `America/Tijuana`, con sus límites al microsegundo. Además compara cada hora local alrededor de un cambio de horario, en cinco zonas, contra una definición independiente de la regla |
 | `AuditLabelsTest` | Toda operación de auditoría de `src/` y `bin/` tiene etiqueta en español en el panel |
+| `CodeStyleTest` | Regla de código legible: indentación con tabuladores, sin espacios al final, máximo de 140 columnas, una sentencia por etiqueta PHP en las plantillas, y el formateador (`npm run format:check`) sin diferencias. La tercera prueba se omite si no están instaladas las dependencias de npm |
 | `EncryptedArchiveTest` | Archivo cifrado de respaldos: ida y vuelta por bloques, permisos privados, llave incorrecta, truncado o alterado, rutas peligrosas y destino existente |
 | `OfflineRequestTest` | Solicitud `.licreq`: bytes firmados exactos, proyección segura, firma alterada, claves duplicadas y tamaño máximo |
 | `ProductionConfigTest` | Configuración: orígenes inseguros, separación entre producción y desarrollo, entorno desconocido, claves reales obligatorias y emisor «AD-EL POS Licencias» del código de verificación. Entorno de licencias: obligatorio, solo `test` o `production`, independiente de `APP_ENV`, y `production` solo con `APP_ENV=production`; el ejemplo y `bin/configure.php` lo piden de forma explícita |

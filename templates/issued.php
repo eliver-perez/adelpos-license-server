@@ -1,3 +1,32 @@
 <?php use AdelPos\License\Http\View as V; ?>
-<div class="page-heading"><div><span class="eyebrow">OPERACIÓN COMPLETADA</span><h1>Guarda la clave comercial</h1><p>La licencia quedó registrada. El código puede consultarse posteriormente con permiso especial, contraseña y verificación en dos pasos.</p></div></div>
-<section class="panel form-panel issuance-panel"><div class="success-emblem" aria-hidden="true">✓</div><h2>Clave generada correctamente</h2><p>Entrégala únicamente al cliente autorizado.</p><label for="commercial-key" class="form-label">Clave comercial</label><div class="input-group"><input class="form-control secret-key" id="commercial-key" value="<?= V::escape($commercialKey) ?>" readonly autocomplete="off"><button class="btn btn-outline-primary" type="button" data-copy="commercial-key">Copiar</button></div><div class="alert alert-warning mt-4">Conserva este código mediante un canal seguro. Su consulta posterior se registra en auditoría y requiere reautenticación. Reemplazarlo invalida la credencial anterior para nuevas activaciones.</div><a class="btn btn-primary" href="/admin/licenses/<?= V::escape($licenseId) ?>">Ya la guardé · Ver licencia</a></section>
+<div class="page-heading">
+	<div>
+		<span class="eyebrow">OPERACIÓN COMPLETADA</span>
+		<h1>Guarda la clave comercial</h1>
+		<p>
+			La licencia quedó registrada. El código puede consultarse posteriormente con permiso especial, contraseña y
+			verificación en dos pasos.
+		</p>
+	</div>
+</div>
+<section class="panel form-panel issuance-panel">
+	<div class="success-emblem" aria-hidden="true">✓</div>
+	<h2>Clave generada correctamente</h2>
+	<p>Entrégala únicamente al cliente autorizado.</p>
+	<label for="commercial-key" class="form-label">Clave comercial</label>
+	<div class="input-group">
+		<input
+			class="form-control secret-key"
+			id="commercial-key"
+			value="<?= V::escape($commercialKey) ?>"
+			readonly
+			autocomplete="off"
+		>
+		<button class="btn btn-outline-primary" type="button" data-copy="commercial-key">Copiar</button>
+	</div>
+	<div class="alert alert-warning mt-4">
+		Conserva este código mediante un canal seguro. Su consulta posterior se registra en auditoría y requiere
+		reautenticación. Reemplazarlo invalida la credencial anterior para nuevas activaciones.
+	</div>
+	<a class="btn btn-primary" href="/admin/licenses/<?= V::escape($licenseId) ?>">Ya la guardé · Ver licencia</a>
+</section>

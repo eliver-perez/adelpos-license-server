@@ -876,6 +876,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 1 — Entornos de firma | **Cerrada.** 176 pruebas, 21 578 aserciones, todas OK. Verificador Go OK. Playwright OK. |
 | 2 — Modelo de datos | **Cerrada.** 186 pruebas, 21 918 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 14 de las 20 marcas de herencia. |
 | 3 — Motor de fechas | **Cerrada.** 258 pruebas, 26 242 aserciones, todas OK. Verificador Go OK. |
+| Repaso de formato (regla del propietario) | **Hecho.** 261 pruebas, 26 248 aserciones, todas OK. Verificador Go OK. Playwright OK. |
 | 4 — Contenido y firma de la licencia | Pendiente |
 | 5 — API en línea | Pendiente |
 | 6 — Archivos sin internet | Pendiente |
@@ -1436,3 +1437,40 @@ Están en `DECISIONS.md`, sección 10, Fase 3. Dos conviene tenerlas presentes:
 - **Fase 7:** publicar estos casos como archivos de prueba del contrato, con entrada y resultado esperado.
 - **Fase 8:** mostrar las fechas en la zona horaria del cliente; el panel las muestra todavía en `America/Monterrey`.
 - **Etapa 3:** renovación (sección 5.3 del contrato), que usa `addMonths` con el ancla guardada.
+
+---
+
+## Etapa 2 · Repaso de formato — código legible (regla del propietario)
+
+**Regla (2026-11-16):** el código no se ofusca ni se minifica. Se escribe con saltos de línea e indentación con **tabuladores**, para que se entienda al leerlo. Aplica a todo el código propio y a todo lo que se escriba en adelante.
+
+Este repaso no cambia el comportamiento: solo cambia espacios, saltos de línea y la forma de escribir algunas plantillas.
+
+### E2-F.1 Qué se hizo
+
+| Archivos | Cómo | Cómo se comprobó que nada cambió |
+| --- | --- | --- |
+| 101 archivos PHP (`src`, `bin`, `tests`, `config`, `public`, `contracts/v1`), `app.js`, `app.css` y las pruebas `.cjs` | Formateador Prettier 3.10.1 con `@prettier/plugin-php` 0.26.0: tabuladores, 120 columnas, una sentencia por línea. Configuración en `.prettierrc.json`. | El árbol sintáctico de cada archivo PHP es idéntico antes y después (comparado con `nikic/php-parser`), comentarios incluidos. |
+| 107 consultas SQL largas dentro del código | Se partieron por cláusula (`SELECT`, `FROM`, `WHERE`…), una por línea. | El texto de cada consulta es igual salvo espacios en blanco. |
+| 11 mensajes largos | Se partieron en cadenas concatenadas. | La salida real de los comandos es idéntica. |
+| 30 plantillas del panel (`templates/`) | Indentación del HTML con tabuladores, un atributo por línea en las etiquetas largas y espacios normales en el PHP (`$a === 'b' ? 'c' : 'd'`). Las líneas que juntaban varias sentencias o listas se reescribieron: los datos van en variables al inicio de la plantilla y cada etiqueta PHP lleva una sola sentencia. | Los tokens PHP de cada plantilla son idénticos antes y después del espaciado. Las 258 pruebas y las pruebas del panel con Playwright pasan, y se revisaron las capturas de pantalla. |
+| Hoja de estilos de las constancias PDF (`templates/certificate-pdf.php`) | Una declaración CSS por línea. | Las pruebas de constancias comparan el PDF generado. |
+| Migraciones `002` y `003` | `003` pasa a tabuladores y a una condición por línea en cada `CHECK`. `002` ya cumplía. | El SQL es igual salvo espacios en blanco, y `InitialSchemaTest` compara el esquema resultante. |
+
+### E2-F.2 Lo que queda fuera
+
+- **`database/migrations/001_esquema_inicial.sql` no se tocó.** La especificación de la etapa 2 dice que no se modifica, y la única excepción aprobada son sus comentarios de herencia. Tiene líneas densas (hasta 238 columnas). **Consulta al propietario:** si lo autoriza, se puede reformatear igual que `003`; no hay instalaciones, así que el cambio de checksum no afecta a nadie.
+- **`contracts/v1/verify-vectors.go`:** la Fase 7 lo sustituye por el verificador nuevo, que se escribe ya con `gofmt` y líneas cortas.
+- **Archivos de terceros** (`vendor/`, `node_modules/`, Bootstrap en `public/assets/vendor/`), archivos generados (`contracts/v1/fixtures/`) y documentos Markdown.
+
+### E2-F.3 Cómo se mantiene
+
+- `npm run format` aplica el formato y `npm run format:check` lo comprueba.
+- **Prueba nueva `tests/Unit/CodeStyleTest.php`** (3 pruebas): ninguna línea indentada con espacios, ninguna termina con espacios, ninguna pasa de 140 columnas; en las plantillas, cada etiqueta PHP de una línea lleva una sola sentencia; y el formateador no encuentra diferencias. Las tres fallan si se quita la regla (comprobado con un cambio temporal).
+- Prettier y su complemento de PHP son dependencias de desarrollo de npm. No van en el paquete de despliegue.
+
+### E2-F.4 Resultado
+
+- PHPUnit: **261 pruebas, 26 248 aserciones, todas OK** (258 anteriores + 3 de estilo).
+- Verificador Go y `generate-fixtures.php --check`: OK.
+- Playwright (`php tests/run-panel-tests.php all`): OK, datos sintéticos eliminados.

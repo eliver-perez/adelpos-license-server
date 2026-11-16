@@ -1,0 +1,14 @@
+# Código de terceros, datos y archivos generados: no se formatean.
+/vendor/
+/node_modules/
+/var/
+/public/assets/vendor/
+/contracts/v1/fixtures/
+/database/
+/deploy/
+/docs/
+*.md
+*.json
+*.lock
+# Las plantillas mezclan HTML y PHP: se indentan a mano, con un elemento por línea.
+/templates/

@@ -96,6 +96,17 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
 ```
 
+### Estilo del código
+
+El código no se ofusca ni se minifica: se escribe con saltos de línea e indentación con tabuladores.
+
+```sh
+npm run format         # aplica el formato a PHP, JavaScript y CSS propios
+npm run format:check   # solo comprueba; es lo que ejecuta la prueba CodeStyleTest
+```
+
+Las plantillas de `templates/` se cuidan a mano: una sentencia por etiqueta PHP y los datos en variables al inicio del archivo.
+
 - **Bases de prueba:** cada prueba crea su propia base y su propio usuario `adelpos_license_test_*` con los permisos reales de la aplicación, y los elimina al terminar. No las apuntes a una base real.
 - **Producto de prueba:** las pruebas usan el producto sintético `producto_prueba`, con módulos `prueba_a` a `prueba_e`.
 - **Variables `TEST_*_BIN`:** solo hacen falta si esas herramientas no están en el `PATH`.

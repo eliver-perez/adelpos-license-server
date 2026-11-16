@@ -11,109 +11,153 @@ use PHPUnit\Framework\TestCase;
 
 final class RulesTest extends TestCase
 {
-    public function testUuidRoundTripAndVersion(): void
-    {
-        $uuid = Uuid::create();
-        self::assertMatchesRegularExpression('/^[a-f0-9-]{14}4[a-f0-9]{3}-[89ab]/', $uuid);
-        self::assertSame($uuid, Uuid::text(Uuid::bytes($uuid)));
-    }
+	public function testUuidRoundTripAndVersion(): void
+	{
+		$uuid = Uuid::create();
+		self::assertMatchesRegularExpression('/^[a-f0-9-]{14}4[a-f0-9]{3}-[89ab]/', $uuid);
+		self::assertSame($uuid, Uuid::text(Uuid::bytes($uuid)));
+	}
 
-    public function testInvalidCalendarDateIsRejected(): void
-    {
-        $this->expectException(Problem::class);
-        Input::date('2026-02-30T12:30');
-    }
+	public function testInvalidCalendarDateIsRejected(): void
+	{
+		$this->expectException(Problem::class);
+		Input::date('2026-02-30T12:30');
+	}
 
-    public function testDependentModuleNeedsItsRequiredModule(): void
-    {
-        $this->expectException(Problem::class);
-        Capabilities::validate(['prueba_e'], ['prueba_e','prueba_a'], [['capability_key'=>'prueba_e','required_key'=>'prueba_a']]);
-    }
+	public function testDependentModuleNeedsItsRequiredModule(): void
+	{
+		$this->expectException(Problem::class);
+		Capabilities::validate(
+			['prueba_e'],
+			['prueba_e', 'prueba_a'],
+			[['capability_key' => 'prueba_e', 'required_key' => 'prueba_a']],
+		);
+	}
 
-    public function testEnabledModulesDoNotInventUnrelatedDependencies(): void
-    {
-        Capabilities::validate(['prueba_b','prueba_a'], ['prueba_b','prueba_c','prueba_a','prueba_e'], [['capability_key'=>'prueba_e','required_key'=>'prueba_a']]);
-        self::assertTrue(true);
-    }
+	public function testEnabledModulesDoNotInventUnrelatedDependencies(): void
+	{
+		Capabilities::validate(
+			['prueba_b', 'prueba_a'],
+			['prueba_b', 'prueba_c', 'prueba_a', 'prueba_e'],
+			[['capability_key' => 'prueba_e', 'required_key' => 'prueba_a']],
+		);
+		self::assertTrue(true);
+	}
 
-    public function testCyclesRejected(): void
-    {
-        $this->expectException(Problem::class);
-        Capabilities::acyclic([['capability_key'=>'first','required_key'=>'second'],['capability_key'=>'second','required_key'=>'first']]);
-    }
+	public function testCyclesRejected(): void
+	{
+		$this->expectException(Problem::class);
+		Capabilities::acyclic([
+			['capability_key' => 'first', 'required_key' => 'second'],
+			['capability_key' => 'second', 'required_key' => 'first'],
+		]);
+	}
 
-    public function testTotpRfcVectorAndReplayBoundary(): void
-    {
-        $clock = new FrozenClock(new \DateTimeImmutable('@59'));
-        $totp = new Totp($clock);
-        // RFC 6238 SHA-1 vector 94287082; six-digit authenticator profile.
-        self::assertSame(1, $totp->matchingStep('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', null));
-        self::assertNull($totp->matchingStep('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', 1));
-        self::assertNull($totp->matchingStep('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '2870820', null));
-    }
+	public function testTotpRfcVectorAndReplayBoundary(): void
+	{
+		$clock = new FrozenClock(new \DateTimeImmutable('@59'));
+		$totp = new Totp($clock);
+		// RFC 6238 SHA-1 vector 94287082; six-digit authenticator profile.
+		self::assertSame(1, $totp->matchingStep('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', null));
+		self::assertNull($totp->matchingStep('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', 1));
+		self::assertNull($totp->matchingStep('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '2870820', null));
+	}
 
-    public function testMfaEncryptionBindsAccountAndRejectsTampering(): void
-    {
-        $crypto = new Crypto(new Config(['MFA_KEY'=>base64_encode(random_bytes(32))]));
-        $ciphertext = $crypto->encrypt('test-mfa-secret', 'mfa:account-one');
-        self::assertSame('test-mfa-secret', $crypto->decrypt($ciphertext, 'mfa:account-one'));
-        $this->expectException(\RuntimeException::class);
-        $crypto->decrypt($ciphertext, 'mfa:account-two');
-    }
+	public function testMfaEncryptionBindsAccountAndRejectsTampering(): void
+	{
+		$crypto = new Crypto(new Config(['MFA_KEY' => base64_encode(random_bytes(32))]));
+		$ciphertext = $crypto->encrypt('test-mfa-secret', 'mfa:account-one');
+		self::assertSame('test-mfa-secret', $crypto->decrypt($ciphertext, 'mfa:account-one'));
+		$this->expectException(\RuntimeException::class);
+		$crypto->decrypt($ciphertext, 'mfa:account-two');
+	}
 
-    public function testNetworkRestrictionsCoverIpv4AndIpv6(): void
-    {
-        self::assertTrue(Network::allows('10.8.0.0/24,::1/128', '10.8.0.20'));
-        self::assertFalse(Network::allows('10.8.0.0/24', '10.8.1.20'));
-        self::assertTrue(Network::allows('::1/128', '::1'));
-        self::assertFalse(Network::allows('invalid/0', '10.8.0.20'));
-        self::assertFalse(Network::allows('0.0.0.0/33', '10.8.0.20'));
-    }
+	public function testNetworkRestrictionsCoverIpv4AndIpv6(): void
+	{
+		self::assertTrue(Network::allows('10.8.0.0/24,::1/128', '10.8.0.20'));
+		self::assertFalse(Network::allows('10.8.0.0/24', '10.8.1.20'));
+		self::assertTrue(Network::allows('::1/128', '::1'));
+		self::assertFalse(Network::allows('invalid/0', '10.8.0.20'));
+		self::assertFalse(Network::allows('0.0.0.0/33', '10.8.0.20'));
+	}
 
-    public function testCountsAreWholeNumbersWithinTheirRange(): void
-    {
-        foreach ([['0', 0], ['7', 7], ['007', 7], [' 999 ', 999], [0, 0], [999, 999]] as [$value, $expected]) {
-            self::assertSame($expected, \AdelPos\License\Domain\Input::integer(['cupo' => $value], 'cupo', 0, 999, 'Cajas'));
-        }
-        foreach (['', ' ', '-1', '1000', '1.5', '1e2', '0x10', '+5', 'diez', '１２', 1000, -1, 1.0, null, true, ['1']] as $value) {
-            try { \AdelPos\License\Domain\Input::integer(['cupo' => $value], 'cupo', 0, 999, 'Cajas'); self::fail('Accepted: ' . var_export($value, true)); }
-            catch (Problem $error) { self::assertSame('Cajas debe ser un número entero entre 0 y 999.', $error->getMessage()); }
-        }
-    }
+	public function testCountsAreWholeNumbersWithinTheirRange(): void
+	{
+		foreach ([['0', 0], ['7', 7], ['007', 7], [' 999 ', 999], [0, 0], [999, 999]] as [$value, $expected]) {
+			self::assertSame(
+				$expected,
+				\AdelPos\License\Domain\Input::integer(['cupo' => $value], 'cupo', 0, 999, 'Cajas'),
+			);
+		}
+		foreach (
+			['', ' ', '-1', '1000', '1.5', '1e2', '0x10', '+5', 'diez', '１２', 1000, -1, 1.0, null, true, ['1']]
+			as $value
+		) {
+			try {
+				\AdelPos\License\Domain\Input::integer(['cupo' => $value], 'cupo', 0, 999, 'Cajas');
+				self::fail('Accepted: ' . var_export($value, true));
+			} catch (Problem $error) {
+				self::assertSame('Cajas debe ser un número entero entre 0 y 999.', $error->getMessage());
+			}
+		}
+	}
 
-    public function testLicenseTermsOfTheContract(): void
-    {
-        $terms = \AdelPos\License\Domain\LicenseTerms::class;
-        self::assertSame(['perpetual', 'subscription', 'trial'], $terms::TYPES);
-        self::assertSame(['monthly', 'quarterly', 'semiannual', 'annual'], $terms::BILLING_PERIODS);
-        self::assertSame(['15d', '1m', '3m'], $terms::TRIAL_DURATIONS);
-        self::assertSame([0, 6, 12], $terms::UPDATES_MONTHS);
-        self::assertSame(6, $terms::DEFAULT_UPDATES_MONTHS);
-        self::assertSame(['cash_registers', 'order_takers', 'kitchen_displays'], array_keys($terms::LIMITS));
-        self::assertSame(999, $terms::MAX_LIMIT);
-        // Calendar months of each billing period, and length of each trial (contract, section 5.1).
-        self::assertSame(['monthly' => 1, 'quarterly' => 3, 'semiannual' => 6, 'annual' => 12], $terms::BILLING_MONTHS);
-        self::assertSame($terms::BILLING_PERIODS, array_keys($terms::BILLING_MONTHS));
-        self::assertSame(['15d' => ['days' => 15], '1m' => ['months' => 1], '3m' => ['months' => 3]], $terms::TRIAL_LENGTHS);
-        self::assertSame($terms::TRIAL_DURATIONS, array_keys($terms::TRIAL_LENGTHS));
-        // Only subscriptions have grace days: 5.
-        self::assertSame([0, 5, 0], array_map([$terms, 'graceDays'], $terms::TYPES));
-    }
+	public function testLicenseTermsOfTheContract(): void
+	{
+		$terms = \AdelPos\License\Domain\LicenseTerms::class;
+		self::assertSame(['perpetual', 'subscription', 'trial'], $terms::TYPES);
+		self::assertSame(['monthly', 'quarterly', 'semiannual', 'annual'], $terms::BILLING_PERIODS);
+		self::assertSame(['15d', '1m', '3m'], $terms::TRIAL_DURATIONS);
+		self::assertSame([0, 6, 12], $terms::UPDATES_MONTHS);
+		self::assertSame(6, $terms::DEFAULT_UPDATES_MONTHS);
+		self::assertSame(['cash_registers', 'order_takers', 'kitchen_displays'], array_keys($terms::LIMITS));
+		self::assertSame(999, $terms::MAX_LIMIT);
+		// Calendar months of each billing period, and length of each trial (contract, section 5.1).
+		self::assertSame(['monthly' => 1, 'quarterly' => 3, 'semiannual' => 6, 'annual' => 12], $terms::BILLING_MONTHS);
+		self::assertSame($terms::BILLING_PERIODS, array_keys($terms::BILLING_MONTHS));
+		self::assertSame(
+			['15d' => ['days' => 15], '1m' => ['months' => 1], '3m' => ['months' => 3]],
+			$terms::TRIAL_LENGTHS,
+		);
+		self::assertSame($terms::TRIAL_DURATIONS, array_keys($terms::TRIAL_LENGTHS));
+		// Only subscriptions have grace days: 5.
+		self::assertSame([0, 5, 0], array_map([$terms, 'graceDays'], $terms::TYPES));
+	}
 
-    public function testCustomerTimeZonesAreCurrentIanaIdentifiers(): void
-    {
-        $zones = \AdelPos\License\Domain\TimeZones::class;
-        self::assertSame('America/Monterrey', $zones::DEFAULT);
-        foreach (['America/Monterrey', 'America/Tijuana', 'America/Mexico_City', 'America/Cancun', 'UTC'] as $zone) { self::assertTrue($zones::valid($zone), $zone); }
-        foreach (['', 'Monterrey', 'america/monterrey', 'America/Monterey', 'US/Pacific', 'Mexico/General', 'CST', 'GMT-6', '-06:00', 'America/Monterrey '] as $zone) { self::assertFalse($zones::valid($zone), $zone); }
-        self::assertContains($zones::DEFAULT, $zones::all());
-    }
+	public function testCustomerTimeZonesAreCurrentIanaIdentifiers(): void
+	{
+		$zones = \AdelPos\License\Domain\TimeZones::class;
+		self::assertSame('America/Monterrey', $zones::DEFAULT);
+		foreach (['America/Monterrey', 'America/Tijuana', 'America/Mexico_City', 'America/Cancun', 'UTC'] as $zone) {
+			self::assertTrue($zones::valid($zone), $zone);
+		}
+		foreach (
+			[
+				'',
+				'Monterrey',
+				'america/monterrey',
+				'America/Monterey',
+				'US/Pacific',
+				'Mexico/General',
+				'CST',
+				'GMT-6',
+				'-06:00',
+				'America/Monterrey ',
+			]
+			as $zone
+		) {
+			self::assertFalse($zones::valid($zone), $zone);
+		}
+		self::assertContains($zones::DEFAULT, $zones::all());
+	}
 
-    public function testDevelopmentHttpCannotBeUsedOnPublicOrigin(): void
-    {
-        $values=['APP_ENV'=>'development','LICENSE_ENVIRONMENT'=>'test','APP_URL'=>'http://public.example'];
-        foreach(['MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { $values[$name]=base64_encode(random_bytes(32)); }
-        $this->expectException(\RuntimeException::class);
-        (new Config($values))->validate();
-    }
+	public function testDevelopmentHttpCannotBeUsedOnPublicOrigin(): void
+	{
+		$values = ['APP_ENV' => 'development', 'LICENSE_ENVIRONMENT' => 'test', 'APP_URL' => 'http://public.example'];
+		foreach (['MFA_KEY', 'CREDENTIAL_KEY', 'AUDIT_KEY', 'SESSION_KEY', 'OPERATION_KEY'] as $name) {
+			$values[$name] = base64_encode(random_bytes(32));
+		}
+		$this->expectException(\RuntimeException::class);
+		(new Config($values))->validate();
+	}
 }

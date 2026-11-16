@@ -1,14 +1,277 @@
-<?php use AdelPos\License\Http\View as V; $licenseId=$license['id_text']; $canChange=$actor->canWrite() && $license['commercial_status']==='issued'; ?>
-<?php $noticeKey=is_string($_GET['notice'] ?? null)?$_GET['notice']:''; $notice = ['administrative'=>'Información administrativa actualizada. Los derechos y activaciones se conservaron.','document'=>'Constancia generada. Disponible en el historial de documentos.'][$noticeKey] ?? ''; if ($notice): ?><div class="alert alert-success" role="status"><?= V::escape($notice) ?></div><?php endif; ?>
-<div class="page-heading"><div><a class="text-link" href="/admin/licenses">← Licencias</a><h1 class="mt-3"><?= V::escape($license['customer_name']) ?></h1><p><?= V::escape($license['product_name']) ?> <span class="mx-2">/</span> <?= V::escape(['perpetual'=>'Licencia perpetua','subscription'=>'Suscripción','trial'=>'Licencia de prueba'][$license['license_type']]) ?></p></div><span class="tag large-tag <?= $license['commercial_status']==='revoked'?'tag-red':'tag-green' ?>"><?= $license['commercial_status']==='revoked'?'Revocada':'Emitida' ?></span></div>
-<div class="row g-4"><div class="col-xl-8"><section class="panel form-panel"><h2>Derechos comerciales</h2><dl class="detail-grid"><div class="wide"><dt>Identificador de licencia</dt><dd class="mono"><?= V::escape($licenseId) ?></dd></div><div><dt>Vencimiento</dt><dd><?= V::escape(V::expiry($license)) ?></dd></div><div><dt>Tolerancia</dt><dd><?= (int)$license['grace_days'] ?> días</dd></div><div><dt>Actualizaciones hasta</dt><dd><?= $license['updates_until']===null?'Empieza al activar':V::escape(V::date($license['updates_until'])) ?></dd></div><?php /* HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación por licencia) */ ?><div><dt>Instalaciones</dt><dd>1 autorizada</dd></div></dl><div class="note-box"><?= V::escape(['perpetual'=>'El uso de las versiones adquiridas no vence, aunque termine el periodo de actualizaciones.','subscription'=>'Después del vencimiento hay '.(int)$license['grace_days'].' días de tolerancia. Al terminar se puede cobrar y cerrar lo capturado, pero no tomar pedidos nuevos.','trial'=>'La prueba no tiene tolerancia. Al vencer se puede cobrar y cerrar lo capturado, pero no tomar pedidos nuevos.'][$license['license_type']]) ?></div></section>
-<section class="panel form-panel mt-4"><h2>Módulos</h2><?php if ($canChange): ?><form method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/features"><?php V::fields($csrf); ?><input type="hidden" name="version" value="<?= (int)$license['row_version'] ?>"><?php endif; ?><div class="feature-grid mt-3"><?php foreach ($capabilities as $feature): if($feature['product_id']!==$license['product_id'])continue; $enabled=false; foreach($license['features'] as $current){if($current['capability_key']===$feature['capability_key'])$enabled=(bool)$current['enabled'];} ?><label class="feature-choice"><input class="form-check-input" type="checkbox" name="features[]" value="<?= V::escape($feature['capability_key']) ?>" data-requires="<?= V::escape($feature['requires_keys']) ?>" <?= $enabled?'checked':'' ?> <?= !$canChange?'disabled':'' ?>><span><?= V::escape($feature['display_name']) ?></span></label><?php endforeach; ?></div><?php if ($canChange): ?><div class="mt-4"><label class="form-label" for="feature_reason">Motivo del cambio</label><input class="form-control" name="reason" id="feature_reason" maxlength="500" required></div><button class="btn btn-outline-primary mt-3">Guardar módulos</button></form><?php endif; ?></section>
-<?php require __DIR__ . '/license-commercial.php'; ?>
-<?php require __DIR__ . '/license-activations.php'; ?>
-<?php require __DIR__ . '/license-offline.php'; ?>
-<section class="panel mt-4"><div class="panel-heading"><div><h2>Historial comercial</h2><p>Las operaciones se conservan sin editar ni sobrescribir.</p></div></div><div class="table-responsive"><table class="table"><thead><tr><th>Operación</th><th>Autorización</th><th>Fecha</th></tr></thead><tbody><?php foreach ($license['history'] as $change): ?><tr><td><strong><?= V::escape(V::action($change['action'])) ?></strong><small class="cell-sub"><?= V::escape($change['reason']) ?></small></td><td><?= V::escape($change['actor_name']) ?></td><td><?= V::escape(V::date($change['created_at'])) ?></td></tr><?php endforeach; ?></tbody></table></div></section></div>
-<div class="col-xl-4">
-<?php if ($canChange): ?><section class="panel form-panel"><span class="eyebrow">RENOVACIÓN Y MANTENIMIENTO</span><h2 class="mt-3">Disponible próximamente</h2><p class="text-secondary small mb-0">La renovación de suscripciones con fecha de pago y la compra de mantenimiento todavía no están disponibles. Esta licencia conserva las condiciones con las que se emitió.</p></section>
-<section class="panel form-panel mt-4"><h2>Clave comercial</h2><p class="text-secondary small">El código puede consultarse con permiso especial.</p><?php if ($actor->allows('credentials.reveal')): ?><details><summary>Consultar código de activación</summary><form class="stack-form mt-3" method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/reveal"><?php V::fields($csrf); ?><?php require __DIR__.'/reauth-fields.php'; ?><button class="btn btn-outline-primary">Revelar código</button></form></details><?php endif; ?><details><summary>Reemplazar clave</summary><form class="stack-form mt-3" method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/reissue"><?php V::fields($csrf); ?><input type="hidden" name="version" value="<?= (int)$license['row_version'] ?>"><label>Motivo<input class="form-control mt-2" name="reason" maxlength="500" required></label><label>Tu contraseña<input class="form-control mt-2" name="password" type="password" autocomplete="current-password" required></label><label>Código de autenticación nuevo<input class="form-control mt-2" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required></label><button class="btn btn-outline-primary">Generar nueva clave</button></form></details></section>
-<?php if ($actor->role==='superadmin'): ?><section class="panel form-panel mt-4 danger-panel"><h2>Revocación</h2><p class="text-secondary small">Impide nuevas activaciones y deja constancia del motivo. Las copias desconectadas no conocen una revocación instantáneamente.</p><details><summary>Revocar esta licencia</summary><form class="stack-form mt-3" method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/revoke" data-confirm="Se revocará esta licencia. Esta acción no tiene rehabilitación automática."><?php V::fields($csrf); ?><input type="hidden" name="version" value="<?= (int)$license['row_version'] ?>"><label>Motivo de revocación<textarea class="form-control mt-2" name="reason" rows="2" maxlength="500" required></textarea></label><label>Tu contraseña<input class="form-control mt-2" type="password" name="password" autocomplete="current-password" required></label><label>Código de autenticación nuevo<input class="form-control mt-2" name="code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" required></label><button class="btn btn-outline-danger">Confirmar revocación</button></form></details></section><?php endif; ?>
-<?php endif; ?></div></div>
+<?php
+use AdelPos\License\Http\View as V;
+
+$licenseId = $license['id_text'];
+$canChange = $actor->canWrite() && $license['commercial_status'] === 'issued';
+$revoked = $license['commercial_status'] === 'revoked';
+$notices = [
+	'administrative' => 'Información administrativa actualizada. Los derechos y activaciones se conservaron.',
+	'document' => 'Constancia generada. Disponible en el historial de documentos.',
+];
+$noticeKey = is_string($_GET['notice'] ?? null) ? $_GET['notice'] : '';
+$notice = $notices[$noticeKey] ?? '';
+$typeNames = ['perpetual' => 'Licencia perpetua', 'subscription' => 'Suscripción', 'trial' => 'Licencia de prueba'];
+$termNotes = [
+	'perpetual' => 'El uso de las versiones adquiridas no vence, aunque termine el periodo de actualizaciones.',
+	'subscription' =>
+		'Después del vencimiento hay ' .
+		(int) $license['grace_days'] .
+		' días de tolerancia. Al terminar se puede cobrar y cerrar lo capturado, pero no tomar pedidos nuevos.',
+	'trial' =>
+		'La prueba no tiene tolerancia. Al vencer se puede cobrar y cerrar lo capturado, ' .
+		'pero no tomar pedidos nuevos.',
+];
+?>
+<?php if ($notice): ?>
+	<div class="alert alert-success" role="status"><?= V::escape($notice) ?></div>
+<?php endif; ?>
+<div class="page-heading">
+	<div>
+		<a class="text-link" href="/admin/licenses">← Licencias</a>
+		<h1 class="mt-3"><?= V::escape($license['customer_name']) ?></h1>
+		<p>
+			<?= V::escape($license['product_name']) ?> <span class="mx-2">/</span>
+			<?= V::escape($typeNames[$license['license_type']]) ?>
+		</p>
+	</div>
+	<span class="tag large-tag <?= $revoked ? 'tag-red' : 'tag-green' ?>"><?= $revoked ? 'Revocada' : 'Emitida' ?></span>
+</div>
+<div class="row g-4">
+	<div class="col-xl-8">
+		<section class="panel form-panel">
+			<h2>Derechos comerciales</h2>
+			<dl class="detail-grid">
+				<div class="wide">
+					<dt>Identificador de licencia</dt>
+					<dd class="mono"><?= V::escape($licenseId) ?></dd>
+				</div>
+				<div>
+					<dt>Vencimiento</dt>
+					<dd><?= V::escape(V::expiry($license)) ?></dd>
+				</div>
+				<div>
+					<dt>Tolerancia</dt>
+					<dd><?= (int) $license['grace_days'] ?> días</dd>
+				</div>
+				<div>
+					<dt>Actualizaciones hasta</dt>
+					<dd>
+						<?php if ($license['updates_until'] === null): ?>
+							Empieza al activar
+						<?php else: ?>
+							<?= V::escape(V::date($license['updates_until'])) ?>
+						<?php endif; ?>
+					</dd>
+				</div>
+				<?php
+				// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md
+				// (una instalación por licencia).
+				?>
+				<div>
+					<dt>Instalaciones</dt>
+					<dd>1 autorizada</dd>
+				</div>
+			</dl>
+			<div class="note-box">
+				<?= V::escape($termNotes[$license['license_type']]) ?>
+			</div>
+		</section>
+		<section class="panel form-panel mt-4">
+			<h2>Módulos</h2>
+			<?php if ($canChange): ?>
+				<form method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/features">
+					<?php V::fields($csrf); ?>
+					<input type="hidden" name="version" value="<?= (int) $license['row_version'] ?>">
+				<?php endif; ?>
+				<div class="feature-grid mt-3">
+					<?php foreach ($capabilities as $feature): ?>
+						<?php
+						if ($feature['product_id'] !== $license['product_id']) {
+							continue;
+						}
+						$enabled = false;
+						foreach ($license['features'] as $current) {
+							if ($current['capability_key'] === $feature['capability_key']) {
+								$enabled = (bool) $current['enabled'];
+							}
+						}
+						?>
+						<label class="feature-choice">
+							<input
+								class="form-check-input"
+								type="checkbox"
+								name="features[]"
+								value="<?= V::escape($feature['capability_key']) ?>"
+								data-requires="<?= V::escape($feature['requires_keys']) ?>"
+								<?= $enabled ? 'checked' : '' ?>
+								<?= !$canChange ? 'disabled' : '' ?>
+							>
+							<span><?= V::escape($feature['display_name']) ?></span>
+						</label>
+					<?php endforeach; ?>
+				</div>
+				<?php if ($canChange): ?>
+					<div class="mt-4">
+						<label class="form-label" for="feature_reason">Motivo del cambio</label>
+						<input class="form-control" name="reason" id="feature_reason" maxlength="500" required>
+					</div>
+					<button class="btn btn-outline-primary mt-3">Guardar módulos</button>
+				</form>
+			<?php endif; ?>
+		</section>
+		<?php require __DIR__ . '/license-commercial.php'; ?>
+		<?php require __DIR__ . '/license-activations.php'; ?>
+		<?php require __DIR__ . '/license-offline.php'; ?>
+		<section class="panel mt-4">
+			<div class="panel-heading">
+				<div>
+					<h2>Historial comercial</h2>
+					<p>Las operaciones se conservan sin editar ni sobrescribir.</p>
+				</div>
+			</div>
+			<div class="table-responsive">
+				<table class="table">
+					<thead>
+						<tr>
+							<th>Operación</th>
+							<th>Autorización</th>
+							<th>Fecha</th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($license['history'] as $change): ?>
+							<tr>
+								<td>
+									<strong><?= V::escape(V::action($change['action'])) ?></strong>
+									<small class="cell-sub"><?= V::escape($change['reason']) ?></small>
+								</td>
+								<td><?= V::escape($change['actor_name']) ?></td>
+								<td><?= V::escape(V::date($change['created_at'])) ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</div>
+	<div class="col-xl-4">
+		<?php if ($canChange): ?>
+			<section class="panel form-panel">
+				<span class="eyebrow">RENOVACIÓN Y MANTENIMIENTO</span>
+				<h2 class="mt-3">Disponible próximamente</h2>
+				<p class="text-secondary small mb-0">
+					La renovación de suscripciones con fecha de pago y la compra de mantenimiento todavía no están
+					disponibles. Esta licencia conserva las condiciones con las que se emitió.
+				</p>
+			</section>
+			<section class="panel form-panel mt-4">
+				<h2>Clave comercial</h2>
+				<p class="text-secondary small">El código puede consultarse con permiso especial.</p>
+				<?php if ($actor->allows('credentials.reveal')): ?>
+					<details>
+						<summary>Consultar código de activación</summary>
+						<form
+							class="stack-form mt-3"
+							method="post"
+							action="/admin/licenses/<?= V::escape($licenseId) ?>/reveal"
+						>
+							<?php V::fields($csrf); ?>
+							<?php require __DIR__ . '/reauth-fields.php'; ?>
+							<button class="btn btn-outline-primary">Revelar código</button>
+						</form>
+					</details>
+				<?php endif; ?>
+				<details>
+					<summary>Reemplazar clave</summary>
+					<form
+						class="stack-form mt-3"
+						method="post"
+						action="/admin/licenses/<?= V::escape($licenseId) ?>/reissue"
+					>
+						<?php V::fields($csrf); ?>
+						<input type="hidden" name="version" value="<?= (int) $license['row_version'] ?>">
+						<label>
+							Motivo
+							<input class="form-control mt-2" name="reason" maxlength="500" required>
+						</label>
+						<label>
+							Tu contraseña
+							<input
+								class="form-control mt-2"
+								name="password"
+								type="password"
+								autocomplete="current-password"
+								required
+							>
+						</label>
+						<label>
+							Código de autenticación nuevo
+							<input
+								class="form-control mt-2"
+								name="code"
+								inputmode="numeric"
+								maxlength="6"
+								autocomplete="one-time-code"
+								required
+							>
+						</label>
+						<button class="btn btn-outline-primary">Generar nueva clave</button>
+					</form>
+				</details>
+			</section>
+			<?php if ($actor->role === 'superadmin'): ?>
+				<section class="panel form-panel mt-4 danger-panel">
+					<h2>Revocación</h2>
+					<p class="text-secondary small">
+						Impide nuevas activaciones y deja constancia del motivo. Las copias desconectadas no conocen una
+						revocación instantáneamente.
+					</p>
+					<details>
+						<summary>Revocar esta licencia</summary>
+						<form
+							class="stack-form mt-3"
+							method="post"
+							action="/admin/licenses/<?= V::escape($licenseId) ?>/revoke"
+							data-confirm="Se revocará esta licencia. Esta acción no tiene rehabilitación automática."
+						>
+							<?php V::fields($csrf); ?>
+							<input type="hidden" name="version" value="<?= (int) $license['row_version'] ?>">
+							<label>
+								Motivo de revocación
+								<textarea
+									class="form-control mt-2"
+									name="reason"
+									rows="2"
+									maxlength="500"
+									required
+								></textarea>
+							</label>
+							<label>
+								Tu contraseña
+								<input
+									class="form-control mt-2"
+									type="password"
+									name="password"
+									autocomplete="current-password"
+									required
+								>
+							</label>
+							<label>
+								Código de autenticación nuevo
+								<input
+									class="form-control mt-2"
+									name="code"
+									maxlength="6"
+									inputmode="numeric"
+									autocomplete="one-time-code"
+									required
+								>
+							</label>
+							<button class="btn btn-outline-danger">Confirmar revocación</button>
+						</form>
+					</details>
+				</section>
+			<?php endif; ?>
+		<?php endif; ?>
+	</div>
+</div>

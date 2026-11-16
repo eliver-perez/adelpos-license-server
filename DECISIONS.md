@@ -135,6 +135,7 @@ Todas son del 2026-11-16, al cerrar la Fase 0. El detalle de cada consulta está
 | 6 | **Hora que no existe por un cambio de horario:** se usa el primer instante después del salto (lectura literal de la sección 5.1). |
 | 7 | **Desactivar una activación que ya terminó:** responde 200 con su revisión de cierre, sea cual sea el motivo. `REVOKED` queda solo para `activate`. |
 | 8 | Los criterios de AVANCE.md, sección E2-0.6, se aplican sin objeción. |
+| 9 | **Código legible (2026-11-16):** el código no se ofusca ni se minifica. Se escribe con saltos de línea e indentación con tabuladores. Aplica a todo el código propio, existente y nuevo. |
 
 ## 9. Propuestas V1.1 del contrato
 
@@ -197,3 +198,13 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 7 | Los casos exactos usan `America/Monterrey` y `America/Tijuana`. Las demás zonas (`America/Santiago`, `Australia/Lord_Howe`, `Europe/Madrid`) se comprueban contra una definición independiente de la regla, con los datos de zonas de la máquina. | Las reglas de Monterrey y Tijuana son estables. Los resultados de otras zonas dependen de la versión de los datos de zonas horarias instalada. |
 | 8 | Límite conocido: el mes de partida se toma de la fecha local del instante de partida. Si un cambio de horario hiciera inexistente la última hora del último día de un mes y el ancla cayera ahí, el periodo siguiente se contaría desde el mes siguiente. | Ninguna zona de México ni de Estados Unidos cambia de horario a medianoche. Se registra para la etapa 3, que encadena periodos al renovar. |
 | 9 | Sin dependencias nuevas de Composer en esta fase. | — |
+
+### Repaso de formato
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | El formato lo aplica Prettier 3.10.1 con `@prettier/plugin-php` 0.26.0 (`.prettierrc.json`: tabuladores, 120 columnas). Son dependencias de desarrollo de npm, con versión exacta. | Un formateador da el mismo resultado siempre y evita discutir el estilo archivo por archivo. npm ya se usaba para Playwright; no se añade nada a Composer ni al paquete de despliegue. |
+| 2 | Las plantillas (`templates/`) no pasan por Prettier: se indentaron con una herramienta propia y las líneas densas se reescribieron a mano. | El complemento de PHP no formatea bien archivos que mezclan HTML y PHP. |
+| 3 | El límite que comprueba la prueba de estilo es de 140 columnas, con el tabulador contado como 4. Prettier apunta a 120. | Prettier no parte cadenas ni expresiones regulares, y el HTML anidado ocupa columnas con la indentación. |
+| 4 | `001_esquema_inicial.sql` queda fuera del repaso. | La especificación de la etapa 2 prohíbe modificarlo. Queda como consulta al propietario en AVANCE.md, sección E2-F.2. |
+| 5 | El SQL dentro del código se parte por cláusula, y cada `CHECK` de las migraciones nuevas lleva una condición por línea. | Es la parte del código que más se lee al revisar una regla. |

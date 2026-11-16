@@ -1,6 +1,14 @@
 {
   "name": "@adelpos/license-server",
   "private": true,
-  "scripts": { "test:panel": "php tests/run-panel-tests.php all" },
-  "devDependencies": { "playwright": "1.63.0" }
+  "scripts": {
+    "format": "prettier --write \"src/**/*.php\" \"bin/*.php\" \"tests/**/*.php\" \"config/*.php\" \"public/*.php\" \"contracts/v1/*.php\" \"public/assets/app.js\" \"public/assets/app.css\" \"tests/*.cjs\"",
+    "format:check": "prettier --check \"src/**/*.php\" \"bin/*.php\" \"tests/**/*.php\" \"config/*.php\" \"public/*.php\" \"contracts/v1/*.php\" \"public/assets/app.js\" \"public/assets/app.css\" \"tests/*.cjs\"",
+    "test:panel": "php tests/run-panel-tests.php all"
+  },
+  "devDependencies": {
+    "@prettier/plugin-php": "0.26.0",
+    "playwright": "1.63.0",
+    "prettier": "3.10.1"
+  }
 }
