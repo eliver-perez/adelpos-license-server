@@ -3,10 +3,9 @@
 <html lang="es">
 <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="application-name" content="AIDEX">
-    <meta name="description" content="AIDEX — Aplicación de Indexación Digital de Expedientes. Administración de licencias.">
-    <title><?= V::escape($title) ?> · AIDEX Licencias</title>
-    <link rel="icon" type="image/svg+xml" href="/assets/brand/logo-v.svg">
+    <meta name="application-name" content="AD-EL POS — Licencias">
+    <meta name="description" content="AD-EL POS — Licencias. Administración de licencias del punto de venta AD-EL POS.">
+    <title><?= V::escape($title) ?> · AD-EL POS — Licencias</title>
     <link rel="stylesheet" href="/assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="/assets/app.css">
     <script src="/assets/vendor/bootstrap/bootstrap.bundle.min.js" defer></script>
@@ -16,7 +15,7 @@
 <?php if ($actor): ?>
     <a class="skip-link" href="#main-content">Saltar al contenido</a>
     <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
-        <a class="sidebar-brand" href="/admin"><img src="/assets/brand/logo-dark-v.svg" alt="AIDEX · Aplicación de Indexación Digital de Expedientes"></a>
+        <a class="sidebar-brand" href="/admin"><img src="/assets/brand/adel-pos-tema-oscuro.png" alt="AD-EL POS — Licencias"></a>
         <div class="sidebar-caption">ADMINISTRACIÓN DE LICENCIAS</div>
         <nav class="sidebar-nav">
         <?php foreach (['/admin' => ['Resumen','◫'], '/admin/licenses' => ['Licencias','⌘'], '/admin/offline' => ['Solicitudes offline','⇄'], '/admin/customers' => ['Clientes','◎'], '/admin/products' => ['Productos','◇'], '/admin/audit' => ['Auditoría','≡']] as $href => [$label,$symbol]): $active = $href === '/admin' ? $path === $href : str_starts_with($path, $href); ?>
@@ -33,21 +32,21 @@
             <div class="account-area"><span class="avatar"><?= V::escape(mb_strtoupper(mb_substr($actor->name, 0, 1))) ?></span><div class="account-name"><?= V::escape($actor->name) ?><small><?= V::escape(V::role($actor->role)) ?></small></div><form method="post" action="/logout"><?php V::fields($csrf); ?><button class="btn btn-sm btn-outline-secondary" type="submit">Salir</button></form></div>
         </header>
         <main id="main-content" class="main-content"><?= $content ?></main>
-        <footer class="workspace-footer">AIDEX · Administración de licencias <span>Zona horaria: <?= V::TIMEZONE ?></span></footer>
+        <footer class="workspace-footer">AD-EL POS — Licencias <span>Zona horaria: <?= V::TIMEZONE ?></span></footer>
     </div>
 <?php else: ?>
     <main class="auth-shell <?= $path === '/login' ? 'auth-login' : '' ?>">
         <section class="auth-brand-panel">
             <img
-                src="/assets/brand/<?= $path === '/login' ? 'logo-dark-v.svg' : 'logo-dark-h.svg' ?>"
+                src="/assets/brand/adel-pos-tema-oscuro.png"
                 class="auth-logo"
-                alt="AIDEX · Aplicación de Indexación Digital de Expedientes"
+                alt="AD-EL POS — Licencias"
             >
 
             <div class="auth-intro">
                 <span class="eyebrow light">CONTROL DE LICENCIAS</span>
 
-                <h1>Tu biblioteca digital,<br>ordenada y al alcance.</h1>
+                <h1>Licencias de AD-EL POS,<br>en orden y bajo control.</h1>
 
                 <p>
                     Administra clientes, productos y vigencias
@@ -80,12 +79,12 @@
             </div>
 
             <footer>
-                AIDEX
-                <span>Tu biblioteca digital, ordenada y al alcance.</span>
+                AD-EL POS
+                <span>Administración de licencias</span>
             </footer>
             </section>
 
-        <section class="auth-form-panel"><a href="/login" class="mobile-brand"><img src="/assets/brand/<?= $path === '/login' ? 'logo-v.svg' : 'logo-h.svg' ?>" alt="AIDEX · Aplicación de Indexación Digital de Expedientes"></a><div class="auth-form-wrap"><?= $content ?></div><p class="auth-footnote">Acceso exclusivo para personal autorizado.</p></section>
+        <section class="auth-form-panel"><a href="/login" class="mobile-brand"><img src="/assets/brand/adel-pos-tema-claro.png" alt="AD-EL POS — Licencias"></a><div class="auth-form-wrap"><?= $content ?></div><p class="auth-footnote">Acceso exclusivo para personal autorizado.</p></section>
     </main>
 <?php endif; ?>
 </body>

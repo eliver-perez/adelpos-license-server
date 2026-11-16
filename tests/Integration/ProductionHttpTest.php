@@ -68,14 +68,14 @@ final class ProductionHttpTest extends TestCase
         self::assertStringNotContainsString('domain=', $login['headers']);
         self::assertStringNotContainsString('x-powered-by:', $login['headers']);
         self::assertStringNotContainsString('adelpos_admin_dev', $login['headers']);
-        self::assertStringContainsString('AIDEX Licencias', $login['body']);
-        self::assertStringContainsString('Aplicación de Indexación Digital de Expedientes', $login['body']);
-        // The previous product's logos are not copied (stage 1, phase 1); the AD-EL POS brand
-        // and its check return in phase 5. Static asset serving is verified with existing assets.
-        foreach (['app.css','app.js'] as $file) {
+        self::assertStringContainsString('AD-EL POS — Licencias', $login['body']);
+        self::assertStringContainsString('/assets/brand/adel-pos-tema-oscuro.png', $login['body']);
+        // Brand files are served byte for byte and stay exactly as the owner supplied them.
+        foreach (['brand/adel-pos-tema-claro.png' => 'fece00410137a618703c5921d2ce2aac5ef06227836b75505201e58125e05434', 'brand/adel-pos-tema-oscuro.png' => '82e1a563a24ebe59fa3676fbb8cae430da4ddc263034583a0f40bbd985e29116', 'app.css' => null, 'app.js' => null] as $file => $sha256) {
             $asset = $this->stack->request('/assets/'.$file, '', 'GET');
             self::assertSame(200, $asset['status']);
             self::assertSame(file_get_contents(dirname(__DIR__, 2).'/public/assets/'.$file), $asset['body']);
+            if ($sha256 !== null) { self::assertSame($sha256, hash('sha256', $asset['body'])); self::assertStringContainsString('content-type: image/png', $asset['headers']); }
         }
         $admin = $this->stack->request('/admin', '', 'GET');
         self::assertSame(303, $admin['status']);
@@ -97,7 +97,7 @@ final class ProductionHttpTest extends TestCase
         $this->stack->privateFile('config.php', "<?php return ".var_export($values, true).";\n");
         $response = $this->stack->request('/login', '', 'GET');
         self::assertSame(503, $response['status']);
-        self::assertStringContainsString('AIDEX · Servicio no disponible', $response['body']);
+        self::assertStringContainsString('AD-EL POS — Licencias · Servicio no disponible', $response['body']);
         foreach (['private-secret', 'RuntimeException', $this->stack->directory, $values['DB_PASSWORD'], $values['MFA_KEY']] as $value) {
             self::assertStringNotContainsString($value, $response['body']);
         }

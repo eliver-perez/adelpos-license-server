@@ -22,7 +22,7 @@ final class DocumentService
             $license = $this->db->one('SELECT l.*,c.display_name AS holder,c.legal_name,c.tax_id,p.display_name AS product FROM licenses l JOIN customers c ON c.id=l.customer_id JOIN products p ON p.product_id=l.product_id WHERE license_id=? FOR UPDATE',[Uuid::bytes($licenseId)]) ?? throw new Problem('No se encontró la licencia.',404);
             $revision = 1 + (int)$this->db->execute('SELECT COALESCE(MAX(revision),0) FROM license_documents WHERE license_id=? AND document_type=?',[$license['license_id'],$type])->fetchColumn();
             $id = Uuid::create(); $verification = Crypto::token();
-            $folio = 'ADX-'.strtoupper(str_replace('-','',$id));
+            $folio = 'ADELPOS-'.strtoupper(str_replace('-','',$id));
             $public = ['folio'=>$folio,'type'=>$type,'revision'=>$revision,'generated_at'=>$this->clock->sql(),'product'=>$license['product'],'license_type'=>$license['license_type']];
             $limits = $this->db->one('SELECT max_installations,max_users FROM license_limits WHERE license_id=?',[$license['license_id']]);
             $features = array_column($this->db->all('SELECT c.display_name FROM license_features f JOIN product_capabilities c ON c.product_id=f.product_id AND c.capability_key=f.capability_key WHERE f.license_id=? AND f.enabled=1 ORDER BY c.capability_key',[$license['license_id']]),'display_name');

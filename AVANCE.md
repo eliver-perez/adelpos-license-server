@@ -9,7 +9,7 @@ Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no 
 | 2 — Renombre de la identidad interna | **Cerrada.** 162 pruebas, 20 997 aserciones, todas OK. Verificador Go OK con archivos regenerados. |
 | 3 — Esquema inicial consolidado | **Cerrada.** 161 pruebas, 20 980 aserciones, todas OK. Equivalencia con la cadena original comprobada. |
 | 4 — Retirar lo exclusivo de AIDEX | Pendiente |
-| 5 — Marca y textos | Pendiente |
+| 5 — Marca y textos | **Adelantada en parte** (instrucción del propietario): nombre, logos y constancias en el commit «Marca AD-EL POS». Faltan Playwright y la revisión de textos. |
 | 6 — Documentación y cierre | Pendiente |
 
 ---
@@ -490,3 +490,72 @@ Otras comprobaciones:
 - `generate-fixtures.php --check` da OK.
 - `php bin/check-secrets.php` no encuentra nada.
 - Quedan 0 bases y 0 usuarios de prueba.
+
+---
+
+## Marca AD-EL POS (adelantada de la Fase 5)
+
+Fecha: 2026-11-16. Por instrucción del propietario, se quitan desde ahora todas las menciones del producto anterior, y se usan los logos de `logos-adelpos/`.
+
+### Logos
+
+Copiados **sin modificar sus bytes** a `public/assets/brand/`:
+
+| Archivo | Uso | SHA-256 |
+| --- | --- | --- |
+| `adel-pos-tema-claro.png` | Fondos claros: acceso en móvil, resumen, productos, verificación de constancias, página de mantenimiento y constancias PDF | `fece00410137a618703c5921d2ce2aac5ef06227836b75505201e58125e05434` |
+| `adel-pos-tema-oscuro.png` | Fondos oscuros: barra lateral y panel de acceso | `82e1a563a24ebe59fa3676fbb8cae430da4ddc263034583a0f40bbd985e29116` |
+
+- **Sin versiones verticales** (decisión del propietario). Donde había logo vertical se usa el horizontal del tema que corresponde.
+- **Sin ícono de pestaña.** Se quitaron las referencias porque no hay ícono. Pendiente, si el propietario entrega uno.
+- **Observación:** `adel-pos-tema-oscuro.png` tiene píxeles blancos sueltos alrededor de «ADEL». Se usa tal cual.
+- `public/assets/app.css`: el logo de la barra lateral usa alto automático, porque el alto fijo de 90 px deformaba el PNG de proporción 3:1.
+
+### Textos
+
+- Nombre visible: **«AD-EL POS — Licencias»** en títulos, metadatos, pie del panel, pantalla de acceso, verificación de constancias y página de mantenimiento.
+- La pantalla de acceso tenía un lema del producto anterior sobre bibliotecas digitales. Ahora dice «Licencias de AD-EL POS, en orden y bajo control.» y «Administración de licencias».
+- `product-form.php`: se quitó la nota del «modo híbrido», que era del catálogo anterior y solo aparecía para ese producto.
+- `products.php`: la tarjeta de `adel_pos` muestra su logo; los demás productos, su nombre.
+- **Folio de constancias:** el prefijo `ADX-`, abreviatura del producto anterior, pasa a `ADELPOS-`.
+
+### Constancias PDF
+
+- Usan `adel-pos-tema-claro.png` (decisión del propietario). `CertificatePdf` verifica su SHA-256 fijo antes de usarlo y, si el archivo falta, muestra el nombre en texto.
+- **Copia reducida en memoria.** Para el PDF se reduce a 812 px de ancho (300 ppp al ancho de 195 pt). El archivo original no se modifica.
+
+  | Medida | PNG original | Copia reducida |
+  | --- | --- | --- |
+  | Peso de cada constancia | 324 KB | 74.5 KB |
+  | Tiempo de generación | 0.65 s | 0.14 s |
+
+  Cada constancia se guarda cifrada en la base, así que la diferencia se acumula.
+- Se revisó visualmente una constancia sintética: el logo se ve nítido, con el nombre y el pie de AD-EL POS. Pesó 94.6 KB.
+- Se eliminó `bin/render-brand.cjs`. Generaba el derivado PNG desde el SVG del producto anterior, y ya no hay SVG.
+
+### Pruebas
+
+- `ProductionHttpTest` comprueba que:
+  - la pantalla de acceso dice «AD-EL POS — Licencias» y usa el logo oscuro;
+  - los dos logos se sirven byte a byte, como `image/png`, con su SHA-256 original;
+  - la página de mantenimiento muestra el nombre nuevo.
+- Se quitó la aserción «la pantalla de acceso no contiene el nombre anterior», porque nombraba la marca. La comprobación queda en la búsqueda de cierre de abajo.
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 3 | 161 | 20 980 | OK |
+| **Marca AD-EL POS** | **161** | **20 988** | **OK**: unitarias 72/20 185, integración 89/803 |
+
+### Búsqueda de cierre
+
+```sh
+git grep -n -i -E 'aibid|aidex' -- . ':!*.md'      # 0 resultados
+git grep -n -E 'ADX' -- . ':!*.md'                 # 0 resultados
+```
+
+**Quedan menciones solo en documentación (`*.md`):**
+
+| Documento | Líneas | Por qué siguen |
+| --- | --- | --- |
+| `AVANCE.md` | 82 | Registro de procedencia y de cada cambio de esta etapa |
+| `DEPLOY_UBUNTU_24_04.md`, `OPERATIONS.md`, `README.md`, `TEST_PLAN.md`, `SCHEMA.md`, `SECURITY.md`, `ARCHITECTURE.md` | 135 en total | Son los documentos del producto anterior, copiados como base. La Fase 6 los reescribe completos; cambiar solo los nombres dejaría afirmaciones falsas sobre un gestor documental. |

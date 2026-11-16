@@ -7,8 +7,8 @@ $title = $licensing ? 'Constancia de licenciamiento' : 'Constancia de entrega pa
 <!doctype html><html lang="es"><head><meta charset="utf-8"><title><?= $title ?></title>
 <style>
 @page { margin: 30pt 38pt; } body { font-family: 'DejaVu Sans'; font-size: 9pt; color: #17243a; line-height: 1.3; }
-.logo { width: 360pt; height: 65pt; } h1 { font-size: 17pt; margin: 8pt 0 4pt; color: #142641; } h2 { font-size: 10pt; margin-top: 10pt; }
-.delivery .logo { width: 300pt; height: 54.167pt; }
+.logo { width: 195pt; height: 65pt; } h1 { font-size: 17pt; margin: 8pt 0 4pt; color: #142641; } h2 { font-size: 10pt; margin-top: 10pt; }
+.delivery .logo { width: 162.5pt; height: 54.167pt; }
 .logo-text { font-size: 22pt; font-weight: bold; color: #142641; margin: 0; }
 .delivery th, .delivery td { padding: 2.5pt 3pt; }
 .muted { color: #526276; } .folio { background: #edf2f8; padding: 9pt; font-size: 8pt; }
@@ -18,8 +18,8 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 .notice { border-left: 3pt solid #385782; padding: 6pt 9pt; background: #f6f8fb; } .verification { margin-top: 10pt; page-break-inside: avoid; } .qr { width: 72pt; height: 72pt; float: right; }
 .footer { margin-top: 10pt; border-top: 1pt solid #cad5e2; padding-top: 6pt; font-size: 7pt; }
 </style></head><body class="<?= $licensing?'licensing':'delivery' ?>">
-<?php if ($logo !== null): ?><img class="logo" src="<?= V::escape($logo) ?>" alt="AIDEX"><?php else: ?><p class="logo-text">AIDEX</p><?php endif; ?>
-<h1><?= $title ?></h1><?php if ($licensing): ?><p class="muted">AIDEX — Aplicación de Indexación Digital de Expedientes</p><?php endif; ?>
+<?php if ($logo !== null): ?><img class="logo" src="<?= V::escape($logo) ?>" alt="AD-EL POS"><?php else: ?><p class="logo-text">AD-EL POS</p><?php endif; ?>
+<h1><?= $title ?></h1><?php if ($licensing): ?><p class="muted">AD-EL POS — Licencias</p><?php endif; ?>
 <div class="folio"><strong>Folio: <?= V::escape($d['folio']) ?></strong> · Revisión <?= (int)$d['revision'] ?><br>Documento generado: <?= V::escape(V::date($d['generated_at'])) ?></div>
 <table>
 <tr><th>Titular / licenciatario</th><td><?= V::escape($d['holder']) ?></td></tr>
@@ -41,7 +41,7 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 <?php if ($d['activation_method']==='online'): ?>
 <p>Método: activación online con código y conexión al servidor de licencias.</p>
 <p class="code"><?= V::escape($d['activation_code']) ?></p>
-<p>Introduce el código en AIDEX, con o sin guiones. Completa la activación en la instalación autorizada. La entrega del código no confirma que la instalación esté activada. El código no sustituye el archivo firmado de una activación totalmente offline.</p>
+<p>Introduce el código en AD-EL POS, con o sin guiones. Completa la activación en la instalación autorizada. La entrega del código no confirma que la instalación esté activada. El código no sustituye el archivo firmado de una activación totalmente offline.</p>
 <?php else: ?>
 <p>Método: archivo firmado para activación offline. Instalación autorizada:<br><strong><?= V::escape($d['installation']) ?></strong></p>
 <p>Archivo: <?= V::escape($d['offline_filename']) ?><br>Revisión técnica: <?= (int)$d['license_revision'] ?> · Estado del archivo firmado: <?= V::escape($d['artifact_status']) ?></p>
@@ -51,5 +51,5 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 <p class="notice">CONFIDENCIAL. Custodia el código o archivo y entrégalo solo al responsable autorizado por un canal seguro. Esta entrega histórica no acredita vigencia actual.</p>
 <?php endif; ?>
 <div class="verification"><img class="qr" src="<?= V::escape($qr) ?>" alt="Verificación de constancia"><h2>Verificación de autenticidad</h2><p>Verifica folio, revisión, estado y SHA-256 del PDF recibido en el sitio oficial del QR. Un QR copiado no valida otro contenido.</p><p style="font-size:7pt;word-wrap:break-word"><?= V::escape($d['verification_url']) ?></p></div>
-<div class="footer">AIDEX — Aplicación de Indexación Digital de Expedientes. Documento histórico: sus condiciones pueden cambiar. La autenticidad documental no acredita activación vigente. Zona horaria: <?= V::TIMEZONE ?>.</div>
+<div class="footer">AD-EL POS — Licencias. Documento histórico: sus condiciones pueden cambiar. La autenticidad documental no acredita activación vigente. Zona horaria: <?= V::TIMEZONE ?>.</div>
 </body></html>
