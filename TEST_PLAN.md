@@ -59,7 +59,7 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 - `tests/MySqlFixture.php` crea por prueba una base y un usuario aleatorios `adelpos_license_test_<10 hex>`. Aplica `001_esquema_inicial.sql` y los GRANT reales de la cuenta de aplicación, y usa esa cuenta limitada para los servicios.
 - **Catálogo:** el esquema inicial solo trae `adel_pos`, sin módulos. La fixture agrega un **producto sintético** `producto_prueba` con cinco módulos (`prueba_a` a `prueba_e`) y una dependencia (`prueba_e` requiere `prueba_a`), para conservar las pruebas de dependencias y ciclos.
 - **Limpieza:** cada prueba borra su base, su usuario y sus llaves. Los directorios temporales usan el prefijo `adelpos-license-` y también se borran. Después de una corrida no deben quedar bases ni usuarios `adelpos_license_test_*`.
-- **Semillas públicas:** las llaves de `contracts/v1/fixtures/` se derivan de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`. Producción las rechaza.
+- **Semillas públicas:** las llaves de `contracts/v1/fixtures/` se derivan de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`. Se rechazan para licencias de producción y en servidores con `APP_ENV=production`.
 
 ## 4. Pruebas unitarias (`tests/Unit`)
 
@@ -69,7 +69,7 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 | `AuditLabelsTest` | Toda operación de auditoría de `src/` y `bin/` tiene etiqueta en español en el panel |
 | `EncryptedArchiveTest` | Archivo cifrado de respaldos: ida y vuelta por bloques, permisos privados, llave incorrecta, truncado o alterado, rutas peligrosas y destino existente |
 | `OfflineRequestTest` | Solicitud `.licreq`: bytes firmados exactos, proyección segura, firma alterada, claves duplicadas y tamaño máximo |
-| `ProductionConfigTest` | Configuración: orígenes inseguros, separación entre producción y desarrollo, entorno desconocido, claves reales obligatorias y emisor «AD-EL POS Licencias» del código de verificación |
+| `ProductionConfigTest` | Configuración: orígenes inseguros, separación entre producción y desarrollo, entorno desconocido, claves reales obligatorias y emisor «AD-EL POS Licencias» del código de verificación. Entorno de licencias: obligatorio, solo `test` o `production`, independiente de `APP_ENV`, y `production` solo con `APP_ENV=production`; el ejemplo y `bin/configure.php` lo piden de forma explícita |
 | `ProtectedRecordTest` | Registros cifrados ligados a su propósito y contexto; un propósito no puede usar el contexto de la evidencia sin internet |
 | `ProtocolTest` | JSON estricto, base64url canónico, esquema sin conversiones ni campos desconocidos, y JWS publicado idéntico byte a byte a los archivos del contrato |
 | `ReleasePackageTest` | Paquete de despliegue: contenido exacto con archivos locales sembrados, manifiesto, `.sha256`, y aborto si se versiona una llave |
@@ -80,12 +80,13 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 
 | Archivo | Qué cubre |
 | --- | --- |
-| `ActivationsTest` | Activación en línea: idempotencia, códigos viejos o mal formados, intentos limitados, desafíos (vencimiento exacto, un solo uso, acción ligada), derechos exactos, refresco, desactivación, revocación atómica, una instalación activa, rotación de llaves, fallos de firma o auditoría con reversión completa, y rechazo en producción de una llave derivada de semilla pública |
+| `ActivationsTest` | Activación en línea: idempotencia, códigos viejos o mal formados, intentos limitados, desafíos (vencimiento exacto, un solo uso, acción ligada), derechos exactos, refresco, desactivación, revocación atómica, una instalación activa, rotación de llaves, y fallos de firma o auditoría con reversión completa |
 | `AdministrationTest` | Esquema inicial (`adel_pos` sin módulos), creación única del primer administrador, emisión y conflictos, verificación en dos pasos y recuperación, renovación y mantenimiento, dependencias inválidas, permisos de consulta, último superadministrador, historia no editable, unicidad de credenciales y obligatoriedad de su copia protegida, búsqueda sin inyección y concurrencia entre dos procesos |
-| `BackupTest` | Respaldo cifrado por CLI con `mysqldump` 8.0, extracción y restauración solo en base vacía, conservando historia, llaves, evidencia y constancias |
+| `BackupTest` | Respaldo cifrado por CLI con `mysqldump` 8.0, extracción y restauración solo en base vacía, conservando historia, llaves, evidencia, constancias y el entorno de licencias |
 | `CommercialDeliveryTest` | Constancias PDF: idempotencia, historial de revisiones, códigos recuperables solo con permiso y verificación en dos pasos, archivo firmado inmutable, y formato de código desconocido no recuperable |
-| `HttpApiTest` | Ciclo en línea por HTTP real sin sesiones del panel; validación, TLS y límites con errores JSON estables |
-| `InitialSchemaTest` | Equivalencia de `001_esquema_inicial.sql` con la cadena original 001-007, leída del primer commit. Solo difieren los dos endurecimientos registrados. También: base vacía, repetición sin efecto, migrador (pendientes, modificadas e incompletas) y permisos por tabla |
+| `HttpApiTest` | Ciclo en línea por HTTP real sin sesiones del panel; validación, TLS y límites con errores JSON estables; respuesta 503, sin detalles, cuando la llave activa es de otro entorno de licencias o falta `LICENSE_ENVIRONMENT` |
+| `InitialSchemaTest` | Equivalencia de `001_esquema_inicial.sql`, sola, con la cadena original 001-007, leída del primer commit. Solo difieren los dos endurecimientos registrados. También: base vacía con todas las migraciones, repetición sin efecto, entornos de firma `test` y `production` en llaves y ámbitos, migrador (pendientes, modificadas e incompletas) y permisos por tabla |
+| `SigningEnvironmentsTest` | Entornos de firma del contrato: registro, archivo y carpeta por entorno; identificador sugerido y etiqueta del entorno; el servidor firma solo con la llave activa de su entorno, aunque se cambie la etiqueta en el registro o se copie el archivo; arranque y `bin/preflight.php` detenidos si la llave activa o la carpeta son de otro entorno; semillas públicas rechazadas; exportación de llaves públicas sin nada privado; y entorno visible en cada operación de `bin/signing-key.php` |
 | `OfflineTest` | Flujo sin internet: importación cifrada, bytes alterados, aprobación idempotente, rechazo, renovación, desactivación firmada, transferencia forzada atómica, evidencia alterada, roles, espacio de `request_id` compartido, recuperación por equipo averiado y concurrencia |
 | `ProductionHttpTest` | Pila real Nginx + PHP-FPM + TLS: cookies `__Host-`, encabezados de seguridad, marca AD-EL POS (logos servidos con su SHA-256), control de acceso, permisos de los controladores, privacidad de la verificación pública y página de mantenimiento sin secretos |
 | `TrustedDevicesHttpTest` | Dispositivos de confianza sobre HTTPS real: autorización, cierre de sesión, revocación, CSRF y origen ajeno |

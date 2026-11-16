@@ -20,7 +20,7 @@ El servidor de AD-EL POS verifica cada licencia sin internet, con las llaves pú
 | `public/index.php` | Punto de entrada único. Fija cabeceras de seguridad (CSP, `X-Frame-Options`, `Referrer-Policy`, HSTS con HTTPS) y entrega cada petición a `Http\Kernel`. Si algo falla al arrancar, responde 503 con un identificador de referencia y lo registra con el prefijo `adelpos-license`. |
 | `public/router.php` | Solo para el servidor PHP local de desarrollo: sirve los recursos estáticos y envía lo demás a `index.php`. |
 | `public/assets/` | `app.css`, `app.js`, Bootstrap 5 local (sin CDN) y la marca en `brand/` (`adel-pos-tema-claro.png`, `adel-pos-tema-oscuro.png`, `icon.png`). |
-| `src/App.php`, `src/Config.php` | Arranque y composición de servicios. La configuración viene de `ADELPOS_LICENSE_CONFIG` o de `config/local.php`. Las variables de entorno con el mismo nombre tienen prioridad, y `Config::validate()` revisa claves y origen. |
+| `src/App.php`, `src/Config.php` | Arranque y composición de servicios. La configuración viene de `ADELPOS_LICENSE_CONFIG` o de `config/local.php`. Las variables de entorno con el mismo nombre tienen prioridad, y `Config::validate()` revisa claves, origen y el entorno de licencias (`LICENSE_ENVIRONMENT`). `App::boot()` se detiene si la llave de firma activa es de otro entorno. |
 | `src/Http/` | `Kernel` (panel: rutas, sesión, CSRF, origen, redes permitidas), `ApiKernel` (API `/v1`), `View` (escape, fechas en `America/Monterrey` y etiquetas de auditoría) y `Network` (`ADMIN_NETWORKS`). |
 | `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios), `ActivationService` (API en línea), `OfflineService` (`.licreq`/`.lic`), `RevisionPublisher` (firma de revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias) y `Operations` (idempotencia). |
 | `src/Domain/` | Reglas sin estado: `Protocol`, `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `Input`, `Uuid`, `Problem` y `ApiProblem`. |
@@ -72,9 +72,11 @@ Recorrido de una petición:
 
 ## 5. Firma de licencias
 
-- **Llaves.** `SigningKeys` guarda cada llave privada Ed25519 en un archivo 0600 de `SIGNING_KEY_DIR`, por omisión `var/keys/<APP_ENV>`. En la base solo están la pública y una referencia.
-- **Estados y entornos.** Las llaves pasan por `staged`, `signing` y `verify_only`. `signing_scopes` marca la activa por entorno y propósito.
-- **Llaves de prueba.** En producción se rechazan las llaves derivadas de las semillas públicas de prueba.
+- **Entornos de firma.** `test` y `production`, según `LICENSE_ENVIRONMENT` (contrato, sección 3). Son independientes de `APP_ENV`: `licensing.sicrat.com` funciona con `APP_ENV=production` y `LICENSE_ENVIRONMENT=test`. Una base de datos pertenece a un solo entorno.
+- **Llaves.** `SigningKeys` guarda cada llave privada Ed25519 en un archivo 0600 de `SIGNING_KEY_DIR`, por omisión `var/keys/<entorno>`. En la base solo están la pública y una referencia. Cada llave, su archivo y su carpeta son de un solo entorno.
+- **Estados.** Las llaves pasan por `staged`, `signing` y `verify_only`. `signing_scopes` marca la activa por entorno y propósito, y el servidor firma solo con la de su entorno.
+- **Llaves de prueba.** Las llaves derivadas de las semillas públicas de prueba se rechazan para licencias de producción y en servidores con `APP_ENV=production`.
+- **Llaves públicas para AD-EL POS.** `bin/signing-key.php --action=export` entrega `kid`, `environment` y `public_key` de las llaves de licencias del entorno.
 - **Revisiones.** `RevisionPublisher` arma el contenido, incrementa el contador de revisión de la licencia y firma un JWS compacto (`EdDSA`). Cada revisión queda en `license_revisions` con su SHA-256; nunca se edita.
 
 ## 6. Flujo sin internet

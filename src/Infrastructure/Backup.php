@@ -23,7 +23,7 @@ final class Backup
                 $head = $this->app->db->one("SELECT * FROM audit_heads WHERE stream_id='admin' FOR SHARE");
                 $events = $this->app->audit->verify();
                 $values = [];
-                foreach (['APP_ENV','APP_URL','DB_DSN','DB_USER','DB_PASSWORD','ADMIN_NETWORKS','MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { $values[$name]=$this->app->config->get($name); }
+                foreach (['APP_ENV','LICENSE_ENVIRONMENT','APP_URL','DB_DSN','DB_USER','DB_PASSWORD','ADMIN_NETWORKS','MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { $values[$name]=$this->app->config->get($name); }
                 $values['SIGNING_KEY_DIR'] = $this->app->signingKeys->directory();
                 $files['config.json'] = $stage.'/config.json';
                 self::write($files['config.json'],json_encode($values,JSON_THROW_ON_ERROR));
@@ -41,7 +41,7 @@ final class Backup
                     $hashes[$name]=hash_file('sha256',$path);
                     if ($hashes[$name]===false) { throw new \RuntimeException('Cannot checksum staged backup file.'); }
                 }
-                return ['schema_version'=>1,'created_at'=>gmdate(DATE_ATOM),'environment'=>$this->app->config->get('APP_ENV'),'database'=>MySqlFiles::databaseName($this->app->config),'audit'=>['events'=>$events,'last_hash'=>$head['last_event_hash']],'files_sha256'=>$hashes,'migrations'=>$this->app->db->all('SELECT name,checksum,state FROM schema_migrations ORDER BY name')];
+                return ['schema_version'=>1,'created_at'=>gmdate(DATE_ATOM),'environment'=>$this->app->config->get('APP_ENV'),'license_environment'=>$this->app->signingKeys->environment(),'database'=>MySqlFiles::databaseName($this->app->config),'audit'=>['events'=>$events,'last_hash'=>$head['last_event_hash']],'files_sha256'=>$hashes,'migrations'=>$this->app->db->all('SELECT name,checksum,state FROM schema_migrations ORDER BY name')];
             });
             $files['manifest.json'] = $stage.'/manifest.json';
             self::write($files['manifest.json'],json_encode($manifest,JSON_THROW_ON_ERROR|JSON_PRETTY_PRINT));

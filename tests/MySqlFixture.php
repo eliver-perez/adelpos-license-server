@@ -36,7 +36,7 @@ final class MySqlFixture
         fclose($pipes[1]); fclose($pipes[2]);
         if (proc_close($process) !== 0) { throw new \RuntimeException('Grant generation failed: ' . $error); }
         foreach (explode(';', $grants) as $sql) { if (trim($sql) !== '') { $this->server->exec($sql); } }
-        $values = ['APP_ENV'=>'testing','APP_URL'=>'http://127.0.0.1:8088','DB_DSN'=>$databaseDsn,'DB_USER'=>$this->username,'DB_PASSWORD'=>$password,'SIGNING_KEY_DIR'=>sys_get_temp_dir().'/'.$this->database.'-keys'];
+        $values = ['APP_ENV'=>'testing','LICENSE_ENVIRONMENT'=>'test','APP_URL'=>'http://127.0.0.1:8088','DB_DSN'=>$databaseDsn,'DB_USER'=>$this->username,'DB_PASSWORD'=>$password,'SIGNING_KEY_DIR'=>sys_get_temp_dir().'/'.$this->database.'-keys'];
         foreach (['MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { $values[$name]=base64_encode(random_bytes(32)); }
         $this->values = $values;
         $config = new Config($values, false);
@@ -63,8 +63,17 @@ final class MySqlFixture
         if (!preg_match('/\Aadelpos_license_test_[a-f0-9]{10}\z/', $this->database)) { throw new \LogicException('Unsafe fixture identifier.'); }
         $this->server->exec('DROP DATABASE `' . $this->database . '`');
         $this->server->exec("DROP USER '" . $this->username . "'@'localhost'");
-        foreach (glob($this->values['SIGNING_KEY_DIR'].'/*.json') ?: [] as $file) { unlink($file); }
-        if (is_dir($this->values['SIGNING_KEY_DIR'])) { rmdir($this->values['SIGNING_KEY_DIR']); }
+        // The fixture folder, plus the folders of other license environments: «<folder>-<environment>».
+        foreach ([$this->values['SIGNING_KEY_DIR'], ...(glob($this->values['SIGNING_KEY_DIR'].'-*', GLOB_ONLYDIR) ?: [])] as $directory) {
+            foreach (glob($directory.'/*.json') ?: [] as $file) { unlink($file); }
+            if (is_dir($directory)) { rmdir($directory); }
+        }
+    }
+
+    /** The same database seen with another configuration, for example another license environment. */
+    public function appWith(array $overrides, ?FrozenClock $clock = null): App
+    {
+        return new App(new Config(array_replace($this->values, $overrides), false), $this->owner, $clock);
     }
 
     public function signingKeys(?FrozenClock $clock = null): \AdelPos\License\Infrastructure\SigningKeys

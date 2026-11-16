@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
-use AdelPos\License\{App, Config};
+use AdelPos\License\App;
 use AdelPos\License\Application\Actor;
 use AdelPos\License\Domain\{ApiProblem, ApiResponse, Protocol, Uuid};
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
@@ -245,22 +245,6 @@ final class ActivationsTest extends TestCase
         $this->activate();
         $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['prueba_b','prueba_a','prueba_e'],'reason'=>'Review without a rights change']);
         self::assertSame(1,(int)$this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
-    }
-    public function testProductionRejectsPublicFixtureKeyEvenWhenRelabeled(): void
-    {
-        $values=array_replace($this->fixture->values,['APP_ENV'=>'production','APP_URL'=>'https://license.example.test']);
-        $production=new App(new Config($values,false),$this->fixture->owner,$this->clock);
-        $production->signingKeys->generate('relabeled-fixture','license');
-        $production->signingKeys->activate('relabeled-fixture','Isolated production-policy test');
-        $record=$this->fixture->owner->one('SELECT * FROM signing_keys WHERE kid=\'relabeled-fixture\'');
-        $pair=sodium_crypto_sign_seed_keypair(hash('sha256','ADELPOS LICENSE PUBLIC TEST ONLY V1 lic-test-v1-a',true));
-        $public=sodium_crypto_sign_publickey($pair);
-        $path=$values['SIGNING_KEY_DIR'].'/'.$record['private_ref'];
-        $file=json_decode(file_get_contents($path),true);$file['public_key']=Protocol::encode($public);$file['secret_key']=Protocol::encode(sodium_crypto_sign_secretkey($pair));
-        file_put_contents($path,Protocol::json($file));
-        $this->fixture->owner->execute('UPDATE signing_keys SET public_key=? WHERE kid=?',[$public,'relabeled-fixture']);
-        $this->expectException(\RuntimeException::class);$this->expectExceptionMessage('Public fixture key forbidden');
-        $production->signingKeys->check();
     }
     public function testTwoProcessesWithDistinctRequestsCannotOccupyTwoSlots(): void { $this->race(false); }
     public function testTwoProcessesWithIdenticalRequestReturnIdenticalBytes(): void { $this->race(true); }

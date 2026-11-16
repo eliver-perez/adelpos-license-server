@@ -2,8 +2,13 @@
 declare(strict_types=1);
 namespace AdelPos\License;
 
+use AdelPos\License\Domain\Problem;
+
 final class Config
 {
+    /** Entornos de firma del contrato (§3). Son independientes de APP_ENV. */
+    public const LICENSE_ENVIRONMENTS = ['test', 'production'];
+
     public function __construct(private array $values = [], private bool $environmentOverrides = true) {}
 
     public static function load(): self
@@ -23,6 +28,16 @@ final class Config
         return in_array($this->get('APP_ENV', 'production'), ['development', 'testing'], true);
     }
 
+    /** Entorno de firma de las licencias: decide con qué llaves se firma y qué dice `environment`. */
+    public function licenseEnvironment(): string
+    {
+        $environment = $this->get('LICENSE_ENVIRONMENT');
+        if (!in_array($environment, self::LICENSE_ENVIRONMENTS, true)) {
+            throw new \RuntimeException('Invalid license environment.');
+        }
+        return $environment;
+    }
+
     public function key(string $name): string
     {
         $key = base64_decode($this->get($name), true);
@@ -36,6 +51,14 @@ final class Config
     {
         if (!in_array($this->get('APP_ENV', 'production'), ['production', 'development', 'testing'], true)) {
             throw new \RuntimeException('APP_ENV debe ser production, development o testing.');
+        }
+        $license = $this->get('LICENSE_ENVIRONMENT');
+        if (!in_array($license, self::LICENSE_ENVIRONMENTS, true)) {
+            throw new Problem(($license === '' ? 'Falta LICENSE_ENVIRONMENT en la configuración' : 'LICENSE_ENVIRONMENT tiene un valor no válido') . ': debe ser test o production. Es el entorno de firma de las licencias y no depende de APP_ENV.');
+        }
+        // Las llaves de producción nunca se usan con las facilidades de desarrollo (HTTP local, cookie sin prefijo).
+        if ($license === 'production' && $this->get('APP_ENV', 'production') !== 'production') {
+            throw new Problem('LICENSE_ENVIRONMENT=production solo se permite con APP_ENV=production.');
         }
         foreach (['MFA_KEY', 'CREDENTIAL_KEY', 'AUDIT_KEY', 'SESSION_KEY', 'OPERATION_KEY'] as $name) {
             $this->key($name);

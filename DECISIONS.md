@@ -120,3 +120,47 @@ Copiados sin modificar desde `logos-adelpos/` a `public/assets/brand/`. `Product
 | `icon.png` | Ícono de pestaña | `241504ff0356a39044862474bf3b071d82418a20763f001ba5e2f6287804456c` |
 
 Observación: `adel-pos-tema-oscuro.png` tiene píxeles blancos sueltos alrededor de «ADEL». Se usa tal cual.
+
+## 8. Decisiones del propietario durante la etapa 2
+
+Todas son del 2026-11-16, al cerrar la Fase 0. El detalle de cada consulta está en AVANCE.md, sección E2-0.5.
+
+| # | Decisión |
+| --- | --- |
+| 1 | **Marcas de herencia dentro de `001_esquema_inicial.sql`:** se quitan solo esas dos líneas de comentario cuando una migración nueva reemplace su regla. El esquema no cambia. Es la única excepción a «la migración 001 no se modifica». |
+| 2 | **Tres migraciones en lugar de una:** `002` en la Fase 1 (entornos de firma), `003` en la Fase 2 (modelo nuevo) y `004` en la Fase 4 (retira la huella, `license_limits` y las fechas heredadas, cuando el contenido deja de firmarlas). |
+| 3 | **`product_id` fijo:** el esquema de la licencia fija `adel_pos` y el servidor no firma otro producto. Las pruebas pasan a `adel_pos`. |
+| 4 | **`licensee_name`:** la razón social del cliente si está capturada; si no, el nombre comercial. |
+| 5 | **HTTP de los errores de transporte:** se conservan 404, 405, 413 y 415 con `code: INVALID_REQUEST`, documentados en OpenAPI. |
+| 6 | **Hora que no existe por un cambio de horario:** se usa el primer instante después del salto (lectura literal de la sección 5.1). |
+| 7 | **Desactivar una activación que ya terminó:** responde 200 con su revisión de cierre, sea cual sea el motivo. `REVOKED` queda solo para `activate`. |
+| 8 | Los criterios de AVANCE.md, sección E2-0.6, se aplican sin objeción. |
+
+## 9. Propuestas V1.1 del contrato
+
+El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una V1.1; la lista completa, con su texto, está en AVANCE.md, sección E2-0.5.
+
+| N.º | Sección | Aclaración | Estado |
+| --- | --- | --- | --- |
+| 1 | §2, §4 | `product_id` fijo en `adel_pos` también en el servidor | Aprobada (decisión 3) |
+| 2 | §4 | Origen de `licensee_name` | Aprobada (decisión 4) |
+| 3 | §8.7 | HTTP de los errores de transporte | Aprobada (decisión 5) |
+| 4 | §5.1 | Hora inexistente por cambio de horario | Aprobada (decisión 6) |
+| 5 | §8.6 | `deactivate` sobre una activación terminada | Aprobada (decisión 7) |
+| 6 a 13 | §13, §8.7, §4, §11, §5.2, §9.1, §2 | Casos de renovación en la etapa 3, uso de `INCOMPATIBLE_SCHEMA`, `request_id` nulo, nombres de los planes, motivo de la liberación forzada, edición del periodo inicial, casos sin internet y formatos menores | Aplicadas sin objeción (decisión 8) |
+
+## 10. Decisiones técnicas de la etapa 2
+
+### Fase 1 — Entornos de firma
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `LICENSE_ENVIRONMENT` no tiene valor por omisión. Sin ella no arranca el servidor ni ningún comando. | Nunca se firma en un entorno que nadie eligió. |
+| 2 | `LICENSE_ENVIRONMENT=production` solo se acepta con `APP_ENV=production`. La combinación inversa sí se permite: `licensing.sicrat.com` usa `APP_ENV=production` con `LICENSE_ENVIRONMENT=test`. | Las llaves de producción no deben usarse con las facilidades de desarrollo (HTTP local, cookie sin prefijo, sin revisión de permisos). No lo pedía la especificación. |
+| 3 | Las semillas públicas de prueba se rechazan con `LICENSE_ENVIRONMENT=production` y también con `APP_ENV=production`. | La segunda condición era la regla de la etapa 1; así tampoco el servidor de pruebas desplegado puede firmar con llaves que cualquiera conoce. |
+| 4 | Una base de datos pertenece a un solo entorno de licencias. Si la llave activa es de otro, el arranque se detiene. Por HTTP responde 503 sin explicar el motivo; el mensaje completo solo aparece en la terminal. | Evita que una licencia emitida en pruebas reciba después una firma de producción. El motivo no se muestra a quien no administra el servidor. |
+| 5 | `SIGNING_KEY_DIR` sigue siendo la carpeta exacta de las llaves; no se le agrega el entorno. Por omisión es `var/keys/<entorno>`. La separación se comprueba con el registro: `generate` y `bin/preflight.php` rechazan una carpeta que contenga llaves registradas en otro entorno. | Los respaldos y la restauración dependen de esa ruta exacta (`keys/` dentro del archivo cifrado). La comprobación no necesita abrir ningún archivo privado. |
+| 6 | Sin `--kid`, `generate` asigna `adelpos-test-AAAAMM-n` o `adelpos-prod-AAAAMM-n`. Se aceptan otros identificadores, salvo los que lleven la etiqueta del otro entorno. | El formato es el sugerido por la especificación; lo que se impide es una etiqueta engañosa. |
+| 7 | La exportación es un documento JSON con `environment` y `keys`, y cada llave con `kid`, `environment` y `public_key`. Incluye las llaves preparadas, la activa y las anteriores, solo de propósito `license`. | AD-EL POS debe confiar en una llave antes de que se active y seguir verificando licencias firmadas con las anteriores. |
+| 8 | `002_entornos_de_firma.sql` no convierte llaves de los entornos anteriores (`development`, `testing`): se detiene si existen. | No hay instalaciones con datos, y un archivo de llave declara su entorno: no se puede renombrar sin invalidarlo. |
+| 9 | Sin dependencias nuevas de Composer en esta fase. | — |

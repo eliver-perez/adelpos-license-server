@@ -72,7 +72,7 @@ final class RulesTest extends TestCase
 
     public function testDevelopmentHttpCannotBeUsedOnPublicOrigin(): void
     {
-        $values=['APP_ENV'=>'development','APP_URL'=>'http://public.example'];
+        $values=['APP_ENV'=>'development','LICENSE_ENVIRONMENT'=>'test','APP_URL'=>'http://public.example'];
         foreach(['MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { $values[$name]=base64_encode(random_bytes(32)); }
         $this->expectException(\RuntimeException::class);
         (new Config($values))->validate();

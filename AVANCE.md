@@ -872,8 +872,8 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 
 | Fase | Estado |
 | --- | --- |
-| 0 — Verificación contra el código | **Entregada.** 164 pruebas, 21 384 aserciones, todas OK. Sin cambios de código. Quedan 7 consultas abiertas para el propietario (E2-0.5). |
-| 1 — Entornos de firma | Pendiente |
+| 0 — Verificación contra el código | **Cerrada.** 164 pruebas, 21 384 aserciones, todas OK. Sin cambios de código. El propietario aprobó las 7 consultas (E2-0.5). |
+| 1 — Entornos de firma | **Cerrada.** 176 pruebas, 21 578 aserciones, todas OK. Verificador Go OK. Playwright OK. |
 | 2 — Modelo de datos | Pendiente |
 | 3 — Motor de fechas | Pendiente |
 | 4 — Contenido y firma de la licencia | Pendiente |
@@ -906,7 +906,7 @@ Entorno: el mismo de la etapa 1. PHP 8.5.7, PHPUnit 12.5.36, MySQL 8.0.46 en `/t
 
 Playwright no se ejecutó: la Fase 0 no lo pide. Se actualiza y se ejecuta en las fases 8 y 9, igual que en la etapa 1.
 
-**Observación:** en la carpeta temporal del sistema quedan dos registros de Playwright de la etapa 1 (`adelpos-license-panel-*.log`, 66 KB y 77 KB). `tests/run-panel-tests.php` crea ese registro y no lo borra. Se corrige en la Fase 8, junto con la actualización de Playwright.
+**Observación:** en la carpeta temporal del sistema quedan dos registros de Playwright de la etapa 1 (`adelpos-license-panel-*.log`, 66 KB y 77 KB). `tests/run-panel-tests.php` crea ese registro y no lo borra. Se corrigió en la Fase 1 (E2-1.3).
 
 ### E2-0.2 Los 20 puntos heredados y la fase que los resuelve
 
@@ -1062,7 +1062,7 @@ Pruebas del motor heredado que se reescriben: `ActivationsTest` (20), `OfflineTe
 
 ### E2-0.5 Consultas al propietario
 
-Estado de todas: **pendiente de respuesta**. La Fase 1 no empieza hasta tenerla.
+**Respuesta del propietario (2026-11-16): aprobadas las 7 propuestas**, es decir, las dos de la especificación y las propuestas V1.1 n.º 1 a 5. Los criterios de E2-0.6 se aplican sin objeción. Quedaron registradas en `DECISIONS.md`, secciones 8 y 9.
 
 **Sobre la especificación de la etapa**
 
@@ -1091,7 +1091,7 @@ Ninguna obliga a cambiar el contrato ahora. Si se aprueban, quedan como aclaraci
 | 12 | §9.1 | No define `renew` para una activación terminada, ni `activate` de la misma instalación que ya está activa. | Igual que en línea: `renew` entrega la revisión de cierre, y `activate` de la misma instalación entrega su revisión vigente sin crear otra activación (**se aplica**, E2-0.6). |
 | 13 | §2, §8.3, §9.1 | No fija el largo de `app_version` ni si los demás UUID admiten mayúsculas. | `app_version`: de 1 a 100 caracteres, sin caracteres de control, como hoy. `server_id` solo en minúsculas; los demás UUID se aceptan en cualquier caja, como hoy (**se aplica**, E2-0.6). |
 
-Las consultas que necesitan respuesta son las dos de la especificación y las propuestas V1.1 n.º 1 a 5.
+Las consultas que necesitaban respuesta eran las dos de la especificación y las propuestas V1.1 n.º 1 a 5. Todas quedaron aprobadas.
 
 ### E2-0.6 Criterios que se aplican salvo indicación contraria
 
@@ -1133,3 +1133,107 @@ git grep -n -o -E "HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCI
 # Rastros del protocolo heredado, sin documentación ni archivos generados
 git grep -c -E "installation_id|fingerprint_(version|hash)|LIC-V1|LICREQ-V1|lic\+jws|license_limits" -- . ':!*.md' ':!contracts/v1/fixtures/*'
 ```
+
+---
+
+## Etapa 2 · Fase 1 — Entornos de firma (contrato §3)
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### E2-1.1 Qué cambió
+
+| Punto de la especificación | Cómo quedó |
+| --- | --- |
+| 1. Configuración obligatoria `LICENSE_ENVIRONMENT` | `Config` la exige con valor `test` o `production`, sin valor por omisión. Es independiente de `APP_ENV`. `config/local.example.php` la trae como `test`, junto al dominio de pruebas, y `bin/configure.php` exige `--license-environment`. |
+| 2. Cada llave es de un solo entorno | `SigningKeys` usa el entorno de licencias, ya no `APP_ENV`. El registro y la carpeta (`var/keys/<entorno>` por omisión) están separados. El servidor firma solo con la llave activa de su entorno. |
+| 2. El arranque y `bin/preflight.php` fallan si la llave activa no corresponde | `App::boot()` se detiene si la llave activa de la base es de otro entorno. Por HTTP responde 503 sin explicar el motivo; en la terminal el mensaje nombra la llave y los dos entornos. `bin/preflight.php` muestra el entorno y revisa además la carpeta. |
+| 2. Formato sugerido de `kid` | Sin `--kid`, `generate` asigna `adelpos-test-AAAAMM-n` o `adelpos-prod-AAAAMM-n`. Rechaza un `kid` con la etiqueta del otro entorno. |
+| 3. Semillas públicas de prueba | Rechazadas con `LICENSE_ENVIRONMENT=production`, aunque se cambie el nombre en el archivo y en el registro. También con `APP_ENV=production` (criterio 3 de E2-0.6). |
+| 4. `bin/signing-key.php` | Cada operación empieza con `Entorno de licencias: <entorno>`. La acción nueva `export` imprime las llaves públicas de licencias del entorno. |
+
+**Migración nueva: `database/migrations/002_entornos_de_firma.sql`.** Cambia la restricción `chk_signing_environment` de `signing_keys` a `test` y `production`, y agrega la misma restricción a `signing_scopes` (`chk_scope_environment`). No crea tablas, así que `bin/grants.php` no cambia. Se detiene si la base tiene llaves de los entornos anteriores.
+
+**Respaldos.** El archivo cifrado guarda `LICENSE_ENVIRONMENT` en su configuración y `license_environment` en su manifiesto. Una restauración conserva el entorno.
+
+Salida real de la exportación, con una base sintética:
+
+```json
+{
+    "environment": "test",
+    "keys": [
+        {
+            "kid": "adelpos-test-202611-1",
+            "environment": "test",
+            "public_key": "Spf1kXd0rOukj-5SVljReAPOC4DCZ2TVHisvd5gMIAk"
+        },
+        {
+            "kid": "adelpos-test-202611-2",
+            "environment": "test",
+            "public_key": "RFWeYgwWKDQBNTnBUuvDzYHxmhGPlJjsbUUDBaaKGLA"
+        }
+    ]
+}
+```
+
+Archivos de código modificados: `src/Config.php`, `src/App.php`, `src/Infrastructure/SigningKeys.php`, `src/Infrastructure/Backup.php`, `bin/signing-key.php`, `bin/preflight.php`, `bin/configure.php` y `config/local.example.php`.
+
+### E2-1.2 Decisiones técnicas
+
+Están en `DECISIONS.md`, sección 10. Tres van más allá de la letra de la especificación y el propietario puede revertirlas:
+
+1. **`LICENSE_ENVIRONMENT=production` solo se acepta con `APP_ENV=production`.** La especificación dice que las dos son independientes, y lo son en el caso que describe: `APP_ENV=production` con `LICENSE_ENVIRONMENT=test`. Lo que se impide es lo contrario: firmar licencias de producción desde un servidor en modo de desarrollo.
+2. **Una base de datos pertenece a un solo entorno.** No se puede cambiar `LICENSE_ENVIRONMENT` en una instalación que ya tiene una llave activa: el servidor deja de arrancar. Pasar de pruebas a producción es instalar otro servidor, con otra base y otras llaves.
+3. **`SIGNING_KEY_DIR` sigue siendo la carpeta exacta.** No se le agrega el entorno, porque los respaldos y la restauración usan esa ruta tal cual. La guía de despliegue pasa a usar `shared/keys/test`. La separación se comprueba con el registro: una carpeta no puede contener llaves registradas en otro entorno.
+
+### E2-1.3 Pruebas
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 0 | 164 | 21 384 | OK |
+| **Cierre de la Fase 1** | **176** | **21 578** | **OK**: unitarias 79/20 604, integración 97/974, sin omisiones ni advertencias |
+
+**Cambios en el número de pruebas (+12):**
+
+| Cambio | Pruebas | Detalle |
+| --- | --- | --- |
+| Nuevas | +7 | `SigningEnvironmentsTest` (archivo nuevo) |
+| Nuevas | +4 | `ProductionConfigTest`: entorno obligatorio y sin valor por omisión; independencia de `APP_ENV`; producción solo con `APP_ENV=production`; ejemplo y configurador |
+| Nueva | +1 | `InitialSchemaTest::testSigningKeysBelongOnlyToTheTestOrProductionLicenseEnvironment` |
+| Nueva | +1 | `HttpApiTest::testServerAnswersUnavailableWhenItsActiveKeyBelongsToAnotherLicenseEnvironment` |
+| Movida | −1 | `ActivationsTest::testProductionRejectsPublicFixtureKeyEvenWhenRelabeled` pasa a `SigningEnvironmentsTest::testPublicFixtureSeedsAreRejectedForProductionLicensesAndOnProductionServers`, ampliada de un caso a seis |
+
+**Ajustadas, sin cambiar lo que prueban:**
+- `InitialSchemaTest`: la equivalencia compara `001_esquema_inicial.sql` sola, y la base vacía se comprueba con todas las migraciones.
+- `ProductionConfigTest::testProductionRequiresRealApplicationKeys` y `RulesTest::testDevelopmentHttpCannotBeUsedOnPublicOrigin` indican el entorno de licencias, para seguir fallando por su motivo original. La primera ahora comprueba además el mensaje.
+- `BackupTest`: comprueba que el respaldo conserva el entorno de licencias.
+- `MySqlFixture`: usa `LICENSE_ENVIRONMENT=test` y limpia las carpetas de llaves de otros entornos.
+
+**Las pruebas que pedía la fase:**
+
+| Prueba pedida | Dónde |
+| --- | --- |
+| No se puede firmar con una llave de otro entorno | `SigningEnvironmentsTest::testServerSignsOnlyWithTheActiveKeyOfItsLicenseEnvironment`: sin llave propia no firma; el registro no admite cruzar entornos; cambiar la etiqueta en el registro o copiar el archivo a la otra carpeta tampoco sirve |
+| `preflight` detecta cuando no coinciden | `SigningEnvironmentsTest::testPreflightDetectsLicenseEnvironmentMismatchAndSharedKeyFolders`, con el comando real. El arranque: `testServerDoesNotBootWhenItsActiveKeyBelongsToAnotherLicenseEnvironment` y, por HTTP, `HttpApiTest` |
+| Producción rechaza las semillas de prueba | `SigningEnvironmentsTest::testPublicFixtureSeedsAreRejectedForProductionLicensesAndOnProductionServers`, con las cuatro semillas |
+| La exportación no incluye ningún secreto | `SigningEnvironmentsTest::testPublicKeyExportContainsOnlyPublicLicenseKeysOfTheEnvironment`: busca en la salida la llave secreta, la semilla y la referencia de cada archivo privado |
+
+**Comprobación de las pruebas.** Se quitó cada regla por separado, 14 veces, y en las 14 falló alguna prueba: la comprobación del arranque; cada una de las dos condiciones de las semillas; la revisión de la carpeta al generar y en `preflight`; la etiqueta del `kid`; los tres filtros de la exportación; el uso del entorno de licencias en lugar de `APP_ENV`; las dos reglas de `Config`; la restricción de la migración, y el entorno en el respaldo. El código se restauró idéntico después de cada una.
+
+**Otras comprobaciones:**
+- Verificador Go: «OK: 5 JWS, 3 proofs, 3 offline requests, 3 negative JWS». Los archivos de `contracts/v1/` siguen siendo los heredados hasta la Fase 7.
+- `generate-fixtures.php --check`: OK.
+- `bin/check-secrets.php`: sin hallazgos.
+- Playwright: panel y dispositivos de confianza OK. No lo pedía la fase; se corrió porque cambió el arranque.
+- Residuos: 0 bases y 0 usuarios de prueba; ninguna carpeta ni registro temporal.
+
+**Registro de Playwright (observación de E2-0.1, adelantada de la Fase 8).** `tests/run-panel-tests.php` borra ahora el registro del servidor local cuando las pruebas pasan, y lo conserva solo si fallan. Se eliminaron los dos registros que quedaban de la etapa 1 y el de esta corrida.
+
+### E2-1.4 Documentación
+
+Actualizados solo en lo que cambia esta fase: `README.md` (configuración y llaves de firma), `OPERATIONS.md` (tabla de configuración, llaves y revisión previa), `SECURITY.md` (validación y entornos de firma), `SCHEMA.md` (migraciones y entornos de las llaves), `ARCHITECTURE.md` (firma), `TEST_PLAN.md` (pruebas nuevas) y `DEPLOY_UBUNTU_24_04.md` (el dominio de pruebas usa `--license-environment=test`, la carpeta `shared/keys/test` y la exportación de llaves). `DECISIONS.md` tiene las secciones 8 a 10, nuevas.
+
+### E2-1.5 Pendientes que deja la fase
+
+- **Fase 4:** el campo `environment` todavía no está en el contenido firmado. Al agregarlo, la firma debe rechazar un contenido cuyo entorno no sea el de la llave.
+- **Fase 7:** los nombres de las semillas públicas de prueba cambian con los archivos nuevos; hay que actualizar la lista de `SigningKeys` y agregar al verificador Go la confianza por entorno.
+- **Etapa 5:** la guía de despliegue solo se ajustó en la configuración y las llaves.

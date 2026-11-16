@@ -6,7 +6,7 @@ Cómo configurar, operar, respaldar y verificar el servidor. La instalación pas
 >
 > | Etapa | Qué cambia en la operación |
 > | --- | --- |
-> | 2 | Contenido de la licencia, rutas, prueba de posesión, archivos `.licreq`/`.lic` y entornos de firma `test`/`production` |
+> | 2 | Contenido de la licencia, rutas, prueba de posesión y archivos `.licreq`/`.lic`. Los entornos de firma `test`/`production` ya están en uso (sección 5) |
 > | 3 | Planes, tipos de licencia (incluida la prueba), fechas de calendario, renovación y propagación de planes |
 > | 4 | Transferencia por autoservicio, alertas y ajustes del flujo sin internet |
 > | 5 | Pantallas nuevas del panel, contenido de las constancias y despliegue en el VPS |
@@ -29,22 +29,25 @@ La configuración es un arreglo PHP. Se lee del archivo indicado en `ADELPOS_LIC
 | Clave | Uso |
 | --- | --- |
 | `APP_ENV` | `production`, `development` o `testing`. Fuera de desarrollo local, HTTPS es obligatorio |
+| `LICENSE_ENVIRONMENT` | **Obligatoria.** `test` o `production`: el entorno de firma de las licencias. No depende de `APP_ENV`. `licensing.sicrat.com` usa `test` con `APP_ENV=production`. `production` solo se permite con `APP_ENV=production` |
 | `APP_URL` | Origen del sitio, sin subdirectorio. Pruebas: `https://licensing.sicrat.com` |
 | `DB_DSN`, `DB_USER`, `DB_PASSWORD` | Conexión de la cuenta de aplicación (`adelpos_license_app`, permisos restringidos) |
 | `MFA_KEY`, `CREDENTIAL_KEY`, `AUDIT_KEY`, `SESSION_KEY`, `OPERATION_KEY` | Cinco claves independientes de 32 bytes. **Se conservan en toda actualización y restauración** |
 | `ADMIN_NETWORKS` | Redes CIDR desde las que se permite el panel, separadas por comas. Vacío: cualquier red (sigue exigiendo contraseña y verificación en dos pasos) |
-| `SIGNING_KEY_DIR` | Directorio absoluto de las llaves privadas de firma, fuera de `public/`. Por omisión, `var/keys/<APP_ENV>` |
+| `SIGNING_KEY_DIR` | Directorio absoluto de las llaves privadas de firma, fuera de `public/`. Por omisión, `var/keys/<LICENSE_ENVIRONMENT>`. Cada entorno de licencias usa su propia carpeta |
 
 Crear una configuración nueva:
 
 ```sh
-php bin/configure.php --env=production --url=https://licensing.sicrat.com \
+php bin/configure.php --env=production --license-environment=test --url=https://licensing.sicrat.com \
   --dsn='mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=adelpos_license;charset=utf8mb4' \
   --user=adelpos_license_app --output=/srv/adelpos-license/shared/config.php \
-  --signing-dir=/srv/adelpos-license/shared/keys
+  --signing-dir=/srv/adelpos-license/shared/keys/test
 ```
 
-Pide la contraseña de la base sin mostrarla, genera las cinco claves y escribe el archivo con permisos 0600. Nunca reemplaza un archivo existente.
+Pide la contraseña de la base sin mostrarla, genera las cinco claves y escribe el archivo con permisos 0600. Nunca reemplaza un archivo existente. `--license-environment` se indica siempre; el comando no asume ninguno.
+
+Una base de datos pertenece a un solo entorno de licencias. Para pasar de pruebas a producción se instala otro servidor, con otra base y otras llaves; no se cambia `LICENSE_ENVIRONMENT` en una instalación que ya firma.
 
 ## 3. Base de datos
 
@@ -53,7 +56,7 @@ Pide la contraseña de la base sin mostrarla, genera las cinco claves y escribe 
 | Aplicar migraciones (cuenta de migración, contraseña sin eco) | `php bin/migrate.php --user=adelpos_license_migrate` |
 | Generar los GRANT de la cuenta de aplicación | `php bin/grants.php --database=adelpos_license --user=adelpos_license_app` |
 
-- El esquema se crea con una sola migración, `database/migrations/001_esquema_inicial.sql`. Solo inserta el producto `adel_pos` («AD-EL POS»), sin módulos. Las tablas y columnas están en [SCHEMA.md](SCHEMA.md).
+- El esquema se crea con las migraciones de `database/migrations/`, en orden. `001_esquema_inicial.sql` solo inserta el producto `adel_pos` («AD-EL POS»), sin módulos; `002_entornos_de_firma.sql` deja los entornos de firma `test` y `production`. Las tablas y columnas están en [SCHEMA.md](SCHEMA.md).
 - El migrador guarda el checksum de cada archivo, usa un bloqueo para que no haya dos migraciones a la vez y se detiene ante una migración incompleta o modificada. Una migración aplicada no se edita: los cambios van en un archivo nuevo.
 - `bin/grants.php` imprime los GRANT por tabla. La cuenta de aplicación no puede modificar ni borrar historia: auditoría, revisiones firmadas, cambios comerciales y decisiones sin internet.
 
@@ -74,17 +77,31 @@ Pide la contraseña de la base sin mostrarla, genera las cinco claves y escribe 
 ## 5. Llaves de firma
 
 ```sh
-php bin/signing-key.php --action=generate --kid=lic-prod-2026-a --purpose=license --user=adelpos_license_migrate
+php bin/signing-key.php --action=generate --user=adelpos_license_migrate
 php bin/signing-key.php --action=list
-php bin/signing-key.php --action=activate --kid=lic-prod-2026-a --reason="Pública distribuida" --trust-confirmed --user=adelpos_license_migrate
+php bin/signing-key.php --action=export > llaves-publicas.json
+php bin/signing-key.php --action=activate --kid=adelpos-test-202611-1 --reason="Pública distribuida" --trust-confirmed --user=adelpos_license_migrate
 php bin/preflight.php --require-signer
 ```
 
-- `generate` crea una llave privada aleatoria en `SIGNING_KEY_DIR` (0600) y muestra solo la pública. Queda en estado `staged`.
+Cada comando muestra primero el entorno de licencias en el que opera (`Entorno de licencias: test`).
+
+- **Entornos.** Cada llave pertenece a un solo entorno de licencias (`test` o `production`), el de `LICENSE_ENVIRONMENT` al generarla. El registro (`signing_keys`, `signing_scopes`) y la carpeta están separados por entorno. El servidor solo firma con la llave activa de su entorno.
+- `generate` crea una llave privada aleatoria en `SIGNING_KEY_DIR` (0600) y muestra solo la pública. Queda en estado `staged`. Sin `--kid` asigna el siguiente identificador del entorno: `adelpos-test-AAAAMM-n` o `adelpos-prod-AAAAMM-n`. Rechaza un `kid` con la etiqueta del otro entorno y una carpeta que ya tenga llaves del otro entorno.
+- `export` imprime las llaves públicas de licencias del entorno, en el formato que AD-EL POS incluye en su versión. Contiene las preparadas, la activa y las anteriores, y nada privado:
+
+  ```json
+  {
+      "environment": "test",
+      "keys": [
+          { "kid": "adelpos-test-202611-1", "environment": "test", "public_key": "<32 bytes en base64url>" }
+      ]
+  }
+  ```
 - `activate` exige `--trust-confirmed`: confirma que la pública ya se distribuyó en AD-EL POS por un canal autenticado. Las llaves anteriores quedan para verificación (`verify_only`) y no se borran.
 - **Rotación:** generar otro `kid`, distribuir la nueva pública junto con las anteriores y solo después activarla.
-- En producción se rechazan las llaves derivadas de las semillas públicas de prueba (`ADELPOS LICENSE PUBLIC TEST ONLY V1 …`).
-- **Herencia temporal (etapa 2):** los entornos de firma son `production`, `development` y `testing`. El contrato define `test` y `production`, con `kid` asociado al entorno.
+- Las llaves derivadas de las semillas públicas de prueba (`ADELPOS LICENSE PUBLIC TEST ONLY V1 …`) se rechazan con `LICENSE_ENVIRONMENT=production` y en cualquier servidor con `APP_ENV=production`.
+- **Si la llave activa es de otro entorno,** el servidor no arranca: el panel y la API responden 503 y los comandos se detienen con un mensaje que nombra la llave y los dos entornos. Se corrige `LICENSE_ENVIRONMENT` o se apunta a la base de ese entorno.
 
 ## 6. Licencias y operación sin internet
 
@@ -142,6 +159,8 @@ La tarea no borra respaldos antiguos. La retención y la copia externa las defin
   - MySQL 8;
   - que las migraciones estén completas y sus checksums coincidan;
   - en producción, que la cuenta de aplicación no pueda modificar ni borrar historia.
+
+  También muestra el entorno de licencias y se detiene si la llave activa es de otro entorno o si la carpeta de llaves contiene llaves de otro entorno.
 
   Con `--require-signer` verifica además la llave de firma activa del entorno.
 

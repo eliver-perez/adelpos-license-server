@@ -8,6 +8,7 @@
 // «panel» usa el servidor PHP local en 127.0.0.1:8088; «trusted» usa Nginx, PHP-FPM y TLS reales
 // (TEST_FPM_BIN, TEST_NGINX_BIN y TEST_OPENSSL_BIN si no están en PATH). Chrome: CHROME_PATH.
 // Al terminar se eliminan la base y el usuario de prueba, las llaves y la configuración temporal.
+// El registro temporal del servidor se conserva solo si hubo fallas.
 declare(strict_types=1);
 
 $mode = $argv[1] ?? 'all';
@@ -75,5 +76,7 @@ function trusted(string $root, array $env, string $log): int
 $status = 0;
 if ($mode !== 'trusted') { $status |= panel($root, $env, $pdo, $log); }
 if ($mode !== 'panel') { $status |= trusted($root, $env, $log); }
+// El registro del servidor local solo sirve para diagnosticar una falla: si todo pasó, se borra.
+if ($status === 0 && is_file($log)) { unlink($log); }
 fwrite(STDOUT, $status === 0 ? "Pruebas del panel: OK. Datos sintéticos eliminados.\n" : "Pruebas del panel: con fallas. Datos sintéticos eliminados; registro: $log\n");
 exit($status === 0 ? 0 : 1);

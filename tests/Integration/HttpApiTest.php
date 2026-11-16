@@ -92,6 +92,25 @@ final class HttpApiTest extends TestCase
         self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM admin_sessions')->fetchColumn());
         self::assertStringNotContainsString($license['secret'],file_get_contents($this->directory.'/server.log'));
     }
+    public function testServerAnswersUnavailableWhenItsActiveKeyBelongsToAnotherLicenseEnvironment(): void
+    {
+        $keys=$this->fixture->signingKeys();$kid=$keys->generate('','license')['kid'];$keys->activate($kid,'HTTP fixture');
+        $path='/v1/activations/challenge';
+        $body=Protocol::json(['action'=>'activate','product_id'=>'producto_prueba','installation_id'=>Uuid::create(),'activation_id'=>null]);
+        self::assertSame(200,$this->http($path,$body)['status']);
+        // Same database and keys, but the configuration now claims the other license environment.
+        $this->config=array_replace($this->config,['APP_ENV'=>'production','APP_URL'=>'https://license.example.test','LICENSE_ENVIRONMENT'=>'production']);$this->writeConfig();
+        $api=$this->http($path,$body);self::assertSame(503,$api['status']);self::assertSame('TEMPORARY_UNAVAILABLE',$api['json']['error']['code']);
+        $panel=$this->http('/login','','GET');self::assertSame(503,$panel['status']);
+        foreach([$api['body'],$panel['body']] as $response){self::assertStringNotContainsString($kid,$response);self::assertStringNotContainsString('LICENSE_ENVIRONMENT',$response);}
+        self::assertStringContainsString('Problem at SigningKeys.php',file_get_contents($this->directory.'/server.log'));
+        // A configuration without license environment does not start either.
+        $this->config=array_replace($this->fixture->values,['APP_URL'=>$this->origin]);unset($this->config['LICENSE_ENVIRONMENT']);$this->writeConfig();
+        self::assertSame(503,$this->http($path,$body)['status']);
+        $this->config['LICENSE_ENVIRONMENT']='test';$this->writeConfig();
+        self::assertSame(200,$this->http($path,$body)['status']);
+        self::assertSame(2,(int)$this->fixture->owner->execute('SELECT COUNT(*) FROM activation_challenges')->fetchColumn());
+    }
     public function testHttpValidationTlsAndRateLimitsUseStableJsonErrors(): void
     {
         $path='/v1/activations/challenge';

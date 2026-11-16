@@ -27,10 +27,14 @@ consoleRun(function (): void {
             }
         }
     }
+    // App::boot() ya rechazó una llave activa de otro entorno. Aquí se revisa además la carpeta.
+    $environment = $app->signingKeys->environment();
+    $app->signingKeys->assertSeparateFolder();
+    fwrite(STDOUT, 'Entorno de licencias: ' . $environment . ". Sus llaves y su carpeta no se mezclan con las de otro entorno.\n");
     $options = getopt('', ['require-signer']);
     if (array_key_exists('require-signer', $options)) {
         $app->signingKeys->check();
-        fwrite(STDOUT, "Firmante de licencias del entorno verificado.\n");
+        fwrite(STDOUT, 'Llave firmante de licencias del entorno ' . $environment . " verificada.\n");
     }
     fwrite(STDOUT, 'PHP ' . PHP_VERSION . ' · MySQL ' . $version . " · configuración y extensiones verificadas.\n");
     fwrite(STDOUT, "Comprueba también el binario PHP-FPM, TLS y la raíz web public/ antes de desplegar.\n");

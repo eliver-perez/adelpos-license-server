@@ -1,6 +1,6 @@
 # Modelo de datos
 
-Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física es una sola migración: [`database/migrations/001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql). MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
+Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido, que no se modifica, y [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
 Las partes marcadas como **Herencia temporal** provienen del motor de licencias heredado. Siguen vigentes, pero se reemplazan en las etapas 2 a 4 según el [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md). En el código están señaladas con `HEREDADO:`; la lista completa está en [AVANCE.md](AVANCE.md), sección 4.2.
 
@@ -64,8 +64,8 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 
 | Tabla | Propósito | Restricciones clave | Escribe |
 | --- | --- | --- | --- |
-| `signing_keys` | Llaves públicas Ed25519 con `kid`, entorno, propósito, estado y referencia opaca al archivo privado. **Ninguna llave privada en la base.** | `environment` en `production`, `development`, `testing`; `purpose` en `license`, `manifest`; `state` en `staged`, `signing`, `verify_only` | `SigningKeys` (por CLI) |
-| `signing_scopes` | Llave activa por entorno y propósito | Llave foránea compuesta: no se cruzan entornos ni propósitos | `SigningKeys` (por CLI) |
+| `signing_keys` | Llaves públicas Ed25519 con `kid`, entorno, propósito, estado y referencia opaca al archivo privado. **Ninguna llave privada en la base.** | `environment` en `test`, `production` (entorno de firma del contrato, no `APP_ENV`); `purpose` en `license`, `manifest`; `state` en `staged`, `signing`, `verify_only` | `SigningKeys` (por CLI) |
+| `signing_scopes` | Llave activa por entorno y propósito | `environment` en `test`, `production`. Llave foránea compuesta: no se cruzan entornos ni propósitos | `SigningKeys` (por CLI) |
 
 ### Activación en línea
 
@@ -86,7 +86,7 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 
 ## 3. Datos iniciales
 
-La migración solo inserta:
+La migración inicial solo inserta:
 
 - `security_state`: la fila `1`.
 - `audit_heads`: la cabeza `admin` con secuencia 0 y hash de 64 ceros.
@@ -132,6 +132,7 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 - Usa un bloqueo de MySQL `adelpos-license-migrations-` más 32 hexadecimales del hash de la base. MySQL limita los nombres de bloqueo a 64 caracteres.
 - Exige MySQL 8 y rechaza MariaDB.
 - Separa sentencias por `;` al final de línea; los comentarios del archivo no deben terminar en `;`.
+- `002_entornos_de_firma.sql` se detiene si la base tiene llaves de los entornos anteriores (`development` o `testing`): esas llaves no se pueden conservar.
 - Las DDL de MySQL confirman implícitamente: una migración fallida no se revierte sola. Se despliega con respaldo previo y `bin/preflight.php`, que verifica que todas las migraciones estén aplicadas con su checksum.
 
 ## 8. Prueba de equivalencia
@@ -139,12 +140,13 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 `tests/Integration/InitialSchemaTest.php` aplica, en bases temporales:
 
 1. La cadena heredada de siete migraciones. Se lee del primer commit del repositorio, identificado por el SHA-256 de su `composer.lock`.
-2. `001_esquema_inicial.sql`.
+2. `001_esquema_inicial.sql`, sola, sin las migraciones posteriores.
 
 Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, juego de caracteres, columnas generadas), índices, llaves foráneas y restricciones `CHECK`. **Las únicas diferencias admitidas son las dos columnas endurecidas.** La misma prueba comprueba:
 
-- la base vacía con solo `adel_pos`;
+- la base vacía con solo `adel_pos`, después de aplicar todas las migraciones;
 - que repetir la migración no hace nada;
+- que las llaves y sus ámbitos solo admiten los entornos `test` y `production`, y que no se cruzan;
 - el rechazo de migraciones modificadas o incompletas;
 - los permisos por tabla.
 
@@ -157,5 +159,4 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 | `licenses.maintenance_until`, `entitled_release_until`, `maintenance_purchases` | Mantenimiento y versiones autorizadas | Etapa 3 (`updates_until` del contrato) |
 | `activations.installation_id`, `fingerprint_version`, `fingerprint_hash` | Identidad con huella del equipo, versión `'1'` | Etapa 2 (`server_id` y llave de licencias de la instalación; la huella queda fuera de V1) |
 | `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | Etapas 2 y 4 (transferencia por autoservicio) |
-| `signing_keys.environment` (`production`, `development`, `testing`) | Entornos de la aplicación | Etapa 2 (entornos de firma `test` y `production` del contrato) |
 | `product_capabilities`, `capability_dependencies`, `license_features` | Módulos genéricos | Se conservan como `features` del contrato (vacío en V1); su uso comercial se define en la etapa 3 |

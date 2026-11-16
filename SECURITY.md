@@ -40,6 +40,8 @@ Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, 
 - **Ubicación.** La configuración vive en `config/local.php` (fuera de git) o en la ruta que indique `ADELPOS_LICENSE_CONFIG`. `bin/configure.php` la crea con permisos 0600. Las variables de proceso tienen prioridad.
 - **Validación (`Config::validate`).**
   - `APP_ENV` debe ser `production`, `development` o `testing`.
+  - `LICENSE_ENVIRONMENT` es obligatoria y debe ser `test` o `production`. No tiene valor por omisión: nunca se firma en un entorno que nadie eligió.
+  - `LICENSE_ENVIRONMENT=production` exige `APP_ENV=production`, para que las llaves de producción no se usen con las facilidades de desarrollo.
   - `APP_URL` debe ser un origen sin ruta.
   - **HTTPS es obligatorio** fuera del desarrollo local en 127.0.0.1, localhost o ::1.
   - Las cinco llaves de aplicación deben ser válidas.
@@ -62,7 +64,12 @@ Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, 
 ## 3. Llaves de firma
 
 - **Algoritmo.** Ed25519 mediante Sodium; no hay implementación propia.
-- **Almacenamiento.** Las llaves privadas viven en archivos JSON 0600, dentro de un directorio 0700 (`SIGNING_KEY_DIR` o `var/keys/<APP_ENV>`), siempre **fuera de `public/`**. El nombre del archivo es una referencia aleatoria; nunca se arma con un `kid` recibido por HTTP.
+- **Entornos de firma (contrato, sección 3).** Hay dos, `test` y `production`, definidos por `LICENSE_ENVIRONMENT` e independientes de `APP_ENV`. Cada llave pertenece a uno solo:
+  - el registro guarda el entorno de cada llave, y una llave foránea compuesta impide que la llave activa de un entorno sea de otro;
+  - el archivo privado también declara su entorno, y se rechaza si no coincide con el registro;
+  - la carpeta es distinta por entorno, y ni `generate` ni `bin/preflight.php` aceptan una carpeta con llaves de otro;
+  - el servidor firma solo con la llave activa de su entorno. Si la llave activa de la base es de otro, **no arranca**: responde 503 sin revelar el motivo, y `bin/preflight.php` lo explica en la terminal.
+- **Almacenamiento.** Las llaves privadas viven en archivos JSON 0600, dentro de un directorio 0700 (`SIGNING_KEY_DIR` o `var/keys/<LICENSE_ENVIRONMENT>`), siempre **fuera de `public/`**. El nombre del archivo es una referencia aleatoria; nunca se arma con un `kid` recibido por HTTP.
 - **En la base** solo están la llave pública, el `kid`, el entorno, el propósito, el estado y la referencia opaca.
 - **Comprobaciones al cargar (`SigningKeys::readSecret`):**
   - ubicación fuera de `public/`;
@@ -71,10 +78,11 @@ Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, 
   - tamaño máximo;
   - coincidencia de `kid`, entorno, propósito y llave pública entre archivo y base;
   - que el par Ed25519 sea consistente.
-- **Llaves públicas de prueba.** En producción se rechazan las cuatro llaves de los archivos de prueba del contrato, derivadas de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`, aunque se les cambie el nombre. Lo verifica `ActivationsTest::testProductionRejectsPublicFixtureKeyEvenWhenRelabeled`.
+- **Llaves públicas de prueba.** Las cuatro llaves de los archivos de prueba del contrato, derivadas de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`, se rechazan con `LICENSE_ENVIRONMENT=production` y en cualquier servidor con `APP_ENV=production`, aunque se les cambie el nombre en el archivo y en el registro. Así tampoco `licensing.sicrat.com` puede firmar con ellas. Lo verifica `SigningEnvironmentsTest::testPublicFixtureSeedsAreRejectedForProductionLicensesAndOnProductionServers`.
+- **Exportación de llaves públicas.** `bin/signing-key.php --action=export` lee solo el registro, nunca los archivos privados, y entrega `kid`, `environment` y `public_key` de las llaves de licencias del entorno.
 - **Generación y rotación** solo por CLI (`bin/signing-key.php`) con una cuenta de MySQL de gestión. La cuenta de la aplicación solo lee `signing_keys` y `signing_scopes`. Rotar deja la llave anterior en `verify_only` y no altera los JWS ya archivados.
 
-> **Herencia temporal.** Los entornos de las llaves son los de la aplicación (`production`, `development`, `testing`). El contrato exige entornos de firma `test` y `production`, con el campo `environment` en la licencia y una confianza separada en el cliente: etapa 2.
+> **Pendiente en la etapa 2.** El campo `environment` todavía no forma parte del contenido firmado de la licencia; se agrega con el contenido del contrato (Fase 4). La confianza por entorno en AD-EL POS corresponde a su etapa de integración.
 
 ## 4. Acceso al panel
 

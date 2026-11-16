@@ -56,6 +56,9 @@ final class App
     {
         $config = Config::load();
         $config->validate();
-        return new self($config, Database::connect($config), null);
+        $app = new self($config, Database::connect($config), null);
+        // El servidor no arranca si su llave activa es de otro entorno de licencias.
+        $app->signingKeys->assertEnvironment();
+        return $app;
     }
 }

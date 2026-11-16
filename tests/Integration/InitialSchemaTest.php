@@ -18,6 +18,8 @@ final class InitialSchemaTest extends TestCase
         'column license_credentials.code_format IS_NULLABLE: YES -> NO',
         'column license_credentials.credential_encrypted IS_NULLABLE: YES -> NO',
     ];
+    /** Every migration, in order. Only the first one is compared with the inherited chain. */
+    private const MIGRATIONS = ['001_esquema_inicial.sql', '002_entornos_de_firma.sql'];
     private \PDO $server;
     private string $dsn;
     /** @var list<string> */
@@ -48,7 +50,7 @@ final class InitialSchemaTest extends TestCase
         [$inheritedName, $inherited] = $this->database();
         self::assertSame(array_keys($origin), (new Migrator($inherited, $this->directory($origin)))->migrate());
         [$initialName, $initial] = $this->database();
-        self::assertSame(['001_esquema_inicial.sql'], (new Migrator($initial, self::migrations()))->migrate());
+        self::assertSame(['001_esquema_inicial.sql'], (new Migrator($initial, $this->directory(['001_esquema_inicial.sql' => (string) file_get_contents(self::migrations() . '/001_esquema_inicial.sql')])))->migrate());
         $before = $this->schema($inheritedName);
         $after = $this->schema($initialName);
         self::assertCount(34, $before['tables']);
@@ -58,7 +60,8 @@ final class InitialSchemaTest extends TestCase
     public function testEmptyDatabaseGetsOnlyAdelPosWithoutModulesAndRepeatingDoesNothing(): void
     {
         [$name, $db] = $this->database();
-        self::assertSame(['001_esquema_inicial.sql'], (new Migrator($db, self::migrations()))->migrate());
+        self::assertSame(array_map('basename', glob(self::migrations() . '/*.sql')), self::MIGRATIONS);
+        self::assertSame(self::MIGRATIONS, (new Migrator($db, self::migrations()))->migrate());
         $schema = $this->schema($name);
         self::assertSame([['product_id' => 'adel_pos', 'display_name' => 'AD-EL POS', 'state' => 'active']], $db->all('SELECT product_id,display_name,state FROM products'));
         foreach (['product_capabilities', 'capability_dependencies', 'licenses', 'admin_users', 'signing_keys'] as $table) {
@@ -68,7 +71,36 @@ final class InitialSchemaTest extends TestCase
         self::assertSame(['admin', 0], array_values(array_map(static fn($v) => is_numeric($v) ? (int) $v : $v, $db->one('SELECT stream_id,last_sequence FROM audit_heads'))));
         self::assertSame([], (new Migrator($db, self::migrations()))->migrate());
         self::assertSame($schema, $this->schema($name));
-        self::assertSame(['001_esquema_inicial.sql' => 'complete'], array_column($db->all('SELECT name,state FROM schema_migrations'), 'state', 'name'));
+        self::assertSame(array_fill_keys(self::MIGRATIONS, 'complete'), array_column($db->all('SELECT name,state FROM schema_migrations ORDER BY name'), 'state', 'name'));
+    }
+
+    public function testSigningKeysBelongOnlyToTheTestOrProductionLicenseEnvironment(): void
+    {
+        [, $db] = $this->database();
+        (new Migrator($db, self::migrations()))->migrate();
+        $key = static fn(string $kid, string $environment): array => ['INSERT INTO signing_keys(kid,environment,purpose,public_key,private_ref,created_at) VALUES (?,?,\'license\',?,?,UTC_TIMESTAMP(6))', [$kid, $environment, random_bytes(32), bin2hex(random_bytes(16)) . '.json']];
+        foreach (['test', 'production'] as $environment) {
+            $db->execute(...$key('llave-' . $environment, $environment));
+            $db->execute('INSERT INTO signing_scopes(environment,purpose,active_kid) VALUES (?,\'license\',?)', [$environment, 'llave-' . $environment]);
+        }
+        foreach (['development', 'testing', 'prod', ''] as $environment) {
+            foreach ([$key('llave-' . $environment, $environment), ['INSERT INTO signing_scopes(environment,purpose) VALUES (?,\'license\')', [$environment]]] as [$sql, $parameters]) {
+                try { $db->execute($sql, $parameters); self::fail('Accepted signing environment: ' . $environment); }
+                catch (\PDOException $error) { self::assertSame(3819, (int) $error->errorInfo[1]); }
+            }
+        }
+        // A scope can never point to a key of another environment.
+        try { $db->execute("UPDATE signing_scopes SET active_kid='llave-test' WHERE environment='production'"); self::fail('Crossed environments'); }
+        catch (\PDOException $error) { self::assertSame(1452, (int) $error->errorInfo[1]); }
+
+        // Keys of the earlier application environments cannot be carried over: the migration stops.
+        [, $legacy] = $this->database();
+        $first = $this->directory(['001_esquema_inicial.sql' => (string) file_get_contents(self::migrations() . '/001_esquema_inicial.sql')]);
+        (new Migrator($legacy, $first))->migrate();
+        $legacy->execute(...$key('llave-anterior', 'testing'));
+        try { (new Migrator($legacy, self::migrations()))->migrate(); self::fail('Migrated a key of an application environment'); }
+        catch (\PDOException $error) { self::assertSame(3819, (int) $error->errorInfo[1]); }
+        self::assertMigrationRejected($legacy, self::migrations(), 'incompleta');
     }
 
     public function testMigratorAppliesOnlyPendingFilesAndRejectsModifiedOrIncompleteOnes(): void

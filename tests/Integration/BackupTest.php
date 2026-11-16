@@ -59,6 +59,9 @@ final class BackupTest extends TestCase
             self::assertTrue($extracted['verified']); self::assertSame(4,$extracted['files']);
             $saved = json_decode(file_get_contents($directory.'/restored/config.json'),true,16,JSON_THROW_ON_ERROR);
             foreach (['MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { self::assertSame($fixture->values[$name],$saved[$name]); }
+            // The backup keeps its license environment: restoring never changes which keys sign.
+            self::assertSame('test',$saved['LICENSE_ENVIRONMENT']);
+            self::assertSame('test',json_decode(file_get_contents($directory.'/restored/manifest.json'),true,16,JSON_THROW_ON_ERROR)['license_environment']);
             self::assertStringNotContainsString('DROP TABLE',file_get_contents($directory.'/restored/database.sql'));
             $fixture->owner->execute('CREATE DATABASE `'.$target.'` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'); $created = true;
             $dsn = str_replace('dbname='.$fixture->database,'dbname='.$target,$saved['DB_DSN']);

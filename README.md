@@ -25,9 +25,11 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
 3. Genera la configuración y sus claves. La contraseña de MySQL se pide sin mostrarla:
 
    ```sh
-   php bin/configure.php --env=development --url=http://127.0.0.1:8088 \
+   php bin/configure.php --env=development --license-environment=test --url=http://127.0.0.1:8088 \
        --dsn='mysql:host=127.0.0.1;dbname=adelpos_license_dev;charset=utf8mb4' --user=adelpos_license_dev_app
    ```
+
+   `--license-environment` es obligatorio: indica con qué llaves se firman las licencias (`test` o `production`) y no depende de `--env`. Ver «Llaves de firma».
 
    Se crea `config/local.php` con permisos 0600. Ese archivo no se versiona: `.gitignore` lo excluye y la revisión de secretos lo detectaría. `config/local.example.php` muestra las claves disponibles, sin valores secretos. Para guardar la configuración fuera del código, apunta la variable `ADELPOS_LICENSE_CONFIG` a otro archivo. Las variables de entorno con el mismo nombre que una clave tienen prioridad.
 4. Aplica el esquema y los permisos:
@@ -37,7 +39,7 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
    php bin/grants.php --database=adelpos_license_dev --user=adelpos_license_dev_app   # imprime los GRANT; aplícalos con una cuenta autorizada
    ```
 
-   El esquema es una sola migración, `database/migrations/001_esquema_inicial.sql`, que crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos. El migrador la registra con su checksum. Si repites la migración no cambia nada, y si el archivo se modifica después de aplicarlo, el migrador se detiene.
+   El esquema está en `database/migrations/`. `001_esquema_inicial.sql` crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos; las migraciones siguientes lo adaptan al contrato, empezando por `002_entornos_de_firma.sql`. El migrador registra cada archivo con su checksum. Si repites la migración no cambia nada, y si un archivo se modifica después de aplicarlo, el migrador se detiene.
 5. Crea el primer administrador y comprueba la instalación:
 
    ```sh
@@ -51,7 +53,7 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
 **Notas:**
 - La raíz web es siempre `public/`, con su propio origen (sin subdirectorio).
 - No hay instalador web ni cuenta predeterminada.
-- En producción se usa `--env=production`, una URL HTTPS y PHP-FPM; la guía es [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md).
+- En un servidor se usa `--env=production`, una URL HTTPS y PHP-FPM; la guía es [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md). `licensing.sicrat.com` es solo para pruebas: lleva `--env=production` y `--license-environment=test`.
 - Con HTTPS, después de la verificación en dos pasos se puede confiar en el navegador durante 30 días. La contraseña sigue siendo obligatoria, y la confianza se revoca en **Mi seguridad**.
 
 ### Llaves de firma
@@ -59,15 +61,19 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
 Las licencias se firman con llaves Ed25519 que se administran por CLI. La llave privada nunca sale del servidor:
 
 ```sh
-php bin/signing-key.php --action=generate --kid=lic-dev-2026-a --purpose=license --user=adelpos_license_dev_migrate
+php bin/signing-key.php --action=generate --user=adelpos_license_dev_migrate     # asigna adelpos-test-AAAAMM-n
 php bin/signing-key.php --action=list
-php bin/signing-key.php --action=activate --kid=lic-dev-2026-a --reason='Llave pública entregada a AD-EL POS' --trust-confirmed --user=adelpos_license_dev_migrate
+php bin/signing-key.php --action=export > llaves-publicas-test.json               # para incluirlas en AD-EL POS
+php bin/signing-key.php --action=activate --kid=adelpos-test-202611-1 --reason='Llave pública incluida en AD-EL POS' --trust-confirmed --user=adelpos_license_dev_migrate
 php bin/preflight.php --require-signer
 ```
 
-- Las llaves privadas se guardan en `SIGNING_KEY_DIR`, por omisión `var/keys/<APP_ENV>`, con permisos 0600 y fuera de `public/`.
-- `APP_ENV` separa las llaves de cada entorno.
-- Las llaves derivadas de las semillas públicas de prueba se rechazan en producción.
+- **Dos entornos de firma, separados:** `test` y `production` (contrato, sección 3). Los define `LICENSE_ENVIRONMENT`, que es obligatorio y no depende de `APP_ENV`. `LICENSE_ENVIRONMENT=production` solo se permite con `APP_ENV=production`.
+- **Cada llave es de un solo entorno.** El servidor firma únicamente con la llave activa del suyo. Si la llave activa de la base es de otro entorno, el servidor no arranca y `bin/preflight.php` lo indica.
+- **Carpeta por entorno.** Las llaves privadas se guardan en `SIGNING_KEY_DIR`, por omisión `var/keys/<entorno>`, con permisos 0600 y fuera de `public/`. Una carpeta no puede mezclar llaves de dos entornos.
+- **Identificador (`kid`).** Si no se indica `--kid`, se asigna el siguiente con el formato `adelpos-test-AAAAMM-n` o `adelpos-prod-AAAAMM-n`. Un `kid` no puede llevar la etiqueta del otro entorno.
+- **Exportación.** `--action=export` imprime en JSON las llaves públicas de licencias del entorno: `kid`, `environment` y `public_key`. No contiene nada privado. Cada comando muestra el entorno en el que opera.
+- **Semillas públicas de prueba.** Las llaves de los archivos de prueba del contrato se rechazan con `LICENSE_ENVIRONMENT=production` y en cualquier servidor con `APP_ENV=production`, aunque se les cambie el nombre.
 - Sin una llave activa, las operaciones que necesitan firmar responden 503 y se revierten; el panel sigue disponible.
 
 ## Pruebas

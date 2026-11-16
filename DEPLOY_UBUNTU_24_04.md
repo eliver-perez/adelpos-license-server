@@ -1,6 +1,8 @@
 # AD-EL POS — Licencias: instalación en licensing.sicrat.com
 
 > **Etapa 1:** esta guía solo se renombró para AD-EL POS (usuario, pool, rutas, servicios y dominio de pruebas). Su revisión completa y el despliegue en el VPS corresponden a la **etapa 5**. `licensing.sicrat.com` es el dominio de **pruebas** y usa llaves de prueba (contrato, sección 14).
+>
+> **Etapa 2:** la configuración y las llaves usan el entorno de licencias `test` (`--license-environment=test`), con `--env=production` para la seguridad del servidor.
 
 Alternativa concreta Ubuntu 24.04 + Nginx; la operación general está en [OPERATIONS.md](OPERATIONS.md). Estos comandos los ejecuta el operador en el VPS. Versiones del VPS: Ubuntu 24.04, PHP 8.3.6, MySQL 8.0.46 y Nginx 1.24.0. El servidor requiere PHP 8.3+ y **MySQL 8**, no MariaDB. Go y Node no se instalan en el VPS.
 
@@ -91,7 +93,7 @@ GRANT ALL PRIVILEGES ON adelpos_license.* TO 'adelpos_license_migrate'@'localhos
 Guardar las dos contraseñas que imprime MySQL en el gestor de secretos. La cuenta de migración solo administra esta base; sus credenciales no se guardan en PHP-FPM. Usamos socket para que el DSN corresponda a las cuentas `localhost`.
 
 ```sh
-sudo -u adelpos-license php8.3 bin/configure.php --env=production --url=https://licensing.sicrat.com --dsn='mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=adelpos_license;charset=utf8mb4' --user=adelpos_license_app --output=/srv/adelpos-license/shared/config.php --signing-dir=/srv/adelpos-license/shared/keys
+sudo -u adelpos-license php8.3 bin/configure.php --env=production --license-environment=test --url=https://licensing.sicrat.com --dsn='mysql:unix_socket=/var/run/mysqld/mysqld.sock;dbname=adelpos_license;charset=utf8mb4' --user=adelpos_license_app --output=/srv/adelpos-license/shared/config.php --signing-dir=/srv/adelpos-license/shared/keys/test
 sudo chown root:root /srv/adelpos-license/shared
 sudo chmod 0755 /srv/adelpos-license/shared
 sudo touch /srv/adelpos-license/shared/maintenance.flag
@@ -101,7 +103,7 @@ sudo mysql < /home/eliver/adelpos-license-runtime-grants.sql
 sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/preflight.php
 ```
 
-Las contraseñas se introducen sin eco en una terminal. Se crean cinco claves independientes en `shared/config.php`, con permisos 0600; conservarlas en toda actualización. `shared/` pasa a ser propiedad de root y permite a Nginx comprobar el indicador de mantenimiento; `config.php`, claves, temporales y logs permanecen privados. La migración única `001_esquema_inicial.sql` crea el esquema completo y solo el producto `adel_pos`, sin módulos; el migrador conserva el control por checksum.
+Las contraseñas se introducen sin eco en una terminal. Se crean cinco claves independientes en `shared/config.php`, con permisos 0600; conservarlas en toda actualización. `shared/` pasa a ser propiedad de root y permite a Nginx comprobar el indicador de mantenimiento; `config.php`, claves, temporales y logs permanecen privados. Las migraciones de `database/migrations/` se aplican en orden: `001_esquema_inicial.sql` crea el esquema y solo el producto `adel_pos`, sin módulos, y las siguientes lo adaptan al contrato; el migrador conserva el control por checksum. `preflight` muestra el entorno de licencias (`test`).
 
 Si deseas restringir el panel por red, editar `ADMIN_NETWORKS` dentro de `shared/config.php` con CIDR separados por comas. Vacío requiere igualmente autenticación/MFA, pero permite conexiones desde cualquier red. No configurar encabezados de proxy como sustituto de HTTPS; estos ejemplos suponen Nginx directamente expuesto.
 
@@ -109,33 +111,32 @@ Si deseas restringir el panel por red, editar `ADMIN_NETWORKS` dentro de `shared
 
 ```sh
 sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/bootstrap-admin.php --login=administrador@example.com --name='Administración AD-EL POS'
-sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/signing-key.php --action=generate --kid=lic-prod-2026-a --purpose=license --user=adelpos_license_migrate
+sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/signing-key.php --action=generate --user=adelpos_license_migrate
 sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/signing-key.php --action=list
+sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/signing-key.php --action=export
 ```
 
 Reemplazar el login por el administrador real. Bootstrap pide una contraseña nueva dos veces y solo funciona en una base sin administradores. La CLI de firma crea una privada aleatoria y muestra únicamente la pública y sus metadatos; aún no la activa.
 
-Incorporar la pública mostrada al conjunto de confianza de la distribución de AD-EL POS por su canal autenticado. El formato exacto de esa configuración en AD-EL POS se define en su etapa de integración; este fragmento es **referencial (herencia temporal)**:
+Cada comando muestra `Entorno de licencias: test`. `generate` asigna el identificador `adelpos-test-AAAAMM-1` y deja la privada en `shared/keys/test`.
+
+`export` imprime las llaves públicas de licencias del entorno. Ese documento se incluye en las versiones de **desarrollo** de AD-EL POS por su canal autenticado; cómo lo incorpora AD-EL POS se define en su etapa de integración:
 
 ```json
 {
-  "license": {
-    "server_url": "https://licensing.sicrat.com",
-    "trusted_keys": [
-      {"kid":"lic-prod-2026-a","public_key":"REEMPLAZAR_POR_LA_PUBLICA_BASE64URL","environment":"production","purpose":"license"}
-    ],
-    "refresh_hours": 24,
-    "development_bypass": false
-  }
+    "environment": "test",
+    "keys": [
+        { "kid": "adelpos-test-202611-1", "environment": "test", "public_key": "REEMPLAZAR_POR_LA_PUBLICA_BASE64URL" }
+    ]
 }
 ```
 
-Un fragmento así se integra en la configuración existente del cliente; no reemplaza el resto del archivo ni las públicas antiguas. `public_key` son 32 bytes Ed25519 en base64url sin `=`. El cliente de producción rechaza claves de prueba y CA/bypass de desarrollo. Nunca distribuir privadas, aceptar una pública porque acompaña a un `.lic`, ni inventar una ruta pública `/v1/keys`.
+Las llaves nuevas se agregan a las anteriores; no las reemplazan. `public_key` son 32 bytes Ed25519 en base64url sin `=`. Las versiones de producción de AD-EL POS solo confían en llaves del entorno `production` y nunca en las de este dominio de pruebas. Nunca distribuir privadas, aceptar una pública porque acompaña a un `.lic`, ni inventar una ruta pública `/v1/keys`.
 
 Una vez comprobada la distribución:
 
 ```sh
-sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/signing-key.php --action=activate --kid=lic-prod-2026-a --reason='Pública incorporada y verificada en la distribución de AD-EL POS' --trust-confirmed --user=adelpos_license_migrate
+sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/signing-key.php --action=activate --kid=adelpos-test-202611-1 --reason='Pública incorporada y verificada en la distribución de AD-EL POS' --trust-confirmed --user=adelpos_license_migrate
 sudo -u adelpos-license env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/preflight.php --require-signer
 ```
 
