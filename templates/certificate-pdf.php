@@ -9,6 +9,7 @@ $title = $licensing ? 'Constancia de licenciamiento' : 'Constancia de entrega pa
 @page { margin: 30pt 38pt; } body { font-family: 'DejaVu Sans'; font-size: 9pt; color: #17243a; line-height: 1.3; }
 .logo { width: 360pt; height: 65pt; } h1 { font-size: 17pt; margin: 8pt 0 4pt; color: #142641; } h2 { font-size: 10pt; margin-top: 10pt; }
 .delivery .logo { width: 300pt; height: 54.167pt; }
+.logo-text { font-size: 22pt; font-weight: bold; color: #142641; margin: 0; }
 .delivery th, .delivery td { padding: 2.5pt 3pt; }
 .muted { color: #526276; } .folio { background: #edf2f8; padding: 9pt; font-size: 8pt; }
 table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { border-bottom: 1pt solid #e2e8f0; padding: 4pt 3pt; text-align: left; vertical-align: top; } th { width: 34%; font-weight: bold; }
@@ -17,7 +18,7 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 .notice { border-left: 3pt solid #385782; padding: 6pt 9pt; background: #f6f8fb; } .verification { margin-top: 10pt; page-break-inside: avoid; } .qr { width: 72pt; height: 72pt; float: right; }
 .footer { margin-top: 10pt; border-top: 1pt solid #cad5e2; padding-top: 6pt; font-size: 7pt; }
 </style></head><body class="<?= $licensing?'licensing':'delivery' ?>">
-<img class="logo" src="<?= V::escape($logo) ?>" alt="AIDEX">
+<?php if ($logo !== null): ?><img class="logo" src="<?= V::escape($logo) ?>" alt="AIDEX"><?php else: ?><p class="logo-text">AIDEX</p><?php endif; ?>
 <h1><?= $title ?></h1><?php if ($licensing): ?><p class="muted">AIDEX — Aplicación de Indexación Digital de Expedientes</p><?php endif; ?>
 <div class="folio"><strong>Folio: <?= V::escape($d['folio']) ?></strong> · Revisión <?= (int)$d['revision'] ?><br>Documento generado: <?= V::escape(V::date($d['generated_at'])) ?></div>
 <table>

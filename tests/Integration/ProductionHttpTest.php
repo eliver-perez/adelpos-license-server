@@ -71,11 +71,12 @@ final class ProductionHttpTest extends TestCase
         self::assertStringNotContainsString('AIBID', $login['body']);
         self::assertStringContainsString('AIDEX Licencias', $login['body']);
         self::assertStringContainsString('Aplicación de Indexación Digital de Expedientes', $login['body']);
-        foreach (['logo-h.svg','logo-v.svg','logo-dark-h.svg','logo-dark-v.svg'] as $file) {
-            $asset = $this->stack->request('/assets/brand/'.$file, '', 'GET');
+        // The AIDEX logos are not copied (stage 1, phase 1); the AD-EL POS brand and its
+        // check return in phase 5. Static asset serving is verified with the assets that exist.
+        foreach (['app.css','app.js'] as $file) {
+            $asset = $this->stack->request('/assets/'.$file, '', 'GET');
             self::assertSame(200, $asset['status']);
-            self::assertStringContainsString('AIDEX', $asset['body']);
-            self::assertSame(file_get_contents(dirname(__DIR__, 2).'/public/assets/brand/'.$file), $asset['body']);
+            self::assertSame(file_get_contents(dirname(__DIR__, 2).'/public/assets/'.$file), $asset['body']);
         }
         $admin = $this->stack->request('/admin', '', 'GET');
         self::assertSame(303, $admin['status']);

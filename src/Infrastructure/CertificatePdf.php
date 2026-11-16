@@ -23,12 +23,16 @@ final class CertificatePdf
         $pdf = new Dompdf($options);
         // Browser-rendered derivative of the supplied SVG: php-svg-lib cannot
         // preserve its percentage dimensions and typography. No source SVG is edited.
+        // Without brand files (stage 1, until phase 5) the template prints the name as text.
         $brand=dirname(__DIR__,2).'/public/assets/brand/';
-        $provenance=json_decode(file_get_contents($brand.'logo-h-pdf.json'),true,8,JSON_THROW_ON_ERROR);
-        if (!hash_equals($provenance['source_sha256'],hash_file('sha256',$brand.'logo-h.svg'))) { throw new \RuntimeException('PDF brand derivative needs regeneration.'); }
-        $png=file_get_contents($brand.'logo-h-pdf.png');
-        if (!hash_equals($provenance['derivative_sha256'],hash('sha256',$png))) { throw new \RuntimeException('PDF brand derivative checksum mismatch.'); }
-        $logo = 'data:image/png;base64,'.base64_encode($png);
+        $logo = null;
+        if (is_file($brand.'logo-h-pdf.json')) {
+            $provenance=json_decode(file_get_contents($brand.'logo-h-pdf.json'),true,8,JSON_THROW_ON_ERROR);
+            if (!hash_equals($provenance['source_sha256'],hash_file('sha256',$brand.'logo-h.svg'))) { throw new \RuntimeException('PDF brand derivative needs regeneration.'); }
+            $png=file_get_contents($brand.'logo-h-pdf.png');
+            if (!hash_equals($provenance['derivative_sha256'],hash('sha256',$png))) { throw new \RuntimeException('PDF brand derivative checksum mismatch.'); }
+            $logo = 'data:image/png;base64,'.base64_encode($png);
+        }
         $writer = new Writer(new ImageRenderer(new RendererStyle(150),new SvgImageBackEnd()));
         $qr = 'data:image/svg+xml;base64,'.base64_encode($writer->writeString($document['verification_url']));
         ob_start();
