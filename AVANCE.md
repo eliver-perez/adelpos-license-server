@@ -863,3 +863,273 @@ php bin/check-secrets.php                               # antes de cada commit
 php bin/build-release.php --output=/ruta/fuera/de/public/adelpos-license.tar.gz
 git grep -n -i -E 'aibid|aidex' -- . ':!*.md'           # debe dar 0 resultados
 ```
+
+---
+
+# Avance — Etapa 2: contrato (licencia, firma y API)
+
+Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad: `docs/CONTRATO_LICENCIAS_ADEL_POS.md` V1.0, que no se modifica.
+
+| Fase | Estado |
+| --- | --- |
+| 0 — Verificación contra el código | **Entregada.** 164 pruebas, 21 384 aserciones, todas OK. Sin cambios de código. Quedan 7 consultas abiertas para el propietario (E2-0.5). |
+| 1 — Entornos de firma | Pendiente |
+| 2 — Modelo de datos | Pendiente |
+| 3 — Motor de fechas | Pendiente |
+| 4 — Contenido y firma de la licencia | Pendiente |
+| 5 — API en línea | Pendiente |
+| 6 — Archivos sin internet | Pendiente |
+| 7 — Archivos del contrato y verificador de referencia | Pendiente |
+| 8 — Panel: emisión con el modelo nuevo | Pendiente |
+| 9 — Cierre | Pendiente |
+
+---
+
+## Etapa 2 · Fase 0 — Verificación contra el código (sin cambios)
+
+Fecha: 2026-11-16. No se modificó código, pruebas ni configuración. El commit de la fase contiene solo este registro y la especificación de la etapa.
+
+### E2-0.1 Estado de partida
+
+| Comprobación | Resultado |
+| --- | --- |
+| Commit | `ec61425` «Fase 6: documentación y cierre de la etapa 1», rama `main` |
+| Árbol de trabajo | Limpio, salvo `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`, que estaba sin versionar. Se versiona en el commit de esta fase. No entra en el paquete de despliegue, que toma `docs/` por lista explícita. |
+| Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`: el registrado en `DECISIONS.md` e idéntico a la copia de la carpeta superior |
+| Suite completa (`phpunit.xml`) | **164 pruebas, 21 384 aserciones, todas OK.** Unitarias 75/20 576, integración 89/808. Sin omisiones ni advertencias. Duración: 1 min 4 s. |
+| Verificador Go | «OK: 5 JWS, 3 proofs, 3 offline requests, 3 negative JWS; PHP/Go signatures match.» |
+| `generate-fixtures.php --check` | «Verified 5 JWS, 3 proofs, 3 offline requests and 3 negative JWS fixtures.» |
+| `bin/check-secrets.php` | Sin hallazgos en 175 archivos |
+| Residuos en MySQL | 0 bases y 0 usuarios `adelpos_license_test_*`, antes y después |
+
+Entorno: el mismo de la etapa 1. PHP 8.5.7, PHPUnit 12.5.36, MySQL 8.0.46 en `/tmp/mysql.sock`, Go 1.25.5. Las variables `TEST_*` son las de «Comandos para reproducir la verificación» de la etapa 1.
+
+Playwright no se ejecutó: la Fase 0 no lo pide. Se actualiza y se ejecuta en las fases 8 y 9, igual que en la etapa 1.
+
+**Observación:** en la carpeta temporal del sistema quedan dos registros de Playwright de la etapa 1 (`adelpos-license-panel-*.log`, 66 KB y 77 KB). `tests/run-panel-tests.php` crea ese registro y no lo borra. Se corrige en la Fase 8, junto con la actualización de Playwright.
+
+### E2-0.2 Los 20 puntos heredados y la fase que los resuelve
+
+Lista regenerada con el comando de `DECISIONS.md`, sección 6. Da 24 coincidencias: **20 marcas en el código**, las mismas de la etapa 1, y 4 menciones del propio marcador en la documentación (`ARCHITECTURE.md`, `AVANCE.md`, `DECISIONS.md` y `README.md`).
+
+| # | Ubicación | Regla marcada | Fase que la resuelve |
+| --- | --- | --- | --- |
+| 1 | `database/migrations/001_esquema_inicial.sql:110` | Tolerancia de 15 días (`chk_license_terms`) | **2.** Una migración nueva reemplaza la restricción. La línea del comentario depende de la consulta 1. |
+| 2 | `src/Application/LicenseService.php:31` | Tolerancia de 15 días al emitir | **2** |
+| 3 | `database/migrations/001_esquema_inicial.sql:127` | Tabla `license_limits` | **4.** Una migración nueva elimina la tabla (consulta 2). La línea del comentario depende de la consulta 1. |
+| 4 | `src/Application/LicenseService.php:34` | Inserta `license_limits` con una instalación | **4** |
+| 5 | `src/Application/RevisionPublisher.php:23` | Lista de límites en el contenido firmado | **4** |
+| 6 | `src/Application/RevisionPublisher.php:34` | Huella del equipo en el contenido firmado | **4** |
+| 7 | `src/Domain/Protocol.php:51` | Huella versión `'1'` en la API | **5** |
+| 8 | `src/Application/ActivationService.php:75` | Una instalación activa por licencia (en línea) | **5.** Reactivación de la misma instalación y `ACTIVATION_LIMIT` con `details`. |
+| 9 | `src/Domain/OfflineRequest.php:29` | Huella versión `'1'` en `.licreq` | **6** |
+| 10 | `src/Application/OfflineService.php:79` | Una instalación activa por licencia (sin internet) | **6** |
+| 11 | `contracts/v1/generate-fixtures.php:84` | Huella en las licencias de prueba | **7** |
+| 12 | `contracts/v1/generate-fixtures.php:94` | Una instalación y lista de límites en las licencias de prueba | **7** |
+| 13 | `contracts/v1/generate-fixtures.php:102` | Tolerancia de 15 días en la suscripción de prueba | **7** |
+| 14 | `contracts/v1/generate-fixtures.php:143` | Huella en los `.licreq` de prueba | **7** |
+| 15 | `src/Application/DocumentService.php:27` | Lista de límites en las constancias | **8.** Deja de leer la tabla en la Fase 4 y muestra plan y cupos en la Fase 8. |
+| 16 | `templates/license-detail.php:4` | «Instalaciones: 1 autorizada» | **8** |
+| 17 | `templates/license-detail.php:4` | Texto de los 15 días de tolerancia | **8** |
+| 18 | `templates/license-form.php:6` | «15 días de tolerancia» | **8** |
+| 19 | `templates/license-form.php:8` | «La tolerancia dura 15 días…» | **8** |
+| 20 | `templates/license-form.php:13` | «Una instalación por licencia» | **8** |
+
+Por fase: 2 en la Fase 2, 4 en la Fase 4, 2 en la Fase 5, 2 en la Fase 6, 4 en la Fase 7 y 6 en la Fase 8.
+
+**Ninguno pasa completo a la etapa 3 o 4.** Al resolverlos quedan estas partes, que se marcarán en el cierre (Fase 9):
+
+| Marca nueva | Dónde |
+| --- | --- |
+| `PENDIENTE etapa 3` | Renovación con fecha de pago y regla de tolerancia, conversión de prueba a pago y compra de mantenimiento: operaciones deshabilitadas en `LicenseService`, `OfflineService`, `Kernel` y sus plantillas. |
+| `PENDIENTE etapa 3` | Editor de planes y propagación: en esta etapa la tabla `plans` solo se lee. |
+| `PENDIENTE etapa 4` | Acción `transfer`, ruta `/v1/activations/transfer`, `TRANSFER_LIMIT` y el cálculo real de `details.transfer_available`. |
+| `PENDIENTE etapa 4` | Relación de la transferencia forzada del panel con el autoservicio y las alertas. |
+
+### E2-0.3 Inventario: dónde se construye y se valida cada cosa
+
+| Tema | Archivos | Qué hace hoy |
+| --- | --- | --- |
+| Contenido de la licencia | `src/Application/RevisionPublisher.php` (`publish`, `commercialChange`), `src/Domain/Jws.php`, `src/Domain/Protocol.php` (`json`, `utc`) | Arma 18 campos desde `licenses`, `activations`, `license_features` y `license_limits`, firma y guarda la revisión. Incrementa `licenses.revision_counter`, que ya es global por licencia. No valida el contenido antes de firmar. |
+| Entradas de la API | `src/Http/ApiKernel.php` (rutas, tamaño, tipo de contenido, límites por IP), `src/Domain/Protocol.php` (`input`, `proofMessage`, `uuid`, `decode`), `src/Domain/StrictJson.php`, `src/Application/ActivationService.php`, `src/Domain/ApiProblem.php`, `src/Domain/ApiResponse.php` | Cuatro rutas `POST /v1/activations[/challenge\|/refresh\|/deactivate]`. Campos exactos, sin sobrantes. Reintentos en `license_requests`. |
+| Solicitudes sin internet | `src/Domain/OfflineRequest.php` (sobre, campos y firma), `src/Application/OfflineService.php` (`import`, `decide`, `release`), `src/Http/Kernel.php` (rutas `/admin/offline/…` y `/admin/licenses/{id}/release`), `templates/offline-detail.php`, `templates/license-offline.php` | Importa, guarda el original cifrado, aprueba o rechaza y firma. La aprobación de `renew` puede ampliar la vigencia (`renewal_mode=extend`). |
+| Llaves de firma | `src/Infrastructure/SigningKeys.php`, `bin/signing-key.php`, `bin/preflight.php` (`--require-signer`), tablas `signing_keys` y `signing_scopes`, `src/Infrastructure/RecoveryVerifier.php` | El entorno de firma **es `APP_ENV`** (`production`, `development` o `testing`). Carpeta `var/keys/<APP_ENV>`. Rechaza las cuatro semillas públicas de prueba solo si `APP_ENV=production`. |
+| Configuración | `src/Config.php`, `config/local.example.php`, `bin/configure.php`, `bin/recovery-config.php` | No existe `LICENSE_ENVIRONMENT`. |
+| Límites | Tabla `license_limits` (`max_installations=1`, `max_users`, `max_libraries`, `max_documents`), `LicenseService::issue`, `RevisionPublisher`, `DocumentService::generate`, `templates/certificate-pdf.php`, `bin/grants.php` | Solo `max_installations` tiene efecto: la constancia lo imprime. No hay planes ni cupos. |
+| Emisión | `src/Application/LicenseService.php` (`issue`), `src/Http/Kernel.php` (`/admin/licenses/create`), `templates/license-form.php` | Tipos `perpetual` y `subscription`. El administrador escribe a mano el vencimiento o la fecha de versiones. Tolerancia fija de 15 días. |
+| Renovación y mantenimiento | `LicenseService::change` (`renew`, `maintenance`), `renewTerms`, `recordOfflineRenewal`, `OfflineService::decide` (`renewal_mode=extend`), `Kernel` (`/admin/licenses/{id}/renew\|maintenance`), `templates/license-detail.php` (formulario lateral), `templates/offline-detail.php`, tablas `subscription_periods` y `maintenance_purchases` | Fecha nueva escrita a mano, sin regla de pago ni de tolerancia. |
+| Otras operaciones comerciales | `LicenseService::change` (`features`, `reissue`, `revoke`), `LicenseService::administrative` | Se conservan. `revoke` firma `revoked` para la activación vigente. |
+| Clientes | `src/Application/CatalogService.php` (`saveCustomer`), `templates/customer-form.php`, `src/Http/View.php` | Sin zona horaria. El panel muestra y lee todas las fechas en `America/Monterrey`, fijo en `View::TIMEZONE`. |
+| Archivos del contrato | `contracts/v1/generate-fixtures.php`, `contracts/v1/verify-vectors.go`, `contracts/v1/fixtures/` (10 archivos), `tests/Unit/ProtocolTest.php` | Protocolo heredado con el producto sintético. El verificador Go solo comprueba firmas. No hay JSON Schema ni OpenAPI. |
+
+Tamaño del cambio, sin contar documentación ni archivos generados:
+
+| Rastro | Archivos | Ocurrencias |
+| --- | --- | --- |
+| `installation_id` | 20 | 63 |
+| `fingerprint_version` / `fingerprint_hash` | 16 | 56 |
+| `license_limits` y `max_*` | 8 | 35 |
+| `entitled_release_until` | 17 | 28 |
+| `maintenance_until` | 9 | 24 |
+| `LICREQ-V1` | 8 | 8 |
+| `lic+jws` | 5 | 6 |
+| `LIC-V1` como prefijo de la prueba de posesión | 3 | 3 |
+| `server_id`, `status_reason`, `LICENSE_ENVIRONMENT` | 0 | 0 |
+
+Pruebas del motor heredado que se reescriben: `ActivationsTest` (20), `OfflineTest` (18), `AdministrationTest` (15, de las que 4 son de renovación y mantenimiento), `HttpApiTest` (2), `ProtocolTest` (6), `OfflineRequestTest` (4), más los datos de `BackupTest`, `CommercialDeliveryTest`, `ProductionHttpTest` y los scripts de Playwright.
+
+### E2-0.4 Diferencias entre el contrato y el código
+
+**Formatos y firma (§2 y §3)**
+
+| Punto | Contrato | Código actual |
+| --- | --- | --- |
+| Identidad de la instalación | `server_id`, UUID v4 **en minúsculas** | `installation_id`. Acepta mayúsculas y las usa tal cual en la prueba de posesión (`testUppercaseUuidBytesAreUsedInProofWithoutNormalization`). |
+| Encabezado JWS | `typ: adelpos-lic+jws` | `typ: lic+jws`. El orden `alg`, `kid`, `typ` ya coincide. |
+| Entornos de firma | `test` y `production`, independientes del entorno de la aplicación | `APP_ENV` hace de entorno de firma. La restricción `chk_signing_environment` solo admite `production`, `development` y `testing`. |
+| Semillas públicas de prueba | Rechazadas en `production` | Rechazadas con `APP_ENV=production`. Los nombres de las llaves de prueba cambian con los archivos nuevos. |
+| Instantes | Seis decimales y `Z` | Ya coincide (`Protocol::utc`). |
+| Base64url | Sin relleno; se rechaza lo no canónico | Ya coincide (`Protocol::decode`). |
+
+**Contenido de la licencia (§4)**
+
+| Campo | Contrato | Código actual |
+| --- | --- | --- |
+| `environment`, `licensee_name`, `billing_period`, `status_reason`, `period_starts_at`, `updates_until`, `plan` | Obligatorios | No existen |
+| `server_id` | Sí | Se llama `installation_id` |
+| `fingerprint_version`, `fingerprint_hash`, `maintenance_until`, `entitled_release_until` | No existen | Se firman |
+| `license_type` | `perpetual`, `subscription` o `trial` | Sin `trial` |
+| `grace_days` | 5 en suscripción; 0 en prueba y perpetua | 15 en suscripción; 0 en perpetua |
+| `limits` | `cash_registers`, `order_takers`, `kitchen_displays`, de 0 a 999 | `max_installations`, `max_users`, `max_libraries`, `max_documents` |
+| `features` | Solo los módulos habilitados, como `clave → true` | Todos los módulos del producto, con `true` o `false` |
+| `license_status` | `active` o `revoked` | Ya coincide, con la misma regla |
+| `license_revision` | Contador global por licencia | Ya coincide |
+| Orden de los campos | El del ejemplo del contrato | Otro orden |
+| Validación antes de firmar | Sí (etapa 2, Fase 4) | No existe |
+
+**Fechas (§5)**
+
+| Punto | Contrato | Código actual |
+| --- | --- | --- |
+| Quién fija las fechas | El servidor, al activar en línea o al aprobar sin internet | El administrador, a mano, al emitir |
+| Licencia emitida sin activar | Sin fechas | Con fechas desde la emisión. `chk_license_terms` exige vencimiento en toda suscripción. |
+| Meses de calendario con día ancla | Sí | No hay cálculo. `modify('+1 month')` de PHP no sirve: 31 de enero más un mes da 3 de marzo. |
+| Zona horaria | La del cliente | `America/Monterrey` fija en el panel; el cliente no tiene zona |
+| Pruebas (15 días, 1 mes, 3 meses) | Sí | No existen |
+| Actualizaciones de la perpetua | 0, 6 o 12 meses desde la activación | Fecha escrita a mano |
+
+**API en línea (§8)**
+
+| Punto | Contrato | Código actual |
+| --- | --- | --- |
+| Rutas | Las cuatro actuales, más `transfer` (etapa 4) | Las cuatro ya coinciden |
+| Desafío | `action`, `product_id`, `server_id`, `activation_id` | Igual, con `installation_id`. `transfer` ya se rechaza con `INVALID_REQUEST`. Los 5 minutos y el uso único ya coinciden. |
+| Prueba de posesión | Prefijo `ADELPOS-LIC-V1` y `server_id` | Prefijo `LIC-V1` e `installation_id`. La estructura del mensaje ya coincide. |
+| Activar: campos | 8 campos | 10: sobran `fingerprint_version` y `fingerprint_hash` |
+| `app_version` | Se recibe | Se valida (hasta 100 caracteres) y **no se guarda** |
+| La misma instalación vuelve a activar | Devuelve su revisión vigente | Responde `ACTIVATION_LIMIT` |
+| Otra instalación | `409 ACTIVATION_LIMIT` con `details.transfer_available` | `409 ACTIVATION_LIMIT`, sin `details` |
+| Consultar actualización | Devuelve la revisión vigente, aunque la activación haya terminado | Ya coincide |
+| Desactivar: respuesta | `activation_id`, `deactivated_at`, `status`, `license_jws`, `server_time`, `request_id` | Solo los tres primeros |
+| Desactivar una activación revocada | No lo define (propuesta V1.1 n.º 5) | `403 REVOKED` |
+| Formato de error | Incluye `details` y `request_id` «UUID o null» | Sin `details`. `request_id` nunca es `null`: si falta, el servidor inventa uno. |
+| `request_id` reutilizado con otro contenido | `409 REQUEST_CONFLICT` | `409` con código `INVALID_REQUEST` |
+| `TRANSFER_LIMIT`, `REQUEST_CONFLICT` | Definidos | No existen en `ApiProblem` |
+| HTTP de `INVALID_REQUEST` | 400 | 400, y además 403, 404, 405, 413 y 415 para errores de transporte (propuesta V1.1 n.º 3) |
+| Tamaño de 16 KiB, reintentos idénticos, límites de intentos, código comercial fuera de los registros, negativa comercial que consume el desafío | Sí | Ya coincide |
+
+**Archivos sin internet (§9)**
+
+| Punto | Contrato | Código actual |
+| --- | --- | --- |
+| Sobre | `schema_version`, `payload_b64u`, `signature_b64u` | Ya coincide |
+| Contenido | `server_id` y `app_version`; sin huella | `installation_id`, huella y sin `app_version` |
+| Firma | Prefijo `ADELPOS-LICREQ-V1` | Prefijo `LICREQ-V1` |
+| `created_at` | UTC terminado en `Z` | Acepta también `+00:00` |
+| `renew` | Entrega la revisión vigente | Firma una revisión nueva cada vez y permite ampliar la vigencia |
+| `activate` | El primer periodo empieza al aprobar | Sin cálculo de periodo |
+| `.lic` | El mismo JWS de la API | Ya coincide |
+| Original cifrado sin cambios, recibir no concede nada, código comercial oculto, reintentos compartidos con la API | Sí | Ya coincide |
+
+**Planes y archivos del contrato (§11 y §13)**
+
+| Punto | Contrato | Código actual |
+| --- | --- | --- |
+| Planes `basico`, `elemental` y `premium` | Sí | No existen |
+| `license.schema.json` y `openapi.yaml` | Sí | No existen |
+| Archivos de prueba | Licencias, casos negativos, fechas, estado temporal, pruebas de posesión y `.licreq`, con `adel_pos` | 5 licencias, 3 pruebas de posesión, 3 `.licreq` y 3 negativos, del protocolo heredado y con `producto_prueba` |
+| Verificador Go | Aplica §5.6 y §10 y ejecuta todos los casos | Solo comprueba firmas. Los casos de estado están descritos pero no se ejecutan. |
+
+### E2-0.5 Consultas al propietario
+
+Estado de todas: **pendiente de respuesta**. La Fase 1 no empieza hasta tenerla.
+
+**Sobre la especificación de la etapa**
+
+| # | Consulta | Propuesta |
+| --- | --- | --- |
+| 1 | **Dos reglas chocan.** La especificación dice que `001_esquema_inicial.sql` no se modifica, y también que el marcador de herencia debe dar cero resultados. Dos de las 20 marcas son comentarios dentro de ese archivo (líneas 110 y 127). | Quitar solo esas dos líneas de comentario cuando una migración nueva reemplace su regla. El esquema no cambia y `InitialSchemaTest` sigue pasando. Cambia el checksum del archivo, sin consecuencias porque no hay instalaciones. La alternativa es dejarlas y excluir ese archivo de la búsqueda de cierre. |
+| 2 | **El esquema cambia antes que el código que lo usa.** La Fase 2 elimina la huella y `license_limits`, pero el contenido firmado los usa hasta la Fase 4 (que es donde la especificación resuelve esas marcas), y la Fase 1 necesita cambiar la restricción del entorno de las llaves. Con todo en una sola migración en la Fase 2 habría que adelantar parte de las fases 4 a 6 para que la suite pase. | Tres migraciones: `002` en la Fase 1 (entornos de firma), `003` en la Fase 2 (todo lo nuevo, el renombre a `server_id` y la emisión con el modelo nuevo) y `004` en la Fase 4 (retira la huella, `license_limits` y las dos fechas heredadas, cuando el contenido deja de firmarlas). Cada commit queda con la suite completa pasando. |
+
+**Propuestas V1.1: ambigüedades del contrato**
+
+Ninguna obliga a cambiar el contrato ahora. Si se aprueban, quedan como aclaraciones para una V1.1 y se anotan en `DECISIONS.md` en la Fase 9.
+
+| # | Sección | Qué no queda definido | Propuesta |
+| --- | --- | --- | --- |
+| 1 | §2, §4 | `product_id` es fijo (`adel_pos`), pero el servidor es de varios productos y sus pruebas usan `producto_prueba`. | El esquema fija `product_id` en `adel_pos` y el servidor no firma otro producto. Las pruebas pasan a `adel_pos`; las de módulos agregan módulos sintéticos a ese producto. El caso «otro producto» lo arma el generador de archivos de prueba. |
+| 2 | §4 | `licensee_name` es «nombre o razón social», y el cliente tiene los dos campos. | La razón social si está capturada; si no, el nombre comercial. Máximo 190 caracteres. |
+| 3 | §8.7 | La tabla asigna 400 a `INVALID_REQUEST`. No dice qué HTTP llevan una ruta inexistente, otro método, otro tipo de contenido o un cuerpo mayor de 16 KiB. | Conservar el HTTP estándar (404, 405, 415, 413) con `code: INVALID_REQUEST`, y documentarlo en OpenAPI. AD-EL POS decide por `code`. La alternativa es responder siempre 400. |
+| 4 | §5.1 | «Si la hora local no existe, se usa el siguiente instante válido» admite dos lecturas. Ejemplo en `America/Tijuana`: 2027-03-14 02:30 no existe. PHP devuelve 03:30 (10:30 UTC); la lectura literal es 03:00 (10:00 UTC). | La lectura literal: el primer instante después del salto, 03:00. Se calcula con las transiciones de la zona, sin depender de PHP. El ancla no cambia. |
+| 5 | §8.6 | No dice qué responde `deactivate` si la activación ya terminó. La §8.4 espera que la computadora anterior reciba así su revisión de cierre. Hoy una activación revocada recibe `403 REVOKED`. | Responder `200` con la revisión de cierre que ya existe, sea `deactivated`, `transferred` o `revoked`, sin firmar otra. `REVOKED` queda solo para `activate`. |
+| 6 | §13 | Dice que la etapa 2 publica los casos de renovación, cambio de plan, conversión de prueba y mantenimiento. La especificación los pasa a la etapa 3. | Seguir la especificación (**se aplica**, E2-0.6) y corregir esa frase en V1.1. |
+| 7 | §8.7 | `INCOMPATIBLE_SCHEMA` no tiene cuándo ocurrir en la API en línea: ninguna petición lleva versión. Solo el sobre `.licreq` la lleva. | Queda definido y se usa al importar un `.licreq` con otra `schema_version` (**se aplica**, E2-0.6). |
+| 8 | §8.7 | `request_id` «UUID o null» no dice cuándo es `null`. | El `request_id` del cliente si es un UUID válido; `null` en el desafío y cuando falta o no es válido (**se aplica**, E2-0.6). |
+| 9 | §4, §11 | El ejemplo dice «Plan elemental» y la tabla de planes, «Elemental». | «Plan básico», «Plan elemental» y «Plan premium», como en el ejemplo de la §4 (**se aplica**, E2-0.6). |
+| 10 | §4 | No dice qué `status_reason` lleva la liberación forzada del panel sin computadora de destino («Recuperar plaza por equipo averiado»). | `transferred`, igual que la transferencia forzada con destino: el propietario retiró la licencia de esa computadora (**se aplica**, E2-0.6). |
+| 11 | §5.2 | «Su periodo inicial se puede editar en el panel» no está asignado a ninguna etapa. | `PENDIENTE etapa 3`, junto con la renovación (**se aplica**, E2-0.6). |
+| 12 | §9.1 | No define `renew` para una activación terminada, ni `activate` de la misma instalación que ya está activa. | Igual que en línea: `renew` entrega la revisión de cierre, y `activate` de la misma instalación entrega su revisión vigente sin crear otra activación (**se aplica**, E2-0.6). |
+| 13 | §2, §8.3, §9.1 | No fija el largo de `app_version` ni si los demás UUID admiten mayúsculas. | `app_version`: de 1 a 100 caracteres, sin caracteres de control, como hoy. `server_id` solo en minúsculas; los demás UUID se aceptan en cualquier caja, como hoy (**se aplica**, E2-0.6). |
+
+Las consultas que necesitan respuesta son las dos de la especificación y las propuestas V1.1 n.º 1 a 5.
+
+### E2-0.6 Criterios que se aplican salvo indicación contraria
+
+1. Las propuestas V1.1 n.º 6 a 13 se aplican como están escritas arriba.
+2. **Validación antes de firmar** (Fase 4 y Fase 7). Un validador en código, sin dependencias nuevas en producción. Una biblioteca de JSON Schema solo en `require-dev` comprueba que el validador y `license.schema.json` dan el mismo resultado en todos los archivos de prueba y en las respuestas reales. Así se respeta la preferencia de la especificación por `require-dev`.
+3. **Semillas públicas de prueba.** Se rechazan con `LICENSE_ENVIRONMENT=production`, como pide la especificación, y también con `APP_ENV=production`, que es la regla actual. Así `licensing.sicrat.com` tampoco puede firmar con ellas.
+4. **Fechas con precisión completa.** La hora ancla se guarda con microsegundos: el vencimiento cae a la misma hora local exacta del inicio.
+5. **Fechas de la licencia, no de la activación.** El primer periodo se fija en la primera activación de la licencia. Si se libera y se activa en otra computadora, conserva sus fechas.
+6. **El servidor no rechaza por vencimiento.** Una suscripción o prueba vencida se puede activar: el servidor firma su fecha y AD-EL POS calcula el estado. El contrato no tiene un código de error para eso.
+7. **Renovación y mantenimiento se deshabilitan en la Fase 2**, con su prueba de rechazo, porque dependen de las columnas que cambian. El panel las oculta en la Fase 8.
+8. **Pruebas por fase.** PHPUnit completo y verificador Go en cada commit. Las pruebas del motor heredado se eliminan en la fase que retira su regla y las nuevas llegan en la fase que la implementa; el total baja y vuelve a subir, con cada cambio justificado. Los archivos de `contracts/v1/` siguen siendo los heredados hasta la Fase 7.
+9. **Búsqueda de cierre del marcador de herencia.** Se hace fuera de `AVANCE.md`, que conserva el registro de las dos etapas.
+
+### E2-0.7 Riesgos y observaciones
+
+- **La Fase 2 es la más grande.** Cambia la emisión al modelo nuevo y arrastra los 8 archivos de `tests/` que emiten licencias: 7 de integración y `prepare-panel.php`.
+- **Zonas horarias.** La lista y las reglas dependen de los datos de zonas de PHP: aquí son los de 2026.1 (419 zonas) y el VPS usa PHP 8.3.6. Los casos de prueba usan `America/Monterrey`, sin cambio de horario, y `America/Tijuana`, con las reglas vigentes de Estados Unidos.
+- **Propósito `manifest` de las llaves.** Es heredado y el contrato deja los manifiestos fuera de V1 (§15). Se conserva sin uso.
+- **`subscription_periods` y `maintenance_purchases`.** Quedan sin escrituras en esta etapa. Su rediseño es de la etapa 3.
+- **YAML.** La prueba que compara `ApiKernel` con `openapi.yaml` necesita leer YAML: será otra dependencia de `require-dev`, que se justificará en `DECISIONS.md` en la Fase 7.
+
+### E2-0.8 Comandos para reproducir
+
+```sh
+cd adelpos-license
+git status --porcelain                                  # árbol limpio
+git log --oneline -1
+shasum -a 256 docs/CONTRATO_LICENCIAS_ADEL_POS.md       # a4c3bfd0…f554bb
+
+# Variables TEST_* de «Comandos para reproducir la verificación» de la etapa 1
+php vendor/bin/phpunit                                  # 164 pruebas, 21 384 aserciones
+php contracts/v1/generate-fixtures.php --check
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+php bin/check-secrets.php
+
+# Los 20 puntos heredados (más 4 menciones del marcador en la documentación)
+git grep -n -o -E "HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS\.md \([^)]*\)"
+
+# Rastros del protocolo heredado, sin documentación ni archivos generados
+git grep -c -E "installation_id|fingerprint_(version|hash)|LIC-V1|LICREQ-V1|lic\+jws|license_limits" -- . ':!*.md' ':!contracts/v1/fixtures/*'
+```
