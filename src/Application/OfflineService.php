@@ -76,6 +76,7 @@ final class OfflineService
                     if (!$active || $active['activation_id'] !== Uuid::bytes($outgoing)) { throw new Problem('La instalación de origen cambió. Revisa la transferencia.',409); }
                     if ($active['installation_id'] === Uuid::bytes($payload['installation_id'])) { throw new Problem('El destino debe ser otra instalación.'); }
                     $this->retire($license['license_id'], $active['activation_id'], true);
+                // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación activa por licencia)
                 } elseif ($active) { throw new Problem('La licencia ya tiene una instalación activa. Desactívala o solicita transferencia.',409); }
                 $activationId = Uuid::bytes(Uuid::create());
                 $this->db->execute("INSERT INTO activations(activation_id,license_id,product_id,installation_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)", [$activationId,$license['license_id'],$payload['product_id'],Uuid::bytes($payload['installation_id']),$verified['public'],$payload['fingerprint_version'],$payload['fingerprint_hash'],$this->clock->sql()]);

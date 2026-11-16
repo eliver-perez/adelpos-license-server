@@ -20,6 +20,7 @@ final class RevisionPublisher
         $features = [];
         foreach ($rows as $row) { $features[$row['capability_key']] = (bool)$row['enabled']; }
         Capabilities::validate(array_keys(array_filter($features)), array_keys($features), $this->db->all('SELECT capability_key,required_key FROM capability_dependencies WHERE product_id=?', [$license['product_id']]));
+        // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (lista de límites en el contenido de la licencia)
         $limits = $this->db->one('SELECT max_installations,max_users,max_libraries,max_documents FROM license_limits WHERE license_id=?', [$licenseId]);
         if (!$limits) { throw new \RuntimeException('Missing license limits.'); }
         foreach ($limits as &$value) { $value = $value === null ? null : (int)$value; } unset($value);
@@ -30,6 +31,7 @@ final class RevisionPublisher
             'license_id'=>Uuid::text($licenseId),'activation_id'=>Uuid::text($activationId),
             'installation_id'=>Uuid::text($activation['installation_id']),
             'installation_public_key'=>Protocol::encode($activation['installation_public_key']),
+            // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo en el contenido de la licencia)
             'fingerprint_version'=>$activation['fingerprint_version'],'fingerprint_hash'=>$activation['fingerprint_hash'],
             'license_type'=>$license['license_type'],
             'license_status'=>$license['commercial_status'] === 'issued' && $activation['state'] === 'active' ? 'active' : 'revoked',

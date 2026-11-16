@@ -81,6 +81,7 @@ $payload = [
     'license_id' => $licenseId, 'activation_id' => $activationId,
     'installation_id' => $installationId,
     'installation_public_key' => $installationKey['public_key_b64u'],
+    // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo, versión '1')
     'fingerprint_version' => '1', 'fingerprint_hash' => $fingerprintHash,
     'license_type' => 'perpetual', 'license_status' => 'active', 'license_revision' => 1,
     'issued_at' => '2026-09-22T18:30:00Z', 'expires_at' => null, 'grace_days' => 0,
@@ -90,6 +91,7 @@ $payload = [
         'prueba_a' => true, 'prueba_e' => true,
     ],
     'limits' => [
+        // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación por licencia y lista de límites)
         'max_installations' => 1, 'max_users' => null, 'max_libraries' => null, 'max_documents' => null,
     ],
 ];
@@ -97,6 +99,7 @@ $subscriptionPayload = array_replace($payload, [
     'license_id' => '77777777-7777-4777-8777-777777777777',
     'activation_id' => '88888888-8888-4888-8888-888888888888',
     'license_type' => 'subscription', 'expires_at' => '2026-10-01T00:00:00Z',
+    // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (tolerancia de 15 días en suscripción)
     'grace_days' => 15, 'entitled_release_until' => '2026-10-01T00:00:00Z',
 ]);
 $licenseVectors = [
@@ -137,6 +140,7 @@ foreach (['activate', 'renew', 'deactivate'] as $index => $action) {
         'created_at' => '2026-09-25T18:30:00Z', 'product_id' => 'producto_prueba',
         'installation_id' => $installationId,
         'installation_public_key' => $installationKey['public_key_b64u'],
+        // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo, versión '1')
         'fingerprint_version' => '1', 'fingerprint_hash' => $fingerprintHash,
     ];
     if ($action !== 'activate') {

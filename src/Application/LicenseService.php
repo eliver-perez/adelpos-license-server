@@ -28,8 +28,10 @@ final class LicenseService
             $id = Uuid::create();
             $bytes = Uuid::bytes($id);
             $instant = $date->format('Y-m-d H:i:s.u');
+            // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (tolerancia de 15 días en suscripción)
             $this->db->execute('INSERT INTO licenses(license_id,customer_id,product_id,license_type,expires_at,grace_days,maintenance_until,entitled_release_until,created_at,updated_at) VALUES (?,?,?,?,?,?,NULL,?,?,?)', [$bytes, Uuid::bytes($customerId), $productId, $type, $type === 'subscription' ? $instant : null, $type === 'subscription' ? 15 : 0, $instant, $this->clock->sql(), $this->clock->sql()]);
             $this->db->execute('UPDATE licenses SET commercial_reference=?,authorization_note=? WHERE license_id=?', [$reference,$reason,$bytes]);
+            // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación por licencia y lista de límites)
             $this->db->execute('INSERT INTO license_limits(license_id,max_installations,max_users,max_libraries,max_documents) VALUES (?,1,NULL,NULL,NULL)', [$bytes]);
             $this->writeFeatures($bytes, $productId, $catalog, $features);
             if ($type === 'subscription') { $this->period($actor, $bytes, null, $instant, $reference, $reason); }

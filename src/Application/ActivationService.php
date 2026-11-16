@@ -72,6 +72,7 @@ final class ActivationService
         $credential = $this->db->one('SELECT state FROM license_credentials WHERE key_digest=? AND digest_key_version=1 AND license_id=?', [$digest,$license['license_id']]);
         if ($license['commercial_status'] === 'revoked') { return $this->failure('REVOKED', 403, $input); }
         if (!$credential || $credential['state'] !== 'active') { return $this->failure('LICENSE_NOT_FOUND', 404, $input); }
+        // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación activa por licencia)
         if ($this->db->one("SELECT activation_id FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [$license['license_id']])) { return $this->failure('ACTIVATION_LIMIT', 409, $input); }
         $id = Uuid::bytes(Uuid::create());
         $this->db->execute("INSERT INTO activations(activation_id,license_id,product_id,installation_id,installation_public_key,fingerprint_version,fingerprint_hash,state,activated_at) VALUES (?,?,?,?,?,?,?,'active',?)", [$id,$license['license_id'],$input['product_id'],Uuid::bytes($input['installation_id']),Protocol::decode($input['installation_public_key'],32),$input['fingerprint_version'],$input['fingerprint_hash'],$this->clock->sql()]);

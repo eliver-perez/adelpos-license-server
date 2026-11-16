@@ -26,6 +26,7 @@ final class OfflineRequest
         }
         Protocol::uuid($payload['request_id']); Protocol::uuid($payload['installation_id'], true);
         if ($payload['action'] !== 'activate') { Protocol::uuid($payload['license_id']); Protocol::uuid($payload['activation_id']); }
+        // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo, versión '1')
         if (!preg_match('/\A[a-z][a-z0-9_]{1,63}\z/', $payload['product_id']) || $payload['fingerprint_version'] !== '1' || !preg_match('/\Asha256:[a-f0-9]{64}\z/', $payload['fingerprint_hash'])) { throw new ApiProblem('INVALID_REQUEST'); }
         // Validate calendar and UTC without normalizing the signed bytes or trusting the device clock.
         if (!preg_match('/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)\z/', $payload['created_at'], $date) || !checkdate((int)$date[2], (int)$date[3], (int)$date[1]) || (int)$date[4] > 23 || (int)$date[5] > 59 || (int)$date[6] > 59) { throw new ApiProblem('INVALID_REQUEST'); }

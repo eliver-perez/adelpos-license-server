@@ -107,6 +107,7 @@ CREATE TABLE licenses (
  FOREIGN KEY(customer_id) REFERENCES customers(id), FOREIGN KEY(product_id) REFERENCES products(product_id),
  UNIQUE KEY uq_license_product(license_id,product_id),
  CONSTRAINT chk_license_status CHECK (commercial_status IN ('issued','revoked')),
+ -- HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (tolerancia de 15 días en suscripción)
  CONSTRAINT chk_license_terms CHECK (
   (license_type='perpetual' AND expires_at IS NULL AND grace_days=0)
   OR (license_type='subscription' AND expires_at IS NOT NULL AND grace_days=15 AND maintenance_until IS NULL)
@@ -123,6 +124,7 @@ CREATE TABLE license_features (
  CONSTRAINT chk_feature_bool CHECK (enabled IN (0,1))
 ) ENGINE=InnoDB;
 CREATE TABLE license_limits (
+ -- HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación por licencia y lista de límites)
  license_id BINARY(16) PRIMARY KEY, max_installations INT NOT NULL DEFAULT 1,
  max_users INT NULL, max_libraries INT NULL, max_documents INT NULL,
  FOREIGN KEY(license_id) REFERENCES licenses(license_id),

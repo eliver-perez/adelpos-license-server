@@ -48,6 +48,7 @@ final class Protocol
             if (strlen($input['app_version']) > 100) { throw new ApiProblem('INVALID_REQUEST'); }
             if ($action === 'activate') {
                 self::decode($input['installation_public_key'], 32);
+                // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo, versión '1')
                 if ($input['fingerprint_version'] !== '1' || !preg_match('/\Asha256:[a-f0-9]{64}\z/', $input['fingerprint_hash']) || strlen($input['license_key']) > 256) { throw new ApiProblem('INVALID_REQUEST'); }
             } else { self::uuid($input['activation_id']); }
         }

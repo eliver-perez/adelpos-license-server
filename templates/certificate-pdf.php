@@ -30,8 +30,6 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 <tr><th>Emisión de licencia</th><td><?= V::escape(V::date($d['issued_at'])) ?></td></tr>
 <tr><th>Vencimiento</th><td><?= $d['expires_at']===null?'Sin vencimiento':V::escape(V::date($d['expires_at'])) ?></td></tr>
 <tr><th>Instalaciones autorizadas</th><td><?= (int)$d['limits']['max_installations'] ?></td></tr>
-<tr><th>Usuarios permitidos</th><td><?= $d['limits']['max_users']===null?'Sin límite':(int)$d['limits']['max_users'] ?></td></tr>
-<tr><th>Módulos autorizados</th><td><?= V::escape(implode(', ',$d['features']) ?: 'Ninguno') ?></td></tr>
 <?php if ($d['reference']!==''): ?><tr><th>Referencia comercial</th><td><?= V::escape($d['reference']) ?></td></tr><?php endif; ?>
 </table>
 <?php if ($licensing): ?>

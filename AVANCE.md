@@ -8,7 +8,7 @@ Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no 
 | 1 — Repositorio y copia limpia | **Cerrada.** 161 pruebas, 20 994 aserciones, todas OK. |
 | 2 — Renombre de la identidad interna | **Cerrada.** 162 pruebas, 20 997 aserciones, todas OK. Verificador Go OK con archivos regenerados. |
 | 3 — Esquema inicial consolidado | **Cerrada.** 161 pruebas, 20 980 aserciones, todas OK. Equivalencia con la cadena original comprobada. |
-| 4 — Retirar lo exclusivo de AIDEX | Pendiente |
+| 4 — Retirar lo exclusivo de AIDEX | **Cerrada.** 163 pruebas, 21 368 aserciones, todas OK. Verificador Go OK. 20 puntos heredados marcados. |
 | 5 — Marca y textos | **Adelantada en parte** (instrucción del propietario): nombre, logos y constancias en el commit «Marca AD-EL POS». Faltan Playwright y la revisión de textos. |
 | 6 — Documentación y cierre | Pendiente |
 
@@ -559,3 +559,91 @@ git grep -n -E 'ADX' -- . ':!*.md'                 # 0 resultados
 | --- | --- | --- |
 | `AVANCE.md` | 82 | Registro de procedencia y de cada cambio de esta etapa |
 | `DEPLOY_UBUNTU_24_04.md`, `OPERATIONS.md`, `README.md`, `TEST_PLAN.md`, `SCHEMA.md`, `SECURITY.md`, `ARCHITECTURE.md` | 135 en total | Son los documentos del producto anterior, copiados como base. La Fase 6 los reescribe completos; cambiar solo los nombres dejaría afirmaciones falsas sobre un gestor documental. |
+
+---
+
+## Fase 4 — Retirar lo exclusivo del producto anterior
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### 4.1 Lo que se eliminó
+
+- **Interfaz y constancias.** Ya no aparecen límites ni módulos del producto anterior:
+  - en el formulario de licencia: «Usuarios ilimitados» y «Sin límites de documentos ni bibliotecas»;
+  - en el detalle de licencia: «Usuarios y documentos: Sin límite»;
+  - en las constancias PDF: «Usuarios permitidos» y «Módulos autorizados».
+
+  AD-EL POS no cobra por usuario, y sus planes y cupos se definen en la etapa 5.
+- **Ya quitado antes:** los mensajes y reglas del catálogo anterior (Fase 3) y la nota del «modo híbrido» (commit de marca).
+- **Se conserva** la selección genérica de módulos del panel. Corresponde a `features` del contrato, que en V1 va vacío.
+- **Pruebas del cliente real del producto anterior:** no quedaba ninguna referencia.
+- **Documentación:** sus menciones de módulos y límites desaparecen con la reescritura de la Fase 6.
+
+### 4.2 Motor de licencias heredado: marcado, sin cambios de lógica
+
+- **Marcador.** La especificación pide `// HEREDADO AIDEX: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md`. Por la instrucción del propietario de no nombrar el producto anterior, el marcador es:
+
+  ```
+  HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (<regla>)
+  ```
+
+  Va como `//` en PHP, `--` en SQL y `<?php /* … */ ?>` en plantillas, este último sin cambiar el HTML generado.
+- **Dónde va:** solo donde la regla está fija en el código:
+  - `max_installations=1` y una activación vigente por licencia;
+  - tolerancia de 15 días;
+  - `fingerprint_version` `'1'`;
+  - la lista de límites.
+- **Sin cambios de lógica:** el generador del contrato produce exactamente los mismos archivos (`--check` OK).
+
+**Lista de puntos heredados, insumo para las etapas 2 a 4.** Se genera con:
+
+```sh
+git grep -n -o -E "HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS\.md \([^)]*\)"
+```
+
+Total: 20 marcas.
+
+| Regla heredada | Ubicaciones |
+| --- | --- |
+| huella del equipo en el contenido de la licencia | `src/Application/RevisionPublisher.php:34` |
+| huella del equipo, versión '1' | `contracts/v1/generate-fixtures.php:84`, `contracts/v1/generate-fixtures.php:143`, `src/Domain/OfflineRequest.php:29`, `src/Domain/Protocol.php:51` |
+| lista de límites en el contenido de la licencia | `src/Application/RevisionPublisher.php:23` |
+| lista de límites en las constancias | `src/Application/DocumentService.php:27` |
+| tolerancia de 15 días en suscripción | `contracts/v1/generate-fixtures.php:102`, `database/migrations/001_esquema_inicial.sql:110`, `src/Application/LicenseService.php:31`, `templates/license-detail.php:4`, `templates/license-form.php:6`, `templates/license-form.php:8` |
+| una instalación activa por licencia | `src/Application/ActivationService.php:75`, `src/Application/OfflineService.php:79` |
+| una instalación por licencia | `templates/license-detail.php:4`, `templates/license-form.php:13` |
+| una instalación por licencia y lista de límites | `contracts/v1/generate-fixtures.php:94`, `database/migrations/001_esquema_inicial.sql:127`, `src/Application/LicenseService.php:34` |
+
+### 4.3 Paquete de despliegue (`bin/build-release.php`)
+
+- **Lista explícita.** Toma `composer.json`, `composer.lock`, `config/local.example.php` y los siete documentos existentes. Se quitaron 11 documentos del producto anterior que ya no existen; antes el comando fallaba por ellos. `DECISIONS.md` y `docs/` se agregan en la Fase 6.
+- **Solo archivos versionados.** De `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/` toma únicamente lo que está en git (`git ls-files`). Antes recorría las carpetas del disco y habría metido archivos locales, como los `.DS_Store` de macOS.
+- **Barrera adicional.** Aborta si aparece `config/local.php`, algo bajo `var/`, un `.DS_Store` o un archivo `.key` o `.pem`.
+- **Sin cambios:** el prefijo `adelpos-license/`, el manifiesto `RELEASE.json` con el SHA-256 de cada archivo, el `.sha256` del paquete y la exclusión de `vendor/`, pruebas y `contracts/`.
+- **Paquete real de prueba:** 120 archivos más `RELEASE.json`, 1.4 MB.
+
+**Nueva prueba: `tests/Unit/ReleasePackageTest.php` (2 pruebas).**
+1. Arma el paquete desde un repositorio temporal con los archivos versionados actuales. En él siembra:
+   - `config/local.php`;
+   - una llave bajo `var/keys/`;
+   - un respaldo `.adelposbackup`;
+   - un `.DS_Store` en `public/`;
+   - un `.key` en `bin/`;
+   - un PHP sin versionar en `src/`.
+
+   Exige que el paquete contenga exactamente los archivos permitidos, y nada de configuración local, `var/`, pruebas, `vendor/`, `contracts/`, `AVANCE.md` ni artefactos. También comprueba el manifiesto contra cada archivo y el `.sha256` del paquete.
+2. Si alguien versiona una llave a la fuerza, el empaquetado se aborta sin dejar archivos.
+
+### 4.4 Pruebas de la fase
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Marca AD-EL POS | 161 | 20 988 | OK |
+| **Cierre de la Fase 4** | **163** | **21 368** | **OK**: unitarias 74/20 565, integración 89/803, sin omisiones ni advertencias |
+
+Diferencia: +2 pruebas y +380 aserciones, todas de `ReleasePackageTest`.
+
+Otras comprobaciones:
+- El verificador Go da OK y `generate-fixtures.php --check` también.
+- `php bin/check-secrets.php` no encuentra nada.
+- No hay menciones de `aibid` ni `aidex` fuera de `*.md`.

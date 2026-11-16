@@ -24,6 +24,7 @@ final class DocumentService
             $id = Uuid::create(); $verification = Crypto::token();
             $folio = 'ADELPOS-'.strtoupper(str_replace('-','',$id));
             $public = ['folio'=>$folio,'type'=>$type,'revision'=>$revision,'generated_at'=>$this->clock->sql(),'product'=>$license['product'],'license_type'=>$license['license_type']];
+            // HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (lista de límites en las constancias)
             $limits = $this->db->one('SELECT max_installations,max_users FROM license_limits WHERE license_id=?',[$license['license_id']]);
             $features = array_column($this->db->all('SELECT c.display_name FROM license_features f JOIN product_capabilities c ON c.product_id=f.product_id AND c.capability_key=f.capability_key WHERE f.license_id=? AND f.enabled=1 ORDER BY c.capability_key',[$license['license_id']]),'display_name');
             $snapshot = $public + ['holder'=>$license['holder'],'legal_name'=>$license['legal_name'],'tax_id'=>$license['tax_id'],'license_id'=>$licenseId,'issued_at'=>$license['created_at'],'expires_at'=>$license['expires_at'],'grace_days'=>(int)$license['grace_days'],'limits'=>$limits,'features'=>$features,'reference'=>$license['commercial_reference'],'administrative_version'=>(int)$license['administrative_version'],'activation_method'=>$method,'verification_url'=>rtrim($this->config->get('APP_URL'),'/').'/verify/'.$verification];
