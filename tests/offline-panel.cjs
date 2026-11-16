@@ -10,7 +10,7 @@ module.exports = async function offlinePanel({ page, context, secret, totp, fres
         return { id: crypto.randomUUID(), private: pair.privateKey, public: pair.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64url') };
     };
     const request = (installation, action = 'activate', activation) => {
-        const payload = { action, request_id: crypto.randomUUID(), created_at: '2000-01-01T00:00:00Z', product_id: 'gestor_documental', installation_id: installation.id, installation_public_key: installation.public, fingerprint_version: '1', fingerprint_hash: 'sha256:' + 'd'.repeat(64), license_key: commercialKey };
+        const payload = { action, request_id: crypto.randomUUID(), created_at: '2000-01-01T00:00:00Z', product_id: 'producto_prueba', installation_id: installation.id, installation_public_key: installation.public, fingerprint_version: '1', fingerprint_hash: 'sha256:' + 'd'.repeat(64), license_key: commercialKey };
         if (activation) Object.assign(payload, { license_id: activation.license_id, activation_id: activation.activation_id });
         const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
         return Buffer.from(JSON.stringify({ schema_version: '1.0', payload_b64u: encoded, signature_b64u: crypto.sign(null, Buffer.from('LICREQ-V1\n' + encoded), installation.private).toString('base64url') }));

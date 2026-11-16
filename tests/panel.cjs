@@ -102,9 +102,9 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
 
         await page.goto('/admin/licenses/new');
         await page.locator('#customer_id').selectOption(customerId);
-        await page.locator('[value="review_workflow"]').check();
-        assert.equal(await page.locator('[value="expedientes"]').isChecked(), true);
-        assert.equal(await page.locator('[value="managed_libraries"]').isChecked(), false);
+        await page.locator('[value="prueba_e"]').check();
+        assert.equal(await page.locator('[value="prueba_a"]').isChecked(), true);
+        assert.equal(await page.locator('[value="prueba_c"]').isChecked(), false);
         assert.equal(await page.locator('#reason').getAttribute('required'), null);
         await screenshot('license-form-desktop');
         await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
@@ -160,7 +160,7 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         assert.equal(await page.locator('tbody tr').count(), 2);
         const offlineDownload = await require('./offline-panel.cjs')({ page, context, secret, totp, freshCode, sensitiveDownload, licenseURL, subscriptionURL: page.url(), commercialKey, screenshot });
 
-        for (const route of ['/admin/customers', '/admin/products', '/admin/products/gestor_documental', '/admin/licenses', '/admin/offline', '/admin/audit', '/admin/users', '/admin/security']) {
+        for (const route of ['/admin/customers', '/admin/products', '/admin/products/producto_prueba', '/admin/licenses', '/admin/offline', '/admin/audit', '/admin/users', '/admin/security']) {
             const result = await page.goto(route);
             assert.equal(result.status(), 200, route);
         }

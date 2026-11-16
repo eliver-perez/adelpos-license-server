@@ -51,7 +51,7 @@ final class ProtocolTest extends TestCase
     }
     public function testSchemaDoesNotCoerceOrAllowUnknownFields(): void
     {
-        $valid=['action'=>'activate','product_id'=>'gestor_documental','installation_id'=>'22222222-2222-4222-8222-222222222222','activation_id'=>null];
+        $valid=['action'=>'activate','product_id'=>'producto_prueba','installation_id'=>'22222222-2222-4222-8222-222222222222','activation_id'=>null];
         self::assertSame('activate',Protocol::input('challenge',$valid)['action']);
         foreach([$valid+['extra'=>true],array_replace($valid,['activation_id'=>'']),array_replace($valid,['installation_id'=>'22222222-2222-1222-8222-222222222222'])] as $invalid) {
             try { Protocol::input('challenge',$invalid); self::fail('Invalid schema accepted'); } catch(ApiProblem $error) { self::assertSame(400,$error->status); }

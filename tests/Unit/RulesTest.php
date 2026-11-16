@@ -24,15 +24,15 @@ final class RulesTest extends TestCase
         Input::date('2026-02-30T12:30');
     }
 
-    public function testReviewNeedsExpedientes(): void
+    public function testDependentModuleNeedsItsRequiredModule(): void
     {
         $this->expectException(Problem::class);
-        Capabilities::validate(['review_workflow'], ['review_workflow','expedientes'], [['capability_key'=>'review_workflow','required_key'=>'expedientes']]);
+        Capabilities::validate(['prueba_e'], ['prueba_e','prueba_a'], [['capability_key'=>'prueba_e','required_key'=>'prueba_a']]);
     }
 
-    public function testLinkedExpedientesDoesNotInventManagedDependency(): void
+    public function testEnabledModulesDoNotInventUnrelatedDependencies(): void
     {
-        Capabilities::validate(['linked_libraries','expedientes'], ['linked_libraries','managed_libraries','expedientes','review_workflow'], [['capability_key'=>'review_workflow','required_key'=>'expedientes']]);
+        Capabilities::validate(['prueba_b','prueba_a'], ['prueba_b','prueba_c','prueba_a','prueba_e'], [['capability_key'=>'prueba_e','required_key'=>'prueba_a']]);
         self::assertTrue(true);
     }
 

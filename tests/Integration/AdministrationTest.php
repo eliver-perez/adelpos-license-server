@@ -35,35 +35,16 @@ final class AdministrationTest extends TestCase
 
     private function issueInput(string $type = 'perpetual'): array
     {
-        return ['customer_id'=>$this->customer(),'product_id'=>'gestor_documental','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['linked_libraries','managed_libraries','expedientes','review_workflow'],'reason'=>'Compra de prueba','reference'=>'TEST-001'];
+        return ['customer_id'=>$this->customer(),'product_id'=>'producto_prueba','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['prueba_b','prueba_c','prueba_a','prueba_e'],'reason'=>'Compra de prueba','reference'=>'TEST-001'];
     }
 
     public function testMigrationIsRepeatableAndBootstrapIsSingleUse(): void
     {
         self::assertSame([], (new Migrator($this->fixture->owner, dirname(__DIR__,2).'/database/migrations'))->migrate());
-        self::assertSame('AIDEX', $this->fixture->app->read->product('gestor_documental')['display_name']);
+        self::assertSame('AD-EL POS', $this->fixture->app->read->product('adel_pos')['display_name']);
+        self::assertSame([], $this->fixture->app->read->capabilities('adel_pos'));
         $this->expectException(Problem::class);
         $this->fixture->app->auth->bootstrap('other@example.test','Otro','Fixture-Password-Only-2026!');
-    }
-
-    public function testIdentityMigrationPreservesCustomCatalogAndLicenseData(): void
-    {
-        $owner = $this->fixture->owner;
-        $app = $this->fixture->app;
-        $issued = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput());
-        $before = $app->read->license($issued['id']);
-        $capabilities = $app->read->capabilities('gestor_documental');
-        $owner->execute("UPDATE products SET display_name='Nombre propio',description='Descripción propia' WHERE product_id='gestor_documental'");
-        $sql = file_get_contents(dirname(__DIR__, 2).'/database/migrations/005_aidex_identity.sql');
-        $owner->pdo->exec($sql);
-        self::assertSame('Nombre propio', $app->read->product('gestor_documental')['display_name']);
-        $owner->execute("UPDATE products SET display_name='AIBID',description='Aplicación de Indexación de Bibliotecas Digitales' WHERE product_id='gestor_documental'");
-        $owner->pdo->exec($sql);
-        self::assertSame('AIDEX', $app->read->product('gestor_documental')['display_name']);
-        self::assertSame('Aplicación de Indexación Digital de Expedientes', $app->read->product('gestor_documental')['description']);
-        self::assertSame($before, $app->read->license($issued['id']));
-        self::assertSame($capabilities, $app->read->capabilities('gestor_documental'));
-        self::assertSame([], (new Migrator($owner, dirname(__DIR__, 2).'/database/migrations'))->migrate());
     }
 
     public function testPerpetualDoesNotIncludeMaintenanceAndKeyIsNeverArchived(): void
@@ -138,7 +119,7 @@ final class AdministrationTest extends TestCase
 
     public function testInvalidDependenciesRollbackWithoutKeyOrLicense(): void
     {
-        $app=$this->fixture->app; $input=$this->issueInput(); $input['features']=['review_workflow'];
+        $app=$this->fixture->app; $input=$this->issueInput(); $input['features']=['prueba_e'];
         try { $app->licenses->issue($this->actor,Uuid::create(),$input); self::fail('Invalid rights accepted'); } catch(Problem) {}
         self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM licenses')->fetchColumn());
         self::assertSame(0,(int)$app->db->execute('SELECT COUNT(*) FROM license_credentials')->fetchColumn());
@@ -191,8 +172,11 @@ final class AdministrationTest extends TestCase
         $app=$this->fixture->app; $issued=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput());
         try { $this->fixture->owner->execute('UPDATE licenses SET grace_days=15 WHERE license_id=?',[Uuid::bytes($issued['id'])]); self::fail('Invalid perpetual term accepted'); } catch(\PDOException $error) { self::assertSame(3819,(int)$error->errorInfo[1]); }
         $credential=$app->db->one('SELECT * FROM license_credentials LIMIT 1');
-        $this->expectException(\PDOException::class);
-        $this->fixture->owner->execute('INSERT INTO license_credentials(credential_id,license_id,key_digest,state,created_at) VALUES (?,?,?,\'active\',?)',[Uuid::bytes(Uuid::create()),$credential['license_id'],str_repeat('f',64),$this->clock->sql()]);
+        // Every required column is supplied, so only the single-active-credential rule can reject it.
+        try { $this->fixture->owner->execute('INSERT INTO license_credentials(credential_id,license_id,key_digest,state,created_at,credential_encrypted,code_format) VALUES (?,?,?,\'active\',?,?,\'3-4-4-4\')',[Uuid::bytes(Uuid::create()),$credential['license_id'],str_repeat('f',64),$this->clock->sql(),$credential['credential_encrypted']]); self::fail('Second active credential accepted'); }
+        catch (\PDOException $error) { self::assertSame(1062,(int)$error->errorInfo[1]); }
+        try { $this->fixture->owner->execute('INSERT INTO license_credentials(credential_id,license_id,key_digest,state,created_at) VALUES (?,?,?,\'retired\',?)',[Uuid::bytes(Uuid::create()),$credential['license_id'],str_repeat('e',64),$this->clock->sql()]); self::fail('Credential without its protected copy accepted'); }
+        catch (\PDOException $error) { self::assertSame(1364,(int)$error->errorInfo[1]); }
     }
 
     public function testSearchCannotInjectSqlAndSnapshotIsConsistent(): void
@@ -245,27 +229,5 @@ final class AdministrationTest extends TestCase
             if($this->fixture->owner->pdo->inTransaction())$this->fixture->owner->pdo->rollBack();
             unlink($file);
         }
-    }
-
-    public function testStageThreeMigrationPreservesExistingCommercialRecords(): void
-    {
-        $issued=$this->fixture->app->licenses->issue($this->actor,Uuid::create(),$this->issueInput());
-        $owner=$this->fixture->owner;
-        // Reconstruct exactly the stage-2 schema in this empty, isolated fixture.
-        // No external database or migration source file is modified.
-        foreach(['license_transfers','offline_decisions','offline_requests'] as $table)$owner->execute('DROP TABLE '.$table);
-        $owner->execute("DELETE FROM schema_migrations WHERE name='004_offline_requests.sql'");
-        $owner->execute('ALTER TABLE activations DROP FOREIGN KEY fk_current_revision');
-        // Remove only this empty fixture's new dependent FK while reconstructing older tables.
-        $owner->execute('ALTER TABLE license_documents DROP FOREIGN KEY license_documents_ibfk_4');
-        foreach(['license_revisions','activations','signing_scopes','signing_keys','activation_challenges','license_requests'] as $table)$owner->execute('DROP TABLE '.$table);
-        $owner->execute('DELETE FROM schema_migrations WHERE name=\'003_online_activations.sql\'');
-        self::assertSame(['003_online_activations.sql','004_offline_requests.sql'],(new Migrator($owner,dirname(__DIR__,2).'/database/migrations'))->migrate());
-        $owner->execute('ALTER TABLE license_documents ADD CONSTRAINT license_documents_ibfk_4 FOREIGN KEY (offline_revision_id) REFERENCES license_revisions(revision_id)');
-        $license=$this->fixture->app->read->license($issued['id']);
-        self::assertSame('perpetual',$license['license_type']);self::assertNull($license['maintenance_until']);
-        self::assertSame(1,(int)$license['row_version']);self::assertSame([],$license['activations']);
-        self::assertCount(1,$license['history']);
-        self::assertSame($this->fixture->app->crypto->digest('CREDENTIAL_KEY',$issued['secret']),$owner->execute('SELECT key_digest FROM license_credentials')->fetchColumn());
     }
 }

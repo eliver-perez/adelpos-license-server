@@ -32,7 +32,7 @@ final class ActivationsTest extends TestCase
     private function issue(string $type='perpetual'): array
     {
         $customer=$this->app->catalog->saveCustomer($this->actor,Uuid::create(),null,['name'=>'API test','contact_name'=>'Test','email'=>'api@example.test','state'=>'active']);
-        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'gestor_documental','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['linked_libraries','expedientes','review_workflow'],'reason'=>'Protocol test']);
+        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['prueba_b','prueba_a','prueba_e'],'reason'=>'Protocol test']);
     }
     private function device(): array
     {
@@ -42,8 +42,8 @@ final class ActivationsTest extends TestCase
     private function request(string $action='activate',?array $device=null,?string $activation=null): array
     {
         $device??=$this->device;
-        $challenge=json_decode($this->app->activations->challenge(['action'=>$action,'product_id'=>'gestor_documental','installation_id'=>$device['id'],'activation_id'=>$activation])->body,true);
-        $input=['request_id'=>Uuid::create(),'product_id'=>'gestor_documental','installation_id'=>$device['id'],'challenge_id'=>$challenge['challenge_id'],'app_version'=>'1.0.0'];
+        $challenge=json_decode($this->app->activations->challenge(['action'=>$action,'product_id'=>'producto_prueba','installation_id'=>$device['id'],'activation_id'=>$activation])->body,true);
+        $input=['request_id'=>Uuid::create(),'product_id'=>'producto_prueba','installation_id'=>$device['id'],'challenge_id'=>$challenge['challenge_id'],'app_version'=>'1.0.0'];
         if($action==='activate')$input+=['license_key'=>$this->issued['secret'],'installation_public_key'=>$device['public'],'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('a',64)];
         else $input['activation_id']=$activation;
         $input['proof']=Protocol::encode(sodium_crypto_sign_detached(Protocol::proofMessage($action,$input,$challenge['nonce']),$device['secret']));
@@ -90,7 +90,7 @@ final class ActivationsTest extends TestCase
         $response=$this->app->activations->execute('activate',$this->request());$payload=$this->payload($response);
         self::assertSame($this->issued['id'],$payload['license_id']);self::assertSame($this->device['id'],$payload['installation_id']);
         self::assertSame(1,$payload['license_revision']);self::assertNull($payload['expires_at']);self::assertNull($payload['maintenance_until']);
-        self::assertSame(0,$payload['grace_days']);self::assertFalse($payload['features']['managed_libraries']);
+        self::assertSame(0,$payload['grace_days']);self::assertFalse($payload['features']['prueba_c']);
         self::assertSame(['max_installations'=>1,'max_users'=>null,'max_libraries'=>null,'max_documents'=>null],$payload['limits']);
         self::assertCount(18,$payload);
         $this->clock->instant=$this->clock->instant->modify('+1 day');
@@ -167,10 +167,10 @@ final class ActivationsTest extends TestCase
         $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'maintenance',['version'=>1,'until'=>'2027-09-25T12:00','reference'=>'PURCHASE','reason'=>'Explicit maintenance']);
         $current=$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
         self::assertSame(2,$current['license_revision']);self::assertNull($current['expires_at']);self::assertNotNull($current['maintenance_until']);
-        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>2,'features'=>['linked_libraries'],'reason'=>'Module change']);
+        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>2,'features'=>['prueba_b'],'reason'=>'Module change']);
         $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'revoke',['version'=>3,'reason'=>'Commercial revocation']);
         $revoked=$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
-        self::assertSame('revoked',$revoked['license_status']);self::assertSame(4,$revoked['license_revision']);self::assertFalse($revoked['features']['review_workflow']);
+        self::assertSame('revoked',$revoked['license_status']);self::assertSame(4,$revoked['license_revision']);self::assertFalse($revoked['features']['prueba_e']);
         self::assertSame(403,$this->app->activations->execute('activate',$this->request('activate',$this->device()))->status);
         self::assertGreaterThan(0,$this->app->audit->verify());
     }
@@ -218,7 +218,7 @@ final class ActivationsTest extends TestCase
         $keys->generate('random-manifest','manifest');$keys->activate('random-manifest','Manifest isolation');
         self::assertSame($first,$this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id']))));
         $keys->generate('random-test-b','license');$keys->activate('random-test-b','Trust distributed in isolated test');
-        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['ocr'],'reason'=>'New rights with new signer']);
+        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['prueba_d'],'reason'=>'New rights with new signer']);
         $this->payload($this->app->activations->execute('refresh',$this->request('refresh',null,$first['activation_id'])));
         self::assertSame(['random-test-a','random-test-b'],array_column($this->app->db->all('SELECT kid FROM license_revisions ORDER BY license_revision'),'kid'));
         self::assertSame('verify_only',$this->app->db->execute('SELECT state FROM signing_keys WHERE kid=\'random-test-a\'')->fetchColumn());
@@ -243,7 +243,7 @@ final class ActivationsTest extends TestCase
     public function testSavingUnchangedModulesDoesNotCreateAnotherSignedRevision(): void
     {
         $this->activate();
-        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['linked_libraries','expedientes','review_workflow'],'reason'=>'Review without a rights change']);
+        $this->app->licenses->change($this->actor,Uuid::create(),$this->issued['id'],'features',['version'=>1,'features'=>['prueba_b','prueba_a','prueba_e'],'reason'=>'Review without a rights change']);
         self::assertSame(1,(int)$this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
     }
     public function testProductionRejectsPublicFixtureKeyEvenWhenRelabeled(): void

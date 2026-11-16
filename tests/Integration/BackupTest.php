@@ -29,11 +29,11 @@ final class BackupTest extends TestCase
             $mfa = 'JBSWY3DPEHPK3PXP';
             $app->db->execute('UPDATE admin_users SET mfa_secret_encrypted=? WHERE id=?',[$app->crypto->encrypt($mfa,'mfa:'.$actor->id),Uuid::bytes($actor->id)]);
             $customer = $app->catalog->saveCustomer($actor,Uuid::create(),null,['name'=>'Recovery fixture','contact_name'=>'Test','email'=>'backup@example.test','state'=>'active']);
-            $license = $app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'gestor_documental','license_type'=>'perpetual','entitled_release_until'=>'2026-09-26T12:00','features'=>['expedientes'],'reason'=>'Recovery fixture']);
+            $license = $app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>'2026-09-26T12:00','features'=>['prueba_a'],'reason'=>'Recovery fixture']);
             $document = $app->documents->generate($actor,Uuid::create(),$license['id'],['document_type'=>'licensing']);
             $documentPdf = $app->documents->download($actor,$document['document_id'])['bytes'];
             $pair = sodium_crypto_sign_keypair();
-            $payload = ['action'=>'activate','request_id'=>Uuid::create(),'created_at'=>'2026-09-26T12:00:00Z','product_id'=>'gestor_documental','installation_id'=>Uuid::create(),'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($pair)),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('d',64),'license_key'=>$license['secret']];
+            $payload = ['action'=>'activate','request_id'=>Uuid::create(),'created_at'=>'2026-09-26T12:00:00Z','product_id'=>'producto_prueba','installation_id'=>Uuid::create(),'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($pair)),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('d',64),'license_key'=>$license['secret']];
             $envelope = static function (array $input) use ($pair): string {
                 $bytes = Protocol::encode(Protocol::json($input));
                 return Protocol::json(['schema_version'=>'1.0','payload_b64u'=>$bytes,'signature_b64u'=>Protocol::encode(sodium_crypto_sign_detached("LICREQ-V1\n".$bytes,sodium_crypto_sign_secretkey($pair)))]);

@@ -27,6 +27,7 @@ final class MySqlFixture
         $databaseDsn = preg_replace('/;?dbname=[^;]*/', '', $dsn) . ';dbname=' . $this->database;
         $this->owner = new Database(new \PDO($databaseDsn, getenv('TEST_MYSQL_USER') ?: 'root', getenv('TEST_MYSQL_PASSWORD') ?: ''));
         (new Migrator($this->owner, dirname(__DIR__) . '/database/migrations'))->migrate();
+        self::syntheticCatalog($this->owner);
         $this->server->exec("CREATE USER '" . $this->username . "'@'localhost' IDENTIFIED BY " . $this->server->quote($password));
         $command = [PHP_BINARY, dirname(__DIR__) . '/bin/grants.php', '--database=' . $this->database, '--user=' . $this->username];
         $process = proc_open($command, [1=>['pipe','w'],2=>['pipe','w']], $pipes);
@@ -40,6 +41,20 @@ final class MySqlFixture
         $this->values = $values;
         $config = new Config($values, false);
         $this->app = new App($config, Database::connect($config), $clock);
+    }
+
+    /**
+     * The initial schema seeds only adel_pos, without modules. Tests use this synthetic
+     * product instead: five modules, one dependency (prueba_e requires prueba_a).
+     */
+    public const PRODUCT = 'producto_prueba';
+    public const MODULES = ['prueba_a'=>'Módulo de prueba A','prueba_b'=>'Módulo de prueba B','prueba_c'=>'Módulo de prueba C','prueba_d'=>'Módulo de prueba D','prueba_e'=>'Módulo de prueba E'];
+
+    public static function syntheticCatalog(Database $db): void
+    {
+        $db->execute("INSERT INTO products(product_id,display_name,description,state,created_at,updated_at) VALUES (?,'Producto de prueba','Producto sintético para pruebas automáticas','active',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))", [self::PRODUCT]);
+        foreach (self::MODULES as $key => $name) { $db->execute('INSERT INTO product_capabilities(product_id,capability_key,display_name) VALUES (?,?,?)', [self::PRODUCT, $key, $name]); }
+        $db->execute('INSERT INTO capability_dependencies(product_id,capability_key,required_key) VALUES (?,?,?)', [self::PRODUCT, 'prueba_e', 'prueba_a']);
     }
 
     public function destroy(): void

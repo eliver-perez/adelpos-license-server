@@ -5,7 +5,6 @@ namespace AdelPos\License\Tests\Integration;
 use AdelPos\License\App;
 use AdelPos\License\Application\Actor;
 use AdelPos\License\Domain\{ApiProblem, OfflineRequest, Problem, Protocol, Uuid};
-use AdelPos\License\Infrastructure\Migrator;
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
@@ -31,7 +30,7 @@ final class OfflineTest extends TestCase
     private function issue(string $type = 'perpetual'): array
     {
         $customer = $this->app->catalog->saveCustomer($this->actor,Uuid::create(),null,['name'=>'Offline tests','contact_name'=>'Test','email'=>'offline@example.test','state'=>'active']);
-        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'gestor_documental','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['expedientes','review_workflow'],'reason'=>'Offline tests']);
+        return $this->app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>$type,'entitled_release_until'=>'2026-09-25T12:00','expires_at'=>'2026-10-01T00:00','features'=>['prueba_a','prueba_e'],'reason'=>'Offline tests']);
     }
     private function device(): array
     {
@@ -41,7 +40,7 @@ final class OfflineTest extends TestCase
     private function envelope(string $action = 'activate', ?array $activation = null, array $changes = [], ?array $device = null): string
     {
         $device ??= $this->device;
-        $payload = ['action'=>$action,'request_id'=>Uuid::create(),'created_at'=>'1999-01-01T00:00:00Z','product_id'=>'gestor_documental','installation_id'=>$device['id'],'installation_public_key'=>$device['public'],'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('b',64),'license_key'=>$this->license['secret']];
+        $payload = ['action'=>$action,'request_id'=>Uuid::create(),'created_at'=>'1999-01-01T00:00:00Z','product_id'=>'producto_prueba','installation_id'=>$device['id'],'installation_public_key'=>$device['public'],'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('b',64),'license_key'=>$this->license['secret']];
         if ($activation !== null) { $payload += ['license_id'=>$activation['license_id'],'activation_id'=>$activation['activation_id']]; }
         $encoded = Protocol::encode(Protocol::json(array_replace($payload,$changes)));
         return Protocol::json(['schema_version'=>'1.0','payload_b64u'=>$encoded,'signature_b64u'=>Protocol::encode(sodium_crypto_sign_detached("LICREQ-V1\n".$encoded,$device['secret']))]);
@@ -68,8 +67,8 @@ final class OfflineTest extends TestCase
 
     private function onlineRequest(?string $requestId = null, string $action = 'activate', ?string $activationId = null): array
     {
-        $challenge = json_decode($this->app->activations->challenge(['action'=>$action,'product_id'=>'gestor_documental','installation_id'=>$this->device['id'],'activation_id'=>$activationId])->body,true);
-        $input = ['request_id'=>$requestId ?? Uuid::create(),'product_id'=>'gestor_documental','installation_id'=>$this->device['id'],'challenge_id'=>$challenge['challenge_id'],'app_version'=>'test'];
+        $challenge = json_decode($this->app->activations->challenge(['action'=>$action,'product_id'=>'producto_prueba','installation_id'=>$this->device['id'],'activation_id'=>$activationId])->body,true);
+        $input = ['request_id'=>$requestId ?? Uuid::create(),'product_id'=>'producto_prueba','installation_id'=>$this->device['id'],'challenge_id'=>$challenge['challenge_id'],'app_version'=>'test'];
         if ($action === 'activate') { $input += ['license_key'=>$this->license['secret'],'installation_public_key'=>$this->device['public'],'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('b',64)]; }
         else { $input['activation_id'] = $activationId; }
         $input['proof'] = Protocol::encode(sodium_crypto_sign_detached(Protocol::proofMessage($action,$input,$challenge['nonce']),$this->device['secret']));
@@ -231,21 +230,6 @@ final class OfflineTest extends TestCase
         $this->app->offline->decide(new Actor($operator['id'],'superadmin'),Uuid::create(),$id,'approved',$this->input(['force_activation_id'=>$old['activation_id'],'accept_offline_limit'=>'1']));
     }
 
-    public function testMigrationFourPreservesOnlineHistoryAndCredentials(): void
-    {
-        $response = $this->app->activations->execute('activate',$this->onlineRequest());
-        $jws = json_decode($response->body,true)['license_jws'];
-        $active = json_decode(sodium_base642bin(explode('.',$jws)[1],SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),true);
-        // Reconstruct stage 3 in this isolated fixture without changing migration source files.
-        $owner = $this->fixture->owner;
-        foreach (['license_transfers','offline_decisions','offline_requests'] as $table) { $owner->execute('DROP TABLE '.$table); }
-        $owner->execute("DELETE FROM schema_migrations WHERE name='004_offline_requests.sql'");
-        $before = $owner->all('SELECT * FROM license_revisions');
-        self::assertSame(['004_offline_requests.sql'],(new Migrator($owner,dirname(__DIR__,2).'/database/migrations'))->migrate());
-        self::assertSame($before,$owner->all('SELECT * FROM license_revisions'));
-        self::assertSame($active['activation_id'],$this->app->read->license($this->license['id'])['activations'][0]['id_text']);
-    }
-
     public function testOnlineAndOfflineShareRequestIdNamespaceInBothDirections(): void
     {
         $envelope = $this->envelope(); $requestId = OfflineRequest::verify($envelope)['payload']['request_id'];
@@ -281,7 +265,7 @@ final class OfflineTest extends TestCase
     public function testCommercialChangesRequireReviewAndRevocationBlocksApproval(): void
     {
         $id = $this->import($this->envelope()); $stale = $this->input();
-        $this->app->licenses->change($this->actor,Uuid::create(),$this->license['id'],'features',['version'=>1,'features'=>['ocr'],'reason'=>'Commercial change']);
+        $this->app->licenses->change($this->actor,Uuid::create(),$this->license['id'],'features',['version'=>1,'features'=>['prueba_d'],'reason'=>'Commercial change']);
         try { $this->app->offline->decide($this->actor,Uuid::create(),$id,'approved',$stale); self::fail('Stale terms approved'); }
         catch (Problem $error) { self::assertSame(409,$error->status); }
         $this->app->licenses->change($this->actor,Uuid::create(),$this->license['id'],'revoke',['version'=>2,'reason'=>'Commercial revocation']);

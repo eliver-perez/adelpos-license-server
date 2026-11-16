@@ -4,7 +4,7 @@ namespace AdelPos\License\Tests\Integration;
 
 use AdelPos\License\Application\{Actor, TrustedDevices};
 use AdelPos\License\Domain\{Problem, Uuid};
-use AdelPos\License\Infrastructure\{Crypto, Migrator};
+use AdelPos\License\Infrastructure\Crypto;
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
@@ -266,24 +266,5 @@ final class TrustedDevicesTest extends TestCase
         $grant = $this->authorize();
         self::assertSame('authenticated', $this->fixture->app->sessions->load($this->login($grant['token']))['stage']);
         $this->reject(fn () => $this->fixture->app->auth->reauthenticate($this->actor, self::PASSWORD, 'invalid'), 401);
-    }
-
-    public function testMigrationPreservesExistingUsersSessionsAndExpiry(): void
-    {
-        $app = $this->fixture->app;
-        $pending = $this->login();
-        $owner = $this->fixture->owner;
-        $owner->execute('DROP TABLE admin_trusted_devices');
-        $owner->execute('ALTER TABLE admin_sessions DROP COLUMN trust_offered_at');
-        $owner->execute("DELETE FROM schema_migrations WHERE name='007_trusted_devices.sql'");
-        $beforeUser = $owner->one('SELECT * FROM admin_users');
-        $beforeSession = $owner->one('SELECT * FROM admin_sessions WHERE token_hash=?', [hash('sha256', $pending)]);
-        self::assertSame(['007_trusted_devices.sql'], (new Migrator($owner, dirname(__DIR__, 2) . '/database/migrations'))->migrate());
-        self::assertSame($beforeUser, $owner->one('SELECT * FROM admin_users'));
-        $afterSession = $owner->one('SELECT * FROM admin_sessions WHERE token_hash=?', [hash('sha256', $pending)]);
-        self::assertNull($afterSession['trust_offered_at']);
-        unset($afterSession['trust_offered_at']);
-        self::assertSame($beforeSession, $afterSession);
-        self::assertSame([], (new Migrator($owner, dirname(__DIR__, 2) . '/database/migrations'))->migrate());
     }
 }

@@ -77,7 +77,7 @@ $licenseId = '11111111-1111-4111-8111-111111111111';
 $activationId = '33333333-3333-4333-8333-333333333333';
 $fingerprintHash = 'sha256:' . hash('sha256', 'PUBLIC TEST MACHINE A');
 $payload = [
-    'schema_version' => '1.0', 'product_id' => 'gestor_documental',
+    'schema_version' => '1.0', 'product_id' => 'producto_prueba',
     'license_id' => $licenseId, 'activation_id' => $activationId,
     'installation_id' => $installationId,
     'installation_public_key' => $installationKey['public_key_b64u'],
@@ -86,8 +86,8 @@ $payload = [
     'issued_at' => '2026-09-22T18:30:00Z', 'expires_at' => null, 'grace_days' => 0,
     'maintenance_until' => null, 'entitled_release_until' => '2026-09-22T18:30:00Z',
     'features' => [
-        'linked_libraries' => true, 'managed_libraries' => true, 'ocr' => true,
-        'expedientes' => true, 'review_workflow' => true,
+        'prueba_b' => true, 'prueba_c' => true, 'prueba_d' => true,
+        'prueba_a' => true, 'prueba_e' => true,
     ],
     'limits' => [
         'max_installations' => 1, 'max_users' => null, 'max_libraries' => null, 'max_documents' => null,
@@ -120,10 +120,10 @@ foreach (['activate', 'refresh', 'deactivate'] as $action) {
     $nonce = encodeBase64Url(hash('sha256', 'PUBLIC TEST NONCE ' . $action, true));
     $proofActivationId = $action === 'activate' ? null : $activationId;
     $message = implode("\n", ['LIC-V1', $action, $challengeId, $nonce,
-        'gestor_documental', $installationId, $proofActivationId ?? '-']);
+        'producto_prueba', $installationId, $proofActivationId ?? '-']);
     $proofVectors[] = [
         'name' => $action, 'key_name' => $installationKey['name'], 'action' => $action,
-        'challenge_id' => $challengeId, 'nonce' => $nonce, 'product_id' => 'gestor_documental',
+        'challenge_id' => $challengeId, 'nonce' => $nonce, 'product_id' => 'producto_prueba',
         'installation_id' => $installationId, 'activation_id' => $proofActivationId,
         'message_utf8' => $message, 'proof' => signTestMessage($installationKey, $message),
     ];
@@ -134,7 +134,7 @@ foreach (['activate', 'renew', 'deactivate'] as $index => $action) {
     $offlinePayload = [
         'action' => $action,
         'request_id' => '44444444-4444-4444-8444-44444444444' . ($index + 1),
-        'created_at' => '2026-09-25T18:30:00Z', 'product_id' => 'gestor_documental',
+        'created_at' => '2026-09-25T18:30:00Z', 'product_id' => 'producto_prueba',
         'installation_id' => $installationId,
         'installation_public_key' => $installationKey['public_key_b64u'],
         'fingerprint_version' => '1', 'fingerprint_hash' => $fingerprintHash,

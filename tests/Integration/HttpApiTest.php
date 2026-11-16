@@ -51,9 +51,9 @@ final class HttpApiTest extends TestCase
     }
     private function signed(string $action,array $device,string $key='',?string $activation=null): array
     {
-        $challenge=$this->http('/v1/activations/challenge',Protocol::json(['action'=>$action,'product_id'=>'gestor_documental','installation_id'=>$device['id'],'activation_id'=>$activation]));
+        $challenge=$this->http('/v1/activations/challenge',Protocol::json(['action'=>$action,'product_id'=>'producto_prueba','installation_id'=>$device['id'],'activation_id'=>$activation]));
         self::assertSame(200,$challenge['status'],$challenge['body']);
-        $input=['request_id'=>Uuid::create(),'product_id'=>'gestor_documental','installation_id'=>$device['id'],'challenge_id'=>$challenge['json']['challenge_id'],'app_version'=>'HTTP-test'];
+        $input=['request_id'=>Uuid::create(),'product_id'=>'producto_prueba','installation_id'=>$device['id'],'challenge_id'=>$challenge['json']['challenge_id'],'app_version'=>'HTTP-test'];
         if($action==='activate')$input+=['license_key'=>$key,'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($device['pair'])),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('b',64)];else $input['activation_id']=$activation;
         $input['proof']=Protocol::encode(sodium_crypto_sign_detached(Protocol::proofMessage($action,$input,$challenge['json']['nonce']),sodium_crypto_sign_secretkey($device['pair'])));
         return $input;
@@ -72,15 +72,15 @@ final class HttpApiTest extends TestCase
         $app=$this->fixture->app;$keys=$this->fixture->signingKeys();$keys->generate('http-random-key','license');$keys->activate('http-random-key','HTTP fixture');
         $actor=new Actor($app->auth->bootstrap('admin@example.test','HTTP test','Fixture-Password-Only-2026!'),'superadmin');
         $customer=$app->catalog->saveCustomer($actor,Uuid::create(),null,['name'=>'HTTP client','contact_name'=>'Test','email'=>'','state'=>'active']);
-        $license=$app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'gestor_documental','license_type'=>'perpetual','entitled_release_until'=>'2026-09-25T12:00','features'=>['ocr'],'reason'=>'HTTP flow']);
+        $license=$app->licenses->issue($actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>'2026-09-25T12:00','features'=>['prueba_d'],'reason'=>'HTTP flow']);
         $device=['id'=>Uuid::create(),'pair'=>sodium_crypto_sign_keypair()];
         $request=$this->signed('activate',$device,$license['secret']);
         $activated=$this->http('/v1/activations',Protocol::json($request));$payload=$this->payload($activated);
         self::assertSame($activated['body'],$this->http('/v1/activations',Protocol::json(array_reverse($request,true)))['body']);
         self::assertStringNotContainsString('set-cookie:',$activated['headers']);self::assertStringContainsString('cache-control: no-store',$activated['headers']);
-        $app->licenses->change($actor,Uuid::create(),$license['id'],'features',['version'=>1,'features'=>['linked_libraries'],'reason'=>'HTTP rights update']);
+        $app->licenses->change($actor,Uuid::create(),$license['id'],'features',['version'=>1,'features'=>['prueba_b'],'reason'=>'HTTP rights update']);
         $fresh=$this->payload($this->http('/v1/activations/refresh',Protocol::json($this->signed('refresh',$device,'',$payload['activation_id']))));
-        self::assertSame(2,$fresh['license_revision']);self::assertFalse($fresh['features']['ocr']);
+        self::assertSame(2,$fresh['license_revision']);self::assertFalse($fresh['features']['prueba_d']);
         $deactivation=$this->signed('deactivate',$device,'',$payload['activation_id']);
         $ack=$this->http('/v1/activations/deactivate',Protocol::json($deactivation));self::assertSame(200,$ack['status']);self::assertSame('deactivated',$ack['json']['status']);
         self::assertSame($ack['body'],$this->http('/v1/activations/deactivate',Protocol::json($deactivation))['body']);
@@ -105,7 +105,7 @@ final class HttpApiTest extends TestCase
         self::assertSame(403,$this->http($path,'{}','POST',['Content-Type: application/json','X-Forwarded-Proto: https'])['status']);
         $this->config['APP_ENV']='testing';$this->config['APP_URL']=$this->origin;$this->writeConfig();
         $this->fixture->owner->execute('DELETE FROM rate_limit_buckets');
-        $body=Protocol::json(['action'=>'activate','product_id'=>'gestor_documental','installation_id'=>Uuid::create(),'activation_id'=>null]);
+        $body=Protocol::json(['action'=>'activate','product_id'=>'producto_prueba','installation_id'=>Uuid::create(),'activation_id'=>null]);
         for($i=0;$i<30;++$i)self::assertSame(200,$this->http($path,$body)['status']);
         $limited=$this->http($path,$body);self::assertSame(429,$limited['status']);self::assertSame('RATE_LIMITED',$limited['json']['error']['code']);self::assertStringContainsString('retry-after: 60',$limited['headers']);
         self::assertStringNotContainsString('access-control-allow-origin:',$limited['headers']);

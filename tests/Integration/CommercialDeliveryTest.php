@@ -25,7 +25,7 @@ final class CommercialDeliveryTest extends TestCase
         $this->actor = new Actor($app->auth->bootstrap('delivery@example.test','Entrega sintética',self::PASSWORD),'superadmin');
         $this->enroll($this->actor);
         $customer=$app->catalog->saveCustomer($this->actor,Uuid::create(),null,['name'=>'Organismo sintético','legal_name'=>'Organismo de pruebas','tax_id'=>'AAA010101AAA','contact_name'=>'Prueba','email'=>'','state'=>'active']);
-        $this->license=$app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'gestor_documental','license_type'=>'perpetual','entitled_release_until'=>'2026-10-21T12:00','features'=>['ocr']]);
+        $this->license=$app->licenses->issue($this->actor,Uuid::create(),['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>'perpetual','entitled_release_until'=>'2026-10-21T12:00','features'=>['prueba_d']]);
     }
 
     protected function tearDown(): void { if (isset($this->fixture)) { $this->fixture->destroy(); } }
@@ -47,7 +47,7 @@ final class CommercialDeliveryTest extends TestCase
     {
         $app=$this->fixture->app;$keys=$this->fixture->signingKeys($this->clock);$keys->generate('commercial-test','license');$keys->activate('commercial-test','Synthetic');
         $pair=sodium_crypto_sign_keypair();$installation=Uuid::create();
-        $payload=['action'=>'activate','request_id'=>Uuid::create(),'created_at'=>'2026-10-21T12:00:00Z','product_id'=>'gestor_documental','installation_id'=>$installation,'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($pair)),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('a',64)];
+        $payload=['action'=>'activate','request_id'=>Uuid::create(),'created_at'=>'2026-10-21T12:00:00Z','product_id'=>'producto_prueba','installation_id'=>$installation,'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($pair)),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('a',64)];
         $encoded=Protocol::encode(Protocol::json($payload));$request=Protocol::json(['schema_version'=>'1.0','payload_b64u'=>$encoded,'signature_b64u'=>Protocol::encode(sodium_crypto_sign_detached("LICREQ-V1\n".$encoded,sodium_crypto_sign_secretkey($pair)))]);
         $imported=$app->offline->import($this->actor,Uuid::create(),$request);
         return $app->offline->decide($this->actor,Uuid::create(),$imported['id'],'approved',['license_id'=>$this->license['id'],'version'=>1,'renewal_mode'=>'current','reason'=>'Equipo verificado por operador']);
@@ -67,7 +67,7 @@ final class CommercialDeliveryTest extends TestCase
     public function testOlderArtifactsRemainDiscoverableAndDownloadableAfterFiftyRevisions(): void
     {
         $app=$this->fixture->app;$offline=$this->offline();
-        for ($i=1;$i<=50;++$i) { $app->licenses->change($this->actor,Uuid::create(),$this->license['id'],'features',['version'=>$i,'features'=>$i%2===0?['ocr']:[],'reason'=>'Revisión sintética']); }
+        for ($i=1;$i<=50;++$i) { $app->licenses->change($this->actor,Uuid::create(),$this->license['id'],'features',['version'=>$i,'features'=>$i%2===0?['prueba_d']:[],'reason'=>'Revisión sintética']); }
         $first=$app->read->license($this->license['id']);$older=$app->read->license($this->license['id'],2);
         self::assertCount(50,$first['revisions']);self::assertCount(1,$older['revisions']);self::assertSame(2,$first['revision_pages']);
         self::assertSame($offline['revision_id'],$older['revisions'][0]['id_text']);
@@ -154,11 +154,11 @@ final class CommercialDeliveryTest extends TestCase
         $this->expectException(Problem::class);$app->materials->revision($operator,$this->license['id'],$offline['revision_id'],self::PASSWORD,$this->code());
     }
 
-    public function testLegacyDigestIsNotRecoveredAndUnprivilegedIssuanceDoesNotDisclose(): void
+    public function testUnknownCodeFormatIsNotRecoveredAndUnprivilegedReissueDoesNotDisclose(): void
     {
         $app=$this->fixture->app;
-        $this->fixture->owner->execute('UPDATE license_credentials SET credential_encrypted=NULL,code_format=NULL WHERE license_id=?',[Uuid::bytes($this->license['id'])]);
-        try { $app->materials->reveal($this->actor,$this->license['id'],self::PASSWORD,$this->code());self::fail('Legacy hash recovered'); } catch(Problem $e) { self::assertSame(409,$e->status); }
+        $this->fixture->owner->execute('UPDATE license_credentials SET code_format=\'formato-desconocido\' WHERE license_id=?',[Uuid::bytes($this->license['id'])]);
+        try { $app->materials->reveal($this->actor,$this->license['id'],self::PASSWORD,$this->code());self::fail('Unknown code format recovered'); } catch(Problem $e) { self::assertSame(409,$e->status); }
         $input=['version'=>1,'reason'=>'Reemplazo de desarrollo'];$operator=$this->operator();
         $result=$app->licenses->change($operator,Uuid::create(),$this->license['id'],'reissue',$input);self::assertArrayNotHasKey('secret',$result);
         $secret=$app->materials->reveal($this->actor,$this->license['id'],self::PASSWORD,$this->code());self::assertNotSame($this->license['secret'],$secret);self::assertNotNull(ActivationCode::normalize($secret));

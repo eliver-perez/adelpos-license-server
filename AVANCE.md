@@ -7,7 +7,7 @@ Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no 
 | 0 — Verificación contra el código | **Cerrada.** Línea base: 147 pruebas, 20 904 aserciones, 1 error con MySQL 8.0.46. El propietario decidió corregirlo en la Fase 1. |
 | 1 — Repositorio y copia limpia | **Cerrada.** 161 pruebas, 20 994 aserciones, todas OK. |
 | 2 — Renombre de la identidad interna | **Cerrada.** 162 pruebas, 20 997 aserciones, todas OK. Verificador Go OK con archivos regenerados. |
-| 3 — Esquema inicial consolidado | Pendiente |
+| 3 — Esquema inicial consolidado | **Cerrada.** 161 pruebas, 20 980 aserciones, todas OK. Equivalencia con la cadena original comprobada. |
 | 4 — Retirar lo exclusivo de AIDEX | Pendiente |
 | 5 — Marca y textos | Pendiente |
 | 6 — Documentación y cierre | Pendiente |
@@ -403,3 +403,90 @@ Otras comprobaciones:
 - `composer validate` da OK.
 - `php bin/check-secrets.php` no encuentra nada.
 - Quedan 0 bases y 0 usuarios de prueba, tanto con el prefijo viejo como con el nuevo.
+
+---
+
+## Fase 3 — Esquema inicial consolidado
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+**Instrucción del propietario (2026-11-16):** eliminar desde ahora cualquier mención de `aibid` o `aidex` en código, plantillas, pruebas y configuración, sin dejarlas para fases posteriores. Esta fase quita las del esquema, el catálogo y las pruebas. El commit siguiente, «Marca AD-EL POS», quita las de textos visibles y logos.
+
+### 3.1 Migración consolidada
+
+- `database/migrations/001_esquema_inicial.sql` sustituye a las migraciones heredadas 001 a 007, que siguen disponibles en el commit raíz `3c0c87b`.
+- Conserva el orden de tablas, columnas y llaves foráneas de la cadena heredada. Las columnas que agregaban las migraciones 006 y 007 quedan al final de su tabla, como antes. Así también coinciden las posiciones de columna y los nombres automáticos de las llaves foráneas (`*_ibfk_N`).
+- **Se eliminaron los datos y pasos que solo existían por la historia de AIDEX:**
+  - el catálogo heredado de producto y módulos (migración 002);
+  - la migración de identidad 005;
+  - el relleno de la referencia comercial desde `license_changes` (migración 006).
+- **Endurecimiento registrado:** `license_credentials.credential_encrypted` y `code_format` pasan a `NOT NULL`, porque no existen credenciales anteriores al formato 3-4-4-4. Se anotará en `DECISIONS.md` (Fase 6). No hay otros cambios de esquema.
+- **Datos iniciales:**
+  - solo el producto `adel_pos` («AD-EL POS», «Punto de venta para restaurantes»), **sin módulos**;
+  - las filas técnicas de siempre: `security_state` y la cabeza de auditoría `admin`.
+- **Sin cambios:** el migrador (control por checksum, bloqueo e integridad), `bin/migrate.php` y `bin/grants.php`. El esquema tiene las mismas 33 tablas, más `schema_migrations`. Una prueba comprueba que los permisos cubren exactamente esas tablas.
+
+### 3.2 Producto sintético de prueba
+
+`tests/MySqlFixture.php` crea, después de migrar, un producto sintético con módulos sintéticos. Los nombres conservan el orden alfabético de los anteriores, así que no cambia ningún resultado que dependa del orden.
+
+| Antes (catálogo heredado) | Ahora (sintético) |
+| --- | --- |
+| producto del gestor documental | `producto_prueba` («Producto de prueba») |
+| `expedientes` | `prueba_a` |
+| `linked_libraries` | `prueba_b` |
+| `managed_libraries` | `prueba_c` |
+| `ocr` | `prueba_d` |
+| `review_workflow`, que requiere `expedientes` | `prueba_e`, que requiere `prueba_a` |
+
+- Se conservan las pruebas de dependencias y ciclos.
+- El generador de `contracts/v1/fixtures/` también usa el producto sintético. Los archivos se regeneraron y el verificador Go da OK.
+- El protocolo heredado no cambia (campos, `LIC-V1`, `LICREQ-V1`, `lic+jws`). Los límites heredados (`max_libraries`, `max_documents`) se conservan hasta la etapa 2 y se marcan en la Fase 4.
+- Los scripts de Playwright (`tests/*.cjs`, `tests/prepare-panel.php`) usan los mismos nombres sintéticos.
+
+### 3.3 Código
+
+`src/Application/CatalogService.php`: se quitaron las tres reglas fijas del catálogo heredado y sus dos mensajes con el nombre AIDEX. Solo aplicaban a un producto que ya no existe, y ninguna prueba las ejercitaba. Las reglas genéricas de dependencias y ciclos (`Capabilities`) no cambian.
+
+### 3.4 Pruebas eliminadas, sustituidas y nuevas
+
+**Eliminadas (5).** Probaban rutas de actualización de la historia de AIDEX, que no existen con un esquema inicial único:
+
+| Prueba | Qué probaba |
+| --- | --- |
+| `AdministrationTest::testIdentityMigrationPreservesCustomCatalogAndLicenseData` | Migración de identidad 005 |
+| `AdministrationTest::testStageThreeMigrationPreservesExistingCommercialRecords` | Actualización de la etapa 2 a la 3 (migraciones 003 y 004 sobre datos) |
+| `OfflineTest::testMigrationFourPreservesOnlineHistoryAndCredentials` | Actualización de la etapa 3 a la 4 (migración 004 sobre datos) |
+| `TrustedDevicesTest::testMigrationPreservesExistingUsersSessionsAndExpiry` | Migración 007 sobre datos |
+| `CommercialMigrationTest` (archivo completo) | Actualización desde 5 migraciones y relleno de datos de la 006 |
+
+**Nueva: `tests/Integration/InitialSchemaTest.php` (4 pruebas).** Sustituye a las anteriores y cubre:
+
+1. **Equivalencia.** La cadena heredada 001-007 se lee del commit raíz, identificado por el SHA-256 de su `composer.lock` sin nombrarlo, y se aplica en una base temporal. `001_esquema_inicial.sql` se aplica en otra. Se comparan tablas, columnas (posición, tipo, nulabilidad, valor por omisión, juego de caracteres, columnas generadas), índices, llaves foráneas y restricciones `CHECK`. **Las únicas diferencias admitidas son los dos endurecimientos.** Para comprobar que detecta cambios, se alteró temporalmente un índice: la prueba falló como debía, y el archivo se restauró idéntico.
+2. **Base vacía.** Crea solo `adel_pos`, sin módulos, licencias, usuarios ni llaves. Repetir la migración no aplica nada y deja el esquema idéntico.
+3. **Migrador genérico.** Con una migración sintética, aplica solo lo pendiente sin tocar los datos existentes, y rechaza un archivo modificado o una migración incompleta. Antes no había pruebas de estas dos reglas.
+4. **Permisos.** Los de `bin/grants.php` cubren exactamente las tablas del esquema.
+
+**Ajustadas:**
+- `AdministrationTest::testMigrationIsRepeatableAndBootstrapIsSingleUse` comprueba ahora `adel_pos` sin módulos, en vez del producto heredado.
+- `AdministrationTest::testUniqueCredentialAndCommercialChecksExistInDatabase`:
+  - antes, la segunda credencial activa se rechazaba por cualquier error;
+  - ahora se envían todos los campos obligatorios y se exige el error de unicidad (1062);
+  - se agregó la comprobación del endurecimiento: rechazar una credencial sin copia protegida (1364).
+- `CommercialDeliveryTest`: la simulación de credencial heredada (copia protegida en NULL, ya imposible) se cambió por un formato de código desconocido. Ejercita la misma rama (409) y la misma reemisión sin revelar el código.
+- `RulesTest`: dos métodos renombrados con la terminología sintética.
+
+### 3.5 Pruebas de la fase
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 2 | 162 | 20 997 | OK |
+| **Cierre de la Fase 3** | **161** | **20 980** | **OK**: unitarias 72/20 185, integración 89/795, sin omisiones ni advertencias |
+
+Diferencias: −5 pruebas eliminadas y +4 nuevas (3.4).
+
+Otras comprobaciones:
+- El verificador Go da OK con los archivos regenerados.
+- `generate-fixtures.php --check` da OK.
+- `php bin/check-secrets.php` no encuentra nada.
+- Quedan 0 bases y 0 usuarios de prueba.
