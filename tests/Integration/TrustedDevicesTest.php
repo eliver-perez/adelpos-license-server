@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\Application\{Actor, TrustedDevices};
-use Aibid\Domain\{Problem, Uuid};
-use Aibid\Infrastructure\{Crypto, Migrator};
-use Aibid\Tests\{FrozenClock, MySqlFixture};
+use AdelPos\License\Application\{Actor, TrustedDevices};
+use AdelPos\License\Domain\{Problem, Uuid};
+use AdelPos\License\Infrastructure\{Crypto, Migrator};
+use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class TrustedDevicesTest extends TestCase

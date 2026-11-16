@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Domain\{Problem, Uuid};
-use Aibid\Infrastructure\{Audit, Crypto, Database};
+use AdelPos\License\Domain\{Problem, Uuid};
+use AdelPos\License\Infrastructure\{Audit, Crypto, Database};
 
 final class LicenseMaterials
 {

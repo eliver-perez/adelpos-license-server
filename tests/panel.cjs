@@ -73,7 +73,7 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         await submit(page.getByRole('button', { name: 'Ahora no' }));
         await page.waitForURL('**/admin');
         await screenshot('dashboard-desktop');
-        assert.equal((await context.cookies()).find(cookie => cookie.name === 'aibid_admin_dev').httpOnly, true);
+        assert.equal((await context.cookies()).find(cookie => cookie.name === 'adelpos_admin_dev').httpOnly, true);
 
         await page.goto('/admin/licenses');
         await page.locator('tbody tr').filter({ hasText: 'Centro Documental del Norte' }).getByRole('link', { name: 'Detalle' }).click();

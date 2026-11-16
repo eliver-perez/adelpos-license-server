@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Aibid;
+namespace AdelPos\License;
 
 final class Config
 {
@@ -8,7 +8,7 @@ final class Config
 
     public static function load(): self
     {
-        $path = getenv('AIBID_CONFIG') ?: dirname(__DIR__) . '/config/local.php';
+        $path = getenv('ADELPOS_LICENSE_CONFIG') ?: dirname(__DIR__) . '/config/local.php';
         return new self(is_file($path) ? require $path : []);
     }
 

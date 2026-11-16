@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
-use Aibid\Config;
+use AdelPos\License\Config;
 
 final class Crypto
 {
@@ -39,7 +39,8 @@ final class Crypto
 
     public function seal(string $plaintext, string $context, string $purpose): string
     {
-        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'aidex/'.$purpose.'/v1');
+        self::assertPurpose($purpose);
+        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'adelpos-license/'.$purpose.'/v1');
         $nonce = random_bytes(24);
         try { return base64_encode($nonce.sodium_crypto_aead_xchacha20poly1305_ietf_encrypt($plaintext, $context, $nonce, $key)); }
         finally { sodium_memzero($key); }
@@ -49,17 +50,24 @@ final class Crypto
     {
         $bytes = base64_decode($ciphertext, true);
         if ($bytes === false || strlen($bytes) < 40) { throw new \RuntimeException('Invalid protected record.'); }
-        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'aidex/'.$purpose.'/v1');
+        self::assertPurpose($purpose);
+        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'adelpos-license/'.$purpose.'/v1');
         try { $result = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(substr($bytes,24), $context, substr($bytes,0,24), $key); }
         finally { sodium_memzero($key); }
         if ($result === false) { throw new \RuntimeException('Protected record authentication failed.'); }
         return $result;
     }
 
+    /** Offline evidence has its own key context; a record purpose may never alias it. */
+    private static function assertPurpose(string $purpose): void
+    {
+        if ($purpose === 'offline-evidence' || !preg_match('/\A[a-z][a-z0-9-]{0,63}\z/', $purpose)) { throw new \InvalidArgumentException('Invalid protected record purpose.'); }
+    }
+
     public function encryptEvidence(string $plaintext, string $context): string
     {
         $nonce = random_bytes(24);
-        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'aibid/offline-evidence/v1');
+        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'adelpos-license/offline-evidence/v1');
         try { return base64_encode($nonce . sodium_crypto_aead_xchacha20poly1305_ietf_encrypt($plaintext, $context, $nonce, $key)); }
         finally { sodium_memzero($key); }
     }
@@ -68,7 +76,7 @@ final class Crypto
     {
         $bytes = base64_decode($ciphertext, true);
         if ($bytes === false || strlen($bytes) < 40) { throw new \RuntimeException('Invalid evidence.'); }
-        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'aibid/offline-evidence/v1');
+        $key = hash_hkdf('sha256', $this->config->key('CREDENTIAL_KEY'), 32, 'adelpos-license/offline-evidence/v1');
         try { $result = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(substr($bytes,24), $context, substr($bytes,0,24), $key); }
         finally { sodium_memzero($key); }
         if ($result === false) { throw new \RuntimeException('Evidence authentication failed.'); }

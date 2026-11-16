@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <section class="panel form-panel mt-4"><h2>Solicitudes y recuperaciones offline</h2>
     <p><a class="text-link" href="/admin/offline">Importar o consultar una solicitud .licreq</a></p>
     <?php foreach ($license['offline'] as $request): ?><div class="note-box mt-2"><a class="text-link" href="/admin/offline/<?= V::escape($request['id_text']) ?>"><?= V::escape(['activate'=>'Activación','renew'=>'Renovación','deactivate'=>'Desactivación'][$request['action']]) ?> · <?= V::escape(['pending'=>'Pendiente','approved'=>'Aprobada','rejected'=>'Rechazada'][$request['status']]) ?></a><small class="cell-sub"><?= V::escape(V::date($request['imported_at'])) ?></small></div><?php endforeach; ?>

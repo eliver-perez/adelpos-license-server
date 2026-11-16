@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; $availableProducts = array_values(array_filter($products, fn($product) => $product['state']==='active')); $selectedProduct=$availableProducts[0]['product_id']??''; ?>
+<?php use AdelPos\License\Http\View as V; $availableProducts = array_values(array_filter($products, fn($product) => $product['state']==='active')); $selectedProduct=$availableProducts[0]['product_id']??''; ?>
 <div class="page-heading"><div><a class="text-link" href="/admin/licenses">← Licencias</a><h1 class="mt-3">Emitir una licencia</h1><p>Define los derechos del cliente y genera su clave comercial.</p></div></div>
 <?php if (!$customers || !$availableProducts): ?><div class="alert alert-info">Necesitas un cliente y un producto activos para emitir una licencia. <a href="/admin/customers/new">Registrar cliente</a></div><?php else: ?>
 <form method="post" action="/admin/licenses/create" id="license-form"><div class="row g-4"><div class="col-xl-8"><section class="panel form-panel"><?php V::fields($csrf); ?>

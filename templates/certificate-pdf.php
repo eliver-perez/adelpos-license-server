@@ -1,5 +1,5 @@
 <?php
-use Aibid\Http\View as V;
+use AdelPos\License\Http\View as V;
 $d = $document;
 $licensing = $d['type']==='licensing';
 $title = $licensing ? 'Constancia de licenciamiento' : 'Constancia de entrega para activación';

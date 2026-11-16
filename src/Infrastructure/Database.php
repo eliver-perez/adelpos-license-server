@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
-use Aibid\Config;
+use AdelPos\License\Config;
 use PDO;
 
 final class Database

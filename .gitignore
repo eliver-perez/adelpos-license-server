@@ -15,8 +15,7 @@
 *.key
 *.pem
 
-# Respaldos cifrados (formato heredado y formato de AD-EL POS)
-*.aibidbackup
+# Respaldos cifrados
 *.adelposbackup
 
 # Artefactos de archivos comprimidos en macOS

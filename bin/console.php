@@ -21,7 +21,7 @@ function hiddenInput(string $label): string
 function consoleRun(callable $operation): void
 {
     try { $operation(); }
-    catch (Aibid\Domain\Problem $error) { fwrite(STDERR, $error->getMessage() . PHP_EOL); exit(1); }
+    catch (AdelPos\License\Domain\Problem $error) { fwrite(STDERR, $error->getMessage() . PHP_EOL); exit(1); }
     catch (Throwable $error) {
         // Never print PDO connection strings, parameters, environment, or secrets.
         fwrite(STDERR, 'No se pudo completar el comando (' . get_class($error) . '). Revisa configuración, permisos y estado de las migraciones.' . PHP_EOL);

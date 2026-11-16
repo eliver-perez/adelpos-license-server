@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\Application\TrustedDevices;
-use Aibid\Domain\Uuid;
-use Aibid\Tests\{MySqlFixture, NativeStackFixture};
+use AdelPos\License\Application\TrustedDevices;
+use AdelPos\License\Domain\Uuid;
+use AdelPos\License\Tests\{MySqlFixture, NativeStackFixture};
 use PHPUnit\Framework\TestCase;
 
 final class TrustedDevicesHttpTest extends TestCase
@@ -73,7 +73,7 @@ final class TrustedDevicesHttpTest extends TestCase
         self::assertArrayNotHasKey(TrustedDevices::COOKIE, $this->cookies);
         $approved = $this->request('/trust-device', $this->fields(['choice' => 'trust']));
         self::assertSame(303, $approved['status']);
-        foreach (['__host-license_trusted_device=', 'httponly', '; secure', 'samesite=lax', 'path=/', 'expires='] as $attribute) { self::assertStringContainsString($attribute, $approved['headers']); }
+        foreach (['__host-adelpos_trusted_device=', 'httponly', '; secure', 'samesite=lax', 'path=/', 'expires='] as $attribute) { self::assertStringContainsString($attribute, $approved['headers']); }
         self::assertStringNotContainsString('domain=', $approved['headers']);
         $trust = $this->cookies[TrustedDevices::COOKIE];
         $stored = $this->stack->app->db->one('SELECT token_hash,expires_at FROM admin_trusted_devices');

@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid;
+namespace AdelPos\License;
 
-use Aibid\Application\{Access, ActivationService, AdminService, AuthService, CatalogService, DocumentService, LicenseMaterials, LicenseService, OfflineService, Operations, RevisionPublisher, TrustedDevices};
-use Aibid\Infrastructure\{Audit, Clock, Crypto, Database, RateLimiter, ReadRepository, Sessions, SigningKeys, Totp};
+use AdelPos\License\Application\{Access, ActivationService, AdminService, AuthService, CatalogService, DocumentService, LicenseMaterials, LicenseService, OfflineService, Operations, RevisionPublisher, TrustedDevices};
+use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database, RateLimiter, ReadRepository, Sessions, SigningKeys, Totp};
 
 final class App
 {
@@ -49,7 +49,7 @@ final class App
         $this->read = new ReadRepository($db, $this->clock);
         $this->access = new Access($db);
         $this->materials = new LicenseMaterials($db,$this->crypto,$this->audit,$this->access,$this->auth);
-        $this->documents = new DocumentService($db,$config,$this->clock,$this->crypto,$this->audit,$operations,$this->access,$this->materials,new \Aibid\Infrastructure\CertificatePdf());
+        $this->documents = new DocumentService($db,$config,$this->clock,$this->crypto,$this->audit,$operations,$this->access,$this->materials,new \AdelPos\License\Infrastructure\CertificatePdf());
     }
 
     public static function boot(): self

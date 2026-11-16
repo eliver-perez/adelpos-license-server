@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -14,7 +14,7 @@ final class SecretsCheckTest extends TestCase
     private const PASSWORD = 'DB_PASS' . 'WORD';
     private const KEY_NAME = 'AUDIT' . '_KEY';
     private const VALUE = 'valor-sintetico-' . 'no-usar';
-    private const PUBLIC_TEST_PREFIX = 'AIBIDLICENSE PUBLIC TEST ONLY V1 ';
+    private const PUBLIC_TEST_PREFIX = 'ADELPOS LICENSE PUBLIC TEST ONLY V1 ';
     private ?string $directory = null;
 
     protected function setUp(): void

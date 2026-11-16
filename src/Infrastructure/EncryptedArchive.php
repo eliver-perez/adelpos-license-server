@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
 /** Streaming authenticated archive, version 1. Never extract into an existing directory. */
 final class EncryptedArchive
 {
-    private const MAGIC = "AIBID-BACKUP-V1\n";
+    private const MAGIC = "ADELPOS-LICENSE-BACKUP-V1\n";
     private const CHUNK = 65536;
 
     public static function key(string $path): string

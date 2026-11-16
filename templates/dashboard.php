@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <div class="page-heading"><div><span class="eyebrow">VISTA GENERAL</span><h1>Tu operación, al día</h1><p>Licencias, clientes y próximos vencimientos en un solo lugar.</p></div><?php if ($actor->canWrite()): ?><a class="btn btn-primary" href="/admin/licenses/new">＋ Emitir licencia</a><?php endif; ?></div>
 <div class="metric-grid">
 <?php foreach ([['Licencias emitidas',$stats['licenses'],'Derechos registrados','/admin/licenses'],['Clientes activos',$stats['customers'],'Relaciones comerciales','/admin/customers'],['Licencias perpetuas',$stats['perpetual'],'Uso sin vencimiento','/admin/licenses?type=perpetual'],['Vencen en 30 días',$stats['expiring'],'Suscripciones por revisar','/admin/licenses?expiry=soon']] as [$label,$value,$description,$link]): ?>

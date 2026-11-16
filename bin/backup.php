@@ -2,12 +2,12 @@
 declare(strict_types=1);
 require __DIR__.'/console.php';
 
-use Aibid\Infrastructure\{Backup,EncryptedArchive};
+use AdelPos\License\Infrastructure\{Backup,EncryptedArchive};
 
 consoleRun(function (): void {
     $options = getopt('',['action:','key-file:','output:','archive:','directory:','mysqldump:','mysql-options:']);
     $action = $options['action'] ?? ''; $keyFile = $options['key-file'] ?? '';
-    if (!in_array($action,['keygen','create','extract'],true) || $keyFile==='') { throw new Aibid\Domain\Problem('Uso: backup.php --action=keygen|create|extract --key-file=/ruta/clave [--output=/ruta/copia.aibidbackup | --archive=/ruta/copia.aibidbackup --directory=/ruta/nueva]'); }
+    if (!in_array($action,['keygen','create','extract'],true) || $keyFile==='') { throw new AdelPos\License\Domain\Problem('Uso: backup.php --action=keygen|create|extract --key-file=/ruta/clave [--output=/ruta/copia.adelposbackup | --archive=/ruta/copia.adelposbackup --directory=/ruta/nueva]'); }
     Backup::outsidePublic($keyFile);
     if ($action==='keygen') {
         $mask = umask(0077);
@@ -22,10 +22,10 @@ consoleRun(function (): void {
     $key = EncryptedArchive::key($keyFile);
     try {
         if ($action==='create') {
-            if (!isset($options['output'])) { throw new Aibid\Domain\Problem('Falta --output.'); }
-            $result = (new Backup(Aibid\App::boot()))->create($options['output'],$key,$options['mysqldump'] ?? 'mysqldump',$options['mysql-options'] ?? null);
+            if (!isset($options['output'])) { throw new AdelPos\License\Domain\Problem('Falta --output.'); }
+            $result = (new Backup(AdelPos\License\App::boot()))->create($options['output'],$key,$options['mysqldump'] ?? 'mysqldump',$options['mysql-options'] ?? null);
         } else {
-            if (!isset($options['archive'],$options['directory'])) { throw new Aibid\Domain\Problem('Faltan --archive y --directory nueva.'); }
+            if (!isset($options['archive'],$options['directory'])) { throw new AdelPos\License\Domain\Problem('Faltan --archive y --directory nueva.'); }
             $manifest = Backup::extract($options['archive'],$key,$options['directory']);
             $result = ['verified'=>true,'created_at'=>$manifest['created_at'],'audit'=>$manifest['audit'],'files'=>count($manifest['files_sha256'])];
         }

@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
-use Aibid\Domain\{ApiProblem, Jws, Protocol, StrictJson};
+use AdelPos\License\Domain\{ApiProblem, Jws, Protocol, StrictJson};
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -12,7 +12,7 @@ final class ProtocolTest extends TestCase
     {
         $previous=getenv('DB_DSN');
         putenv('DB_DSN=mysql:host=must-not-connect;dbname=unrelated');
-        try { self::assertSame('mysql:dbname=isolated_test',(new \Aibid\Config(['DB_DSN'=>'mysql:dbname=isolated_test'],false))->get('DB_DSN')); }
+        try { self::assertSame('mysql:dbname=isolated_test',(new \AdelPos\License\Config(['DB_DSN'=>'mysql:dbname=isolated_test'],false))->get('DB_DSN')); }
         finally { $previous===false ? putenv('DB_DSN') : putenv('DB_DSN='.$previous); }
     }
     public static function invalidJson(): array

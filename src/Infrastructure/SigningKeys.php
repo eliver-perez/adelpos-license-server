@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
-use Aibid\Config;
-use Aibid\Domain\{Jws, Problem, Protocol};
+use AdelPos\License\Config;
+use AdelPos\License\Domain\{Jws, Problem, Protocol};
 
 final class SigningKeys
 {
@@ -128,7 +128,7 @@ final class SigningKeys
             // even if someone relabels their file or registry record.
             if ($this->environment() === 'production') {
                 foreach (['lic-test-v1-a','lic-test-v1-b','installation-test-v1-a','installation-test-v1-b'] as $name) {
-                    $fixture = sodium_crypto_sign_seed_keypair(hash('sha256', 'AIBIDLICENSE PUBLIC TEST ONLY V1 ' . $name, true));
+                    $fixture = sodium_crypto_sign_seed_keypair(hash('sha256', 'ADELPOS LICENSE PUBLIC TEST ONLY V1 ' . $name, true));
                     if (hash_equals(sodium_crypto_sign_publickey($fixture), $key['public_key'])) { throw new \RuntimeException('Public fixture key forbidden in production.'); }
                 }
             }

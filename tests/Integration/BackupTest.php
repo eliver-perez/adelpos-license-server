@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\{App,Config};
-use Aibid\Application\Actor;
-use Aibid\Domain\{Protocol,Uuid};
-use Aibid\Infrastructure\{Backup,Database,RecoveryVerifier};
-use Aibid\Tests\{FrozenClock,MySqlFixture,NativeStackFixture};
+use AdelPos\License\{App,Config};
+use AdelPos\License\Application\Actor;
+use AdelPos\License\Domain\{Protocol,Uuid};
+use AdelPos\License\Infrastructure\{Backup,Database,RecoveryVerifier};
+use AdelPos\License\Tests\{FrozenClock,MySqlFixture,NativeStackFixture};
 use PHPUnit\Framework\TestCase;
 
 final class BackupTest extends TestCase
@@ -16,11 +16,11 @@ final class BackupTest extends TestCase
         if (!getenv('TEST_MYSQL_DSN')) { self::markTestSkipped('Requires isolated MySQL 8 and its mysql/mysqldump utilities.'); }
         $clock = new FrozenClock(new \DateTimeImmutable('2026-09-26T12:00:00Z'));
         $fixture = new MySqlFixture($clock); $app = $fixture->app;
-        $directory = sys_get_temp_dir().'/aibid-recovery-'.bin2hex(random_bytes(8)); mkdir($directory,0700);
-        $target = 'aibid_test_'.bin2hex(random_bytes(5)); $created = false;
+        $directory = sys_get_temp_dir().'/adelpos-license-recovery-'.bin2hex(random_bytes(8)); mkdir($directory,0700);
+        $target = 'adelpos_license_test_'.bin2hex(random_bytes(5)); $created = false;
         $write = static function (string $file, string $value): void { file_put_contents($file,$value); chmod($file,0600); };
         $environment = array_diff_key(getenv(),$fixture->values);
-        $environment['AIBID_CONFIG'] = $directory.'/source.php';
+        $environment['ADELPOS_LICENSE_CONFIG'] = $directory.'/source.php';
         $cli = static fn(array $args): string => NativeStackFixture::command([PHP_BINARY,...$args],dirname(__DIR__,2),$environment);
         try {
             $write($directory.'/source.php','<?php return '.var_export($fixture->values,true).';');
@@ -51,11 +51,11 @@ final class BackupTest extends TestCase
             self::assertCount(2,$history);
             $cli(['bin/backup.php','--action=keygen','--key-file='.$directory.'/backup.key']);
             self::assertSame(0600,fileperms($directory.'/backup.key')&0777);
-            $metadata = json_decode($cli(['bin/backup.php','--action=create','--key-file='.$directory.'/backup.key','--output='.$directory.'/copy.aibidbackup','--mysqldump='.(getenv('TEST_MYSQLDUMP_BIN') ?: 'mysqldump')]),true,16,JSON_THROW_ON_ERROR);
-            self::assertSame(hash_file('sha256',$directory.'/copy.aibidbackup'),$metadata['archive_sha256']);
-            self::assertSame(0600,fileperms($directory.'/copy.aibidbackup')&0777);
-            self::assertSame([],glob($directory.'/.aibid-backup-*'));
-            $extracted = json_decode($cli(['bin/backup.php','--action=extract','--key-file='.$directory.'/backup.key','--archive='.$directory.'/copy.aibidbackup','--directory='.$directory.'/restored']),true,16,JSON_THROW_ON_ERROR);
+            $metadata = json_decode($cli(['bin/backup.php','--action=create','--key-file='.$directory.'/backup.key','--output='.$directory.'/copy.adelposbackup','--mysqldump='.(getenv('TEST_MYSQLDUMP_BIN') ?: 'mysqldump')]),true,16,JSON_THROW_ON_ERROR);
+            self::assertSame(hash_file('sha256',$directory.'/copy.adelposbackup'),$metadata['archive_sha256']);
+            self::assertSame(0600,fileperms($directory.'/copy.adelposbackup')&0777);
+            self::assertSame([],glob($directory.'/.adelpos-license-backup-*'));
+            $extracted = json_decode($cli(['bin/backup.php','--action=extract','--key-file='.$directory.'/backup.key','--archive='.$directory.'/copy.adelposbackup','--directory='.$directory.'/restored']),true,16,JSON_THROW_ON_ERROR);
             self::assertTrue($extracted['verified']); self::assertSame(4,$extracted['files']);
             $saved = json_decode(file_get_contents($directory.'/restored/config.json'),true,16,JSON_THROW_ON_ERROR);
             foreach (['MFA_KEY','CREDENTIAL_KEY','AUDIT_KEY','SESSION_KEY','OPERATION_KEY'] as $name) { self::assertSame($fixture->values[$name],$saved[$name]); }
@@ -104,7 +104,7 @@ final class BackupTest extends TestCase
             try { RecoveryVerifier::verify($restored); self::fail('Corrupt JWS was accepted.'); }
             catch (\RuntimeException $error) { self::assertStringContainsString('JWS',$error->getMessage()); }
         } finally {
-            if ($created && preg_match('/\Aaibid_test_[a-f0-9]{10}\z/',$target)) { $fixture->owner->execute('DROP DATABASE `'.$target.'`'); }
+            if ($created && preg_match('/\Aadelpos_license_test_[a-f0-9]{10}\z/',$target)) { $fixture->owner->execute('DROP DATABASE `'.$target.'`'); }
             $fixture->destroy(); NativeStackFixture::remove($directory);
         }
     }

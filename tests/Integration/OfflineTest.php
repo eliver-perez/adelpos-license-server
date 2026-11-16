@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\App;
-use Aibid\Application\Actor;
-use Aibid\Domain\{ApiProblem, OfflineRequest, Problem, Protocol, Uuid};
-use Aibid\Infrastructure\Migrator;
-use Aibid\Tests\{FrozenClock, MySqlFixture};
+use AdelPos\License\App;
+use AdelPos\License\Application\Actor;
+use AdelPos\License\Domain\{ApiProblem, OfflineRequest, Problem, Protocol, Uuid};
+use AdelPos\License\Infrastructure\Migrator;
+use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class OfflineTest extends TestCase
@@ -319,7 +319,7 @@ final class OfflineTest extends TestCase
         $owner->pdo->beginTransaction(); $owner->one('SELECT license_id FROM licenses WHERE license_id=? FOR UPDATE',[Uuid::bytes($this->license['id'])]);
         try {
             foreach ($jobs as $job) {
-                $file = tempnam(sys_get_temp_dir(),'aibid-offline-race-'); chmod($file,0600); $files[] = $file;
+                $file = tempnam(sys_get_temp_dir(),'adelpos-license-offline-race-'); chmod($file,0600); $files[] = $file;
                 file_put_contents($file,Protocol::json($job));
                 $process = proc_open([PHP_BINARY,dirname(__DIR__).'/offline-worker.php',$file],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
                 self::assertIsResource($process); $workers[] = [$process,$pipes];

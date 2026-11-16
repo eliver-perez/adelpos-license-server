@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <div class="page-heading"><div><span class="eyebrow">SEGUNDO FACTOR VERIFICADO</span><h1>¿Deseas confiar en este dispositivo?</h1><p>Podrás iniciar sesión durante los próximos 30 días sin introducir nuevamente el código de Authenticator. Tu usuario y contraseña seguirán siendo obligatorios.</p></div></div>
 <section class="panel form-panel">
     <p>Confía únicamente en un dispositivo de uso personal. Puedes revocar esta autorización desde Seguridad de tu cuenta.</p>

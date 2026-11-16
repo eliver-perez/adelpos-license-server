@@ -1,5 +1,5 @@
 <?php
-use Aibid\Http\View as V;
+use AdelPos\License\Http\View as V;
 $payload = $offline['payload'];
 $requestPath = '/admin/offline/'.$offline['id_text'];
 $active = null;

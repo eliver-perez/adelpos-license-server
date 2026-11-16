@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\Application\Actor;
-use Aibid\Domain\{Protocol, Uuid};
-use Aibid\Tests\MySqlFixture;
+use AdelPos\License\Application\Actor;
+use AdelPos\License\Domain\{Protocol, Uuid};
+use AdelPos\License\Tests\MySqlFixture;
 use PHPUnit\Framework\TestCase;
 
 final class HttpApiTest extends TestCase
@@ -25,7 +25,7 @@ final class HttpApiTest extends TestCase
         $this->config=array_replace($this->fixture->values,['APP_URL'=>$this->origin]);$this->writeConfig();
         $log=$this->directory.'/server.log';
         $environment=array_diff_key(getenv(),$this->config);
-        $this->process=proc_open([PHP_BINARY,'-S',$address,'-t','public','public/router.php'],[0=>['pipe','r'],1=>['file',$log,'a'],2=>['file',$log,'a']],$pipes,dirname(__DIR__,2),array_merge($environment,['AIBID_CONFIG'=>$this->directory.'/config.php']));
+        $this->process=proc_open([PHP_BINARY,'-S',$address,'-t','public','public/router.php'],[0=>['pipe','r'],1=>['file',$log,'a'],2=>['file',$log,'a']],$pipes,dirname(__DIR__,2),array_merge($environment,['ADELPOS_LICENSE_CONFIG'=>$this->directory.'/config.php']));
         fclose($pipes[0]);
         $deadline=microtime(true)+5;
         do{$connection=@stream_socket_client('tcp://'.$address,$errno,$error,0.1);if($connection){fclose($connection);return;}usleep(10000);}while(microtime(true)<$deadline);

@@ -131,7 +131,7 @@ func main() {
 	for _, key := range fixtures.Keys {
 		seed, seedError := hex.DecodeString(key.Seed)
 		require(seedError == nil && len(seed) == ed25519.SeedSize, key.Name+": test seed")
-		expectedSeed := sha256.Sum256([]byte("AIBIDLICENSE PUBLIC TEST ONLY V1 " + key.Name))
+		expectedSeed := sha256.Sum256([]byte("ADELPOS LICENSE PUBLIC TEST ONLY V1 " + key.Name))
 		require(hex.EncodeToString(expectedSeed[:]) == key.Seed, key.Name+": public deterministic derivation")
 		privateKey := ed25519.NewKeyFromSeed(seed)
 		publicKey := privateKey.Public().(ed25519.PublicKey)

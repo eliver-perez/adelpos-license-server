@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <div class="page-heading"><div><span class="eyebrow">OPERACIÓN SIN CONEXIÓN</span><h1>Solicitudes offline</h1><p>Importa la solicitud del equipo, revisa sus derechos y entrega el archivo autorizado.</p></div></div>
 <?php if ($actor->canWrite()): ?>
 <section class="panel form-panel mb-4">

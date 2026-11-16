@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Http;
+namespace AdelPos\License\Http;
 
-use Aibid\Domain\{Problem, Uuid};
+use AdelPos\License\Domain\{Problem, Uuid};
 
 final class View
 {

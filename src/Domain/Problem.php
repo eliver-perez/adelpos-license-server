@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Domain;
+namespace AdelPos\License\Domain;
 
 final class Problem extends \RuntimeException
 {

@@ -1,13 +1,13 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Domain\{Problem, Uuid};
-use Aibid\Infrastructure\{Audit, Clock, Crypto, Database, Sessions};
+use AdelPos\License\Domain\{Problem, Uuid};
+use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database, Sessions};
 
 final class TrustedDevices
 {
-    public const COOKIE = '__Host-license_trusted_device';
+    public const COOKIE = '__Host-adelpos_trusted_device';
 
     public function __construct(private Database $db, private Clock $clock, private Audit $audit, private Sessions $sessions) {}
 

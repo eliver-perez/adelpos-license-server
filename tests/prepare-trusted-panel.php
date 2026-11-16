@@ -3,10 +3,10 @@ declare(strict_types=1);
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 // Utiliza únicamente la base aleatoria y el HTTPS local de las fixtures de pruebas.
-$fixture = new Aibid\Tests\MySqlFixture();
+$fixture = new AdelPos\License\Tests\MySqlFixture();
 $stack = null;
 try {
-    $stack = new Aibid\Tests\NativeStackFixture($fixture);
+    $stack = new AdelPos\License\Tests\NativeStackFixture($fixture);
     $stack->app->auth->bootstrap('browser@example.test', 'Prueba visual', 'Fixture-Password-Only-2026!');
     echo 'Panel sintético listo: ' . $stack->origin . PHP_EOL;
     echo 'En otra terminal: TRUST_PANEL_ORIGIN=' . $stack->origin . ' node tests/trusted-devices-panel.cjs' . PHP_EOL;

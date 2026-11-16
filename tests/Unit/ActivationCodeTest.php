@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
-use Aibid\Domain\ActivationCode;
+use AdelPos\License\Domain\ActivationCode;
 use PHPUnit\Framework\TestCase;
 
 final class ActivationCodeTest extends TestCase
@@ -22,6 +22,6 @@ final class ActivationCodeTest extends TestCase
     public function testNormalizationAndStrictRejection(): void
     {
         foreach (['K7M-9R3X-6TVP-8CHD','k7m9r3x6tvp8chd',' k7m-9r3x-6tvp-8chd '] as $value) { self::assertSame('K7M-9R3X-6TVP-8CHD',ActivationCode::normalize($value)); }
-        foreach (['K7I-9R3X-6TVP-8CHD','K7L-9R3X-6TVP-8CHD','K7O-9R3X-6TVP-8CHD','K70-9R3X-6TVP-8CHD','K71-9R3X-6TVP-8CHD','K7M-9R3X6-TVP-8CHD','K7M 9R3X 6TVP 8CHD','AIDEX-123456789012345','Ｋ7M-9R3X-6TVP-8CHD','',"K7M-9R3X-6TVP-8C\nHD"] as $value) { self::assertNull(ActivationCode::normalize($value)); }
+        foreach (['K7I-9R3X-6TVP-8CHD','K7L-9R3X-6TVP-8CHD','K7O-9R3X-6TVP-8CHD','K70-9R3X-6TVP-8CHD','K71-9R3X-6TVP-8CHD','K7M-9R3X6-TVP-8CHD','K7M 9R3X 6TVP 8CHD','ADELPOS-123456789012345','Ｋ7M-9R3X-6TVP-8CHD','',"K7M-9R3X-6TVP-8C\nHD"] as $value) { self::assertNull(ActivationCode::normalize($value)); }
     }
 }

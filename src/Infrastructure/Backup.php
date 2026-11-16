@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
-use Aibid\App;
+use AdelPos\License\App;
 
 final class Backup
 {
@@ -12,7 +12,7 @@ final class Backup
     {
         self::outsidePublic($output);
         if (file_exists($output) || is_link($output)) { throw new \RuntimeException('Backup destination already exists.'); }
-        $stage = dirname($output).'/.aibid-backup-'.bin2hex(random_bytes(8));
+        $stage = dirname($output).'/.adelpos-license-backup-'.bin2hex(random_bytes(8));
         mkdir($stage,0700); mkdir($stage.'/keys',0700);
         $files = []; $mask = umask(0077);
         try {

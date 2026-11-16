@@ -1,15 +1,15 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
-use Aibid\Infrastructure\EncryptedArchive;
-use Aibid\Tests\NativeStackFixture;
+use AdelPos\License\Infrastructure\EncryptedArchive;
+use AdelPos\License\Tests\NativeStackFixture;
 use PHPUnit\Framework\TestCase;
 
 final class EncryptedArchiveTest extends TestCase
 {
     private string $directory;
-    protected function setUp(): void { $this->directory=sys_get_temp_dir().'/aibid-archive-'.bin2hex(random_bytes(6)); mkdir($this->directory,0700); }
+    protected function setUp(): void { $this->directory=sys_get_temp_dir().'/adelpos-license-archive-'.bin2hex(random_bytes(6)); mkdir($this->directory,0700); }
     protected function tearDown(): void { NativeStackFixture::remove($this->directory); }
     public function testRoundTripAcrossChunksPreservesBytesAndPrivatePermissions(): void
     {

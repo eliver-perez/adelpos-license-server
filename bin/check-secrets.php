@@ -19,7 +19,7 @@ declare(strict_types=1);
  * Códigos de salida: 0 sin hallazgos, 1 con hallazgos, 2 si no se pudo revisar.
  */
 
-const PUBLIC_TEST_SEED_PREFIXES = ['AIBIDLICENSE PUBLIC TEST ONLY V1 '];
+const PUBLIC_TEST_SEED_PREFIXES = ['ADELPOS LICENSE PUBLIC TEST ONLY V1 '];
 const PRIVATE_CONFIG_NAME = '(?:DB_PASSWORD|[A-Z][A-Z0-9_]*_KEY)';
 const KEY_MATERIAL_FIELD = '(?:secret[_-]?key|private[_-]?key|signing[_-]?secret|seed(?:_hex|_b64u?)?|sk)';
 

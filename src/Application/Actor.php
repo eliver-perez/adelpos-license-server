@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Domain\Problem;
+use AdelPos\License\Domain\Problem;
 
 final readonly class Actor
 {

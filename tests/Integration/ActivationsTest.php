@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\{App, Config};
-use Aibid\Application\Actor;
-use Aibid\Domain\{ApiProblem, ApiResponse, Protocol, Uuid};
-use Aibid\Tests\{FrozenClock, MySqlFixture};
+use AdelPos\License\{App, Config};
+use AdelPos\License\Application\Actor;
+use AdelPos\License\Domain\{ApiProblem, ApiResponse, Protocol, Uuid};
+use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class ActivationsTest extends TestCase
@@ -75,14 +75,14 @@ final class ActivationsTest extends TestCase
 
     public function testOldAndMalformedCodesCannotActivateAndCredentialAttemptsAreLimited(): void
     {
-        foreach (['AIDEX-'.str_repeat('A',43),'K7I-9R3X-6TVP-8CHD'] as $code) {
+        foreach (['ADELPOS-'.str_repeat('A',43),'K7I-9R3X-6TVP-8CHD'] as $code) {
             $input=$this->request();$input['license_key']=$code;
             self::assertSame(404,$this->app->activations->execute('activate',$input)->status);
         }
         self::assertSame(0,(int)$this->app->db->execute('SELECT COUNT(*) FROM activations')->fetchColumn());
         for ($i=0;$i<10;++$i) { $response=$this->app->activations->execute('activate',$this->request());self::assertContains($response->status,[200,409]); }
         try { $this->app->activations->execute('activate',$this->request());self::fail('Credential throttle bypassed'); }
-        catch (\Aibid\Domain\Problem $e) { self::assertSame(429,$e->status); }
+        catch (\AdelPos\License\Domain\Problem $e) { self::assertSame(429,$e->status); }
     }
 
     public function testActivationHasExactRightsAndRefreshReusesSignedBytes(): void
@@ -253,7 +253,7 @@ final class ActivationsTest extends TestCase
         $production->signingKeys->generate('relabeled-fixture','license');
         $production->signingKeys->activate('relabeled-fixture','Isolated production-policy test');
         $record=$this->fixture->owner->one('SELECT * FROM signing_keys WHERE kid=\'relabeled-fixture\'');
-        $pair=sodium_crypto_sign_seed_keypair(hash('sha256','AIBIDLICENSE PUBLIC TEST ONLY V1 lic-test-v1-a',true));
+        $pair=sodium_crypto_sign_seed_keypair(hash('sha256','ADELPOS LICENSE PUBLIC TEST ONLY V1 lic-test-v1-a',true));
         $public=sodium_crypto_sign_publickey($pair);
         $path=$values['SIGNING_KEY_DIR'].'/'.$record['private_ref'];
         $file=json_decode(file_get_contents($path),true);$file['public_key']=Protocol::encode($public);$file['secret_key']=Protocol::encode(sodium_crypto_sign_secretkey($pair));
@@ -271,7 +271,7 @@ final class ActivationsTest extends TestCase
         $owner->pdo->beginTransaction();$owner->one('SELECT license_id FROM licenses WHERE license_id=? FOR UPDATE',[Uuid::bytes($this->issued['id'])]);
         try {
             foreach($inputs as $input) {
-                $file=tempnam(sys_get_temp_dir(),'aibid-api-race-');chmod($file,0600);$files[]=$file;
+                $file=tempnam(sys_get_temp_dir(),'adelpos-license-api-race-');chmod($file,0600);$files[]=$file;
                 file_put_contents($file,Protocol::json(['config'=>$this->fixture->values,'input'=>$input]));
                 $process=proc_open([PHP_BINARY,dirname(__DIR__).'/activation-worker.php',$file],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
                 self::assertIsResource($process);$workers[]=[$process,$pipes];

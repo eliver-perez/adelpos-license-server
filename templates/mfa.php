@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <span class="eyebrow">VERIFICACIÓN EN DOS PASOS</span><h1 class="auth-title"><?= V::escape($title) ?></h1>
 <?php if ($secret !== null): ?>
 <p class="text-secondary">Escanea este código con tu aplicación de autenticación. Después introduce el código de seis dígitos.</p>

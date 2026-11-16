@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
 final class Migrator
 {
@@ -12,7 +12,8 @@ final class Migrator
         if (!str_starts_with($version, '8.') || stripos($version, 'mariadb') !== false) {
             throw new \RuntimeException('Las migraciones requieren MySQL 8; MariaDB no es el motor de validación.');
         }
-        $lockName = 'aibid-migrations-' . substr(hash('sha256', (string) $this->db->execute('SELECT DATABASE()')->fetchColumn()), 0, 40);
+        // MySQL lock names are limited to 64 characters: 27-character prefix + 32 hex digits.
+        $lockName = 'adelpos-license-migrations-' . substr(hash('sha256', (string) $this->db->execute('SELECT DATABASE()')->fetchColumn()), 0, 32);
         if ((int) $this->db->execute('SELECT GET_LOCK(?,10)', [$lockName])->fetchColumn() !== 1) {
             throw new \RuntimeException('Hay otra migración en ejecución.');
         }

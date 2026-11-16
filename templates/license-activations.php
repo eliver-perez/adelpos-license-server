@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <section class="panel form-panel mt-4">
     <h2>Instalaciones y revisiones firmadas</h2>
     <?php if (!$license['activations']): ?>

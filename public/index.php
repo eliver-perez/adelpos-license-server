@@ -17,7 +17,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 if (($_SERVER['HTTPS'] ?? '') === 'on') { header('Strict-Transport-Security: max-age=31536000'); }
 try {
     require dirname(__DIR__) . '/vendor/autoload.php';
-    (new Aibid\Http\Kernel(Aibid\App::boot()))->handle();
+    (new AdelPos\License\Http\Kernel(AdelPos\License\App::boot()))->handle();
 } catch (Throwable $error) {
     // Keep correlation IDs valid even when Composer/bootstrap is unavailable.
     $bytes = random_bytes(16);
@@ -25,7 +25,7 @@ try {
     $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
     $hex = bin2hex($bytes);
     $reference = substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4) . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20);
-    error_log('AIDEX [' . $reference . '] ' . get_class($error) . ' at ' . basename($error->getFile()) . ':' . $error->getLine());
+    error_log('adelpos-license [' . $reference . '] ' . get_class($error) . ' at ' . basename($error->getFile()) . ':' . $error->getLine());
     http_response_code(503);
     if (str_starts_with($_SERVER['REQUEST_URI'] ?? '', '/v1/')) {
         header('Content-Type: application/json; charset=utf-8');

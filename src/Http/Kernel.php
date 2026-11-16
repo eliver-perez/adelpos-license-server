@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Http;
+namespace AdelPos\License\Http;
 
-use Aibid\App;
-use Aibid\Application\{Actor, TrustedDevices};
-use Aibid\Domain\{Input, Problem};
+use AdelPos\License\App;
+use AdelPos\License\Application\{Actor, TrustedDevices};
+use AdelPos\License\Domain\{Input, Problem};
 use BaconQrCode\Renderer\{ImageRenderer, Image\SvgImageBackEnd, RendererStyle\RendererStyle};
 use BaconQrCode\Writer;
 
@@ -128,7 +128,7 @@ final class Kernel
         }
         if (preg_match('~^/admin/documents/([a-f0-9-]{36})/download$~',$this->path,$matches)) {
             $this->actor->requireRole(['superadmin','operator']);
-            $meta=$this->app->db->one('SELECT document_type,credential_id,offline_revision_id FROM license_documents WHERE id=?',[\Aibid\Domain\Uuid::bytes($matches[1])]) ?? throw new Problem('No se encontró la constancia.',404);
+            $meta=$this->app->db->one('SELECT document_type,credential_id,offline_revision_id FROM license_documents WHERE id=?',[\AdelPos\License\Domain\Uuid::bytes($matches[1])]) ?? throw new Problem('No se encontró la constancia.',404);
             if ($meta['document_type']==='delivery') {
                 $this->actor->requirePermission('documents.delivery');
                 if ($meta['credential_id']!==null) { $this->actor->requirePermission('credentials.reveal'); }
@@ -305,7 +305,7 @@ final class Kernel
     }
     private function password(string $field): string { $value = $_POST[$field] ?? ''; if (!is_string($value)) { throw new Problem('La contraseña no es válida.'); } return $value; }
     private function redirect(string $path): void { header('Location: ' . $path, true, 303); }
-    private function cookieName(): string { return $this->app->config->development() ? 'aibid_admin_dev' : '__Host-license_admin'; }
+    private function cookieName(): string { return $this->app->config->development() ? 'adelpos_admin_dev' : '__Host-license_admin'; }
     private function trustedToken(): ?string { $token = $_COOKIE[TrustedDevices::COOKIE] ?? null; return is_string($token) ? $token : null; }
     private function cookieOptions(int $expires = 0): array { return ['expires' => $expires, 'path' => '/', 'secure' => !$this->app->config->development() || str_starts_with($this->app->config->get('APP_URL'), 'https://'), 'httponly' => true, 'samesite' => 'Lax']; }
 

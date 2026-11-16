@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
-use Aibid\Config;
+use AdelPos\License\Config;
 
 final class MySqlFiles
 {
@@ -23,7 +23,8 @@ final class MySqlFiles
     public static function restoreEmpty(Config $target, string $source, string $binary = 'mysql'): void
     {
         $name = self::databaseName($target); $db = Database::connect($target);
-        $lock = 'aibid:restore:'.$name;
+        // Hash of the name: MySQL lock names are limited to 64 characters (24 + 40).
+        $lock = 'adelpos-license-restore-'.substr(hash('sha256',$name),0,40);
         if ((int)$db->execute('SELECT GET_LOCK(?,0)',[$lock])->fetchColumn()!==1) { throw new \RuntimeException('Another restore is running.'); }
         try {
             if ((int)$db->execute('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=?',[$name])->fetchColumn()!==0) { throw new \RuntimeException('Restore target must be empty.'); }
@@ -35,7 +36,7 @@ final class MySqlFiles
         $database = self::databaseName($config);
         $temporary = null;
         if ($credentials === null) {
-            $temporary = tempnam(sys_get_temp_dir(),'aibid-mysql-'); chmod($temporary,0600);
+            $temporary = tempnam(sys_get_temp_dir(),'adelpos-license-mysql-'); chmod($temporary,0600);
             $quote = static fn(string $value): string => '"'.strtr($value,["\\"=>"\\\\",'"'=>'\\"',"\n"=>'\\n',"\r"=>'\\r',"\t"=>'\\t']).'"';
             file_put_contents($temporary,"[client]\nuser=".$quote($config->get('DB_USER'))."\npassword=".$quote($config->get('DB_PASSWORD'))."\n");
             $credentials = $temporary;

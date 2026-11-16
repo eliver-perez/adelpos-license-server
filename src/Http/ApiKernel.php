@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Http;
+namespace AdelPos\License\Http;
 
-use Aibid\App;
-use Aibid\Domain\{ApiProblem, ApiResponse, Problem, Protocol, StrictJson, Uuid};
+use AdelPos\License\App;
+use AdelPos\License\Domain\{ApiProblem, ApiResponse, Problem, Protocol, StrictJson, Uuid};
 
 final class ApiKernel
 {
@@ -35,7 +35,7 @@ final class ApiKernel
             if ($error->status !== 429) { throw $error; }
             $response = ApiResponse::error(new ApiProblem('RATE_LIMITED',429),$requestId);
         } catch (\Throwable $error) {
-            error_log('AIDEX API [' . $requestId . '] ' . get_class($error) . ' at ' . basename($error->getFile()) . ':' . $error->getLine());
+            error_log('adelpos-license API [' . $requestId . '] ' . get_class($error) . ' at ' . basename($error->getFile()) . ':' . $error->getLine());
             $response = ApiResponse::error(new ApiProblem('TEMPORARY_UNAVAILABLE',503),$requestId);
         }
         http_response_code($response->status);

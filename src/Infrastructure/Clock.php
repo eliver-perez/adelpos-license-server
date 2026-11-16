@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
 class Clock implements \Psr\Clock\ClockInterface
 {

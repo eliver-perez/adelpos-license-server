@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\Application\Actor;
-use Aibid\Domain\{Problem, Uuid};
-use Aibid\Infrastructure\Migrator;
-use Aibid\Tests\{FrozenClock, MySqlFixture};
+use AdelPos\License\Application\Actor;
+use AdelPos\License\Domain\{Problem, Uuid};
+use AdelPos\License\Infrastructure\Migrator;
+use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class AdministrationTest extends TestCase
@@ -208,7 +208,7 @@ final class AdministrationTest extends TestCase
         $app=$this->fixture->app;
         $issued=$app->licenses->issue($this->actor,Uuid::create(),$this->issueInput('subscription'));
         $input=['version'=>1,'until'=>'2026-11-01T00:00','reason'=>'Concurrent renewal','reference'=>'RACE'];
-        $file=tempnam(sys_get_temp_dir(),'aibid-race-');
+        $file=tempnam(sys_get_temp_dir(),'adelpos-license-race-');
         chmod($file,0600);
         file_put_contents($file,json_encode(['config'=>$this->fixture->values,'actor'=>$this->actor->id,'operation'=>Uuid::create(),'license'=>$issued['id'],'input'=>$input],JSON_THROW_ON_ERROR));
         $workers=[];

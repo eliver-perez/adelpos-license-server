@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <section class="panel form-panel mt-4"><h2>Información administrativa</h2><p class="small text-secondary">Actualizar estos campos no cambia código, archivo firmado, derechos, vigencia ni activaciones.</p>
 <?php if ($actor->canWrite()): ?><form class="stack-form" method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/administrative"><?php V::fields($csrf); ?><input type="hidden" name="administrative_version" value="<?= (int)$license['administrative_version'] ?>">
 <label>Referencia comercial <span class="optional">opcional</span><input class="form-control mt-2" name="reference" maxlength="190" value="<?= V::escape($license['commercial_reference']) ?>"></label>

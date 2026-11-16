@@ -19,7 +19,7 @@ function encodeJson(array $value): string
 
 function testKey(string $name, string $kind): array
 {
-    $seed = hash('sha256', 'AIBIDLICENSE PUBLIC TEST ONLY V1 ' . $name, true);
+    $seed = hash('sha256', 'ADELPOS LICENSE PUBLIC TEST ONLY V1 ' . $name, true);
     $keyPair = sodium_crypto_sign_seed_keypair($seed);
 
     return [

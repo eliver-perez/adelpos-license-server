@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Domain\{ActivationCode, ApiProblem, ApiResponse, Protocol, Uuid};
-use Aibid\Infrastructure\{Audit, Clock, Crypto, Database, RateLimiter};
+use AdelPos\License\Domain\{ActivationCode, ApiProblem, ApiResponse, Protocol, Uuid};
+use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database, RateLimiter};
 
 final class ActivationService
 {

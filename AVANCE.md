@@ -6,7 +6,7 @@ Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no 
 | --- | --- |
 | 0 — Verificación contra el código | **Cerrada.** Línea base: 147 pruebas, 20 904 aserciones, 1 error con MySQL 8.0.46. El propietario decidió corregirlo en la Fase 1. |
 | 1 — Repositorio y copia limpia | **Cerrada.** 161 pruebas, 20 994 aserciones, todas OK. |
-| 2 — Renombre de la identidad interna | Pendiente |
+| 2 — Renombre de la identidad interna | **Cerrada.** 162 pruebas, 20 997 aserciones, todas OK. Verificador Go OK con archivos regenerados. |
 | 3 — Esquema inicial consolidado | Pendiente |
 | 4 — Retirar lo exclusivo de AIDEX | Pendiente |
 | 5 — Marca y textos | Pendiente |
@@ -203,7 +203,7 @@ Otros artefactos sin referencias en texto, que tampoco se copian: `var/releases/
 5. **Nombre del paquete npm.** La tabla de la Fase 2 pide `adelpos/license-server` para Composer y npm. Es válido en Composer, pero **npm lo rechaza** («name can only contain URL-friendly characters»). **Decisión del propietario (2026-11-16):** en npm se usa `@adelpos/license-server`; en Composer, `adelpos/license-server`.
 6. **Logos.** AD-EL POS tiene dos PNG horizontales (claro y oscuro) y no tiene SVG ni versión vertical o ícono. En la Fase 5:
    - las referencias horizontales se ajustarán a los PNG;
-   - **decisión del propietario (2026-11-16):** por ahora no hay versiones verticales; se dejan fuera;
+   - **decisión del propietario (2026-11-16):** no hay versiones verticales. Donde AIDEX usaba un logo vertical (barra lateral, ícono de pestaña, pantalla de acceso y página de verificación) se usa el horizontal de `logos-adelpos/`: el claro sobre fondo claro y el oscuro sobre fondo oscuro. Se aplica en la Fase 5;
    - sin SVG no se puede regenerar el PNG para PDF con `bin/render-brand.cjs`. **Decisión del propietario (2026-11-16):** las constancias PDF usan `adel-pos-tema-claro.png` tal cual, sin modificar sus bytes, en lugar del nombre en texto. Se registrará en `DECISIONS.md` en la Fase 6.
 7. **`INTEGRACION-LICENCIAMIENTO.md`** existe en AIDEX y no aparece ni en la lista de permitidos ni en la de excluidos de la Fase 1. Como la Fase 1 copia solo lo permitido, **no se copia**.
 8. Informativo: la documentación de AIDEX registra corridas anteriores (por ejemplo, 96 pruebas/571 aserciones o 127/20 802). La línea base vale solo con lo medido aquí: 147 pruebas y 20 904 aserciones en `phpunit.xml`.
@@ -258,7 +258,7 @@ Repositorio git independiente en `adelpos-license/`, rama `main`. La carpeta de 
 | `3c0c87b` | **Copia base desde AIDEX (sin secretos ni artefactos).** Solo la lista de permitidos, más `.gitignore` ampliado y `var/.gitkeep`. |
 | `295961f` | Compatibilidad de respaldos con MySQL 8.0 (ver 1.5) |
 | `50b22e9` | Funcionar sin los logos de AIDEX (ver 1.5) |
-| commit de cierre | Revisión de secretos, su prueba, sección en `README.md` y este registro |
+| `9adde0e` | Revisión de secretos, su prueba, sección en `README.md` y este registro |
 
 ### 1.2 Copia
 
@@ -326,3 +326,80 @@ Otras comprobaciones:
 - `php contracts/v1/generate-fixtures.php --check` da OK.
 - `php bin/check-secrets.php` no encuentra nada.
 - En MySQL quedan 0 bases y 0 usuarios de prueba.
+
+---
+
+## Fase 2 — Renombre de la identidad interna
+
+Fecha: 2026-11-16. Estado: **cerrada**.
+
+### 2.1 Renombres aplicados
+
+| Concepto | Antes | Ahora |
+| --- | --- | --- |
+| Namespace PHP | `Aibid\`, `Aibid\Tests\` | `AdelPos\License\`, `AdelPos\License\Tests\` (115 archivos PHP y `composer.json`) |
+| Paquete Composer | `aidex/license-server` | `adelpos/license-server`. En `composer.lock` solo cambió el `content-hash`, sin versiones nuevas. |
+| Paquete npm | `aidex-license-panel-tests` | `@adelpos/license-server` (decisión del propietario; 0.7, punto 5) |
+| Variable del archivo de configuración | `AIBID_CONFIG` | `ADELPOS_LICENSE_CONFIG` |
+| Cookie de desarrollo | `aibid_admin_dev` | `adelpos_admin_dev` |
+| Cookie de dispositivo de confianza | `__Host-license_trusted_device` | `__Host-adelpos_trusted_device` |
+| Contextos HKDF | `aidex/<propósito>/v1`, `aibid/offline-evidence/v1` | `adelpos-license/<propósito>/v1`, `adelpos-license/offline-evidence/v1` |
+| Formato y extensión de respaldos | `AIBID-BACKUP-V1`, `.aibidbackup` | `ADELPOS-LICENSE-BACKUP-V1`, `.adelposbackup` |
+| Bloqueos y temporales | `aibid-migrations-`, `aibid:restore:`, `.aibid-backup-*`, `aibid-mysql-*` | `adelpos-license-migrations-`, `adelpos-license-restore-`, `.adelpos-license-backup-*`, `adelpos-license-mysql-*` |
+| Semillas públicas de prueba | `AIBIDLICENSE PUBLIC TEST ONLY V1 …` | `ADELPOS LICENSE PUBLIC TEST ONLY V1 …` (generador, verificador Go, `SigningKeys`, pruebas y revisión de secretos) |
+| Emisor TOTP | `AIDEX Licencias` | `AD-EL POS Licencias` |
+| Prefijos de registro | `AIDEX [`, `AIDEX API [` | `adelpos-license [`, `adelpos-license API [` |
+| Bases y usuarios de prueba | `aibid_test_*` | `adelpos_license_test_*` (31 caracteres; el límite de usuario de MySQL es 32) |
+| Temporales de pruebas | `aibid-*`, `aidex-pdf-*` | `adelpos-license-*` |
+| `deploy/` | `aidex-maintenance.*`, pool y usuario `aidex`/`aidexlicense`, `/srv/aidexlicense`, `licensing.aidex.com.mx` | `adelpos-license-maintenance.*`, pool y usuario `adelpos-license`, `/srv/adelpos-license`, `licensing.sicrat.com` |
+| Ejemplos de configuración y CLI | `aidex_licenses`, `aidex_app`, `licensing.aidex.com.mx` | `adelpos_license`, `adelpos_license_app`, `licensing.sicrat.com` |
+
+**Sin cambios, como pide la especificación:** las rutas `/v1/...` y los mensajes del protocolo heredado (`LIC-V1`, `LICREQ-V1`, `lic+jws`). En los archivos regenerados solo cambian las llaves, las semillas y las firmas; el encabezado JWS es idéntico.
+
+### 2.2 Decisiones técnicas de la fase
+
+1. **Límite de 64 caracteres en los bloqueos de MySQL.**
+   - El de migraciones usa 32 hexadecimales del hash de la base (27 + 32 = 59). Con el prefijo nuevo y los 40 originales serían 67, y MySQL lo rechazaría.
+   - El de restauración usa un hash del nombre de la base en vez del nombre (24 + 40 = 64), para no depender de su largo.
+2. **Separación de llaves.** Al unificar los contextos HKDF bajo `adelpos-license/`, un registro con propósito `offline-evidence` podría haber derivado la misma llave que la evidencia sin internet. `Crypto::seal`/`open` ahora rechazan ese propósito y cualquier nombre fuera de `[a-z][a-z0-9-]*`. Nueva prueba: `ProtectedRecordTest::testRecordPurposesCannotAliasTheOfflineEvidenceKeyContext`.
+3. **Llave de prueba en producción.** `ActivationsTest::testProductionRejectsPublicFixtureKeyEvenWhenRelabeled` deriva la llave de la semilla nueva y comprueba que producción la rechaza.
+4. **Archivos de prueba del contrato.** Se regeneraron con `php contracts/v1/generate-fixtures.php` (9 archivos).
+5. **Datos sintéticos de prueba sin la marca anterior.** `ADELPOS-…` como código inválido, `ADELPOS-sensitive-optional` y `adelpos-license-legacy-synthetic`. Conservan la misma función en cada prueba.
+6. **`ProductionHttpTest`.** Se quitó la aserción «la pantalla de acceso no contiene AIBID» (−1). En la Fase 5 se agrega su equivalente: «no contiene AIDEX».
+7. **`bin/build-release.php`.** Se cambió el prefijo del paquete a `adelpos-license/` y se quitó de su lista `INFORME-TRANSICION-AIDEX.md`, que no existe. El resto de la lista se corrige en la Fase 4.
+8. **Scripts de Playwright.** `tests/*.cjs` y `tests/prepare-*.php` usan las cookies y rutas nuevas, pero no se ejecutan hasta la Fase 5.
+9. **Documentación (`*.md`).** Se reescribe en la Fase 6.
+10. **Dominio en la configuración de ejemplo.** `config/local.example.php` usa `licensing.sicrat.com` con `APP_ENV=production`. El contrato reserva ese dominio para pruebas; la separación de entornos de firma (`test`/`production`) se implementa en la etapa 2.
+
+### 2.3 Búsqueda de `aibid` y `aidex`
+
+En código, configuración, pruebas, `deploy/` y `bin/` (sin `*.md`): **cero** en `bin/`, `deploy/`, `config/`, `composer.json`, `package*.json`, `contracts/` y en toda la identidad interna de `src/` y `tests/`.
+
+Quedan 27 líneas con menciones que **no son identidad interna**. Cada una tiene su propia fase y su propia búsqueda de cierre:
+
+| Archivo | Líneas | Qué es | Fase |
+| --- | --- | --- | --- |
+| `database/migrations/002_aibid_catalog.sql`, `005_aidex_identity.sql` | 3 | Catálogo e historia de AIDEX | 3 (se reemplazan por `001_esquema_inicial.sql`) |
+| `tests/Integration/AdministrationTest.php` | 4 | Prueba de la migración 005 y del nombre del producto AIDEX | 3 |
+| `src/Application/CatalogService.php` | 2 | Mensajes del catálogo de AIDEX | 4 |
+| `templates/` (5 archivos) | 15 | Textos visibles y `alt` de logos | 5 |
+| `public/index.php` | 1 | Texto visible de la página de mantenimiento | 5 |
+| `tests/Integration/ProductionHttpTest.php` | 2 | Aserciones de esos textos visibles | 5 |
+
+**Criterio aplicado:** la Fase 2 cubre la identidad interna (tabla 2.1). Los textos visibles y el catálogo de AIDEX tienen sus propias búsquedas de cierre en las fases 3, 4 y 5, que eliminan esas menciones.
+
+### 2.4 Pruebas de la fase
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 1 | 161 | 20 994 | OK |
+| **Cierre de la Fase 2** | **162** | **20 997** | **OK**: unitarias 72/20 185, integración 90/812, sin omisiones ni advertencias |
+
+Diferencias: +1 prueba y +4 aserciones por la prueba nueva de `ProtectedRecordTest`, y −1 aserción en `ProductionHttpTest` (2.2, punto 6).
+
+Otras comprobaciones:
+- El verificador Go da «OK: 5 JWS, 3 proofs, 3 offline requests, 3 negative JWS» con los archivos regenerados.
+- `generate-fixtures.php --check` da OK.
+- `composer validate` da OK.
+- `php bin/check-secrets.php` no encuentra nada.
+- Quedan 0 bases y 0 usuarios de prueba, tanto con el prefijo viejo como con el nuevo.

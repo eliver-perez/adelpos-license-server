@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
-use Aibid\Config;
-use Aibid\Infrastructure\{Clock, Totp};
+use AdelPos\License\Config;
+use AdelPos\License\Infrastructure\{Clock, Totp};
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -21,7 +21,7 @@ final class ProductionConfigTest extends TestCase
     public static function invalidOrigins(): array
     {
         return array_map(fn($url)=>[$url], [
-            'http://licensing.aidex.com.mx', 'http://127.0.0.1:8088',
+            'http://licensing.sicrat.com', 'http://127.0.0.1:8088',
             'https://user:secret@example.test', 'https://example.test?debug=1',
             'https://example.test#fragment', 'https://example.test/panel',
             "https://example.test\n", 'https://bad host.test', 'ftp://127.0.0.1',
@@ -37,7 +37,7 @@ final class ProductionConfigTest extends TestCase
 
     public function testProductionAndLocalDevelopmentRemainSeparate(): void
     {
-        $production = $this->config('production', 'https://licensing.aidex.com.mx');
+        $production = $this->config('production', 'https://licensing.sicrat.com');
         $production->validate();
         self::assertFalse($production->development());
         foreach (['development','testing'] as $environment) {
@@ -67,11 +67,11 @@ final class ProductionConfigTest extends TestCase
         (new Config(['APP_ENV'=>'production','APP_URL'=>'https://example.test'], false))->validate();
     }
 
-    public function testAuthenticatorUsesAidexWithoutChangingTotpSecret(): void
+    public function testAuthenticatorUsesAdelPosWithoutChangingTotpSecret(): void
     {
         $uri = (new Totp(new Clock()))->provisioningUri('JBSWY3DPEHPK3PXP', 'admin@example.test');
         parse_str(parse_url($uri, PHP_URL_QUERY), $parameters);
-        self::assertSame('AIDEX Licencias', $parameters['issuer']);
+        self::assertSame('AD-EL POS Licencias', $parameters['issuer']);
         self::assertSame('JBSWY3DPEHPK3PXP', $parameters['secret']);
     }
 }

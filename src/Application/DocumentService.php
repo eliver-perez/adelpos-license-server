@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Config;
-use Aibid\Domain\{Input, Problem, Protocol, Uuid};
-use Aibid\Infrastructure\{Audit, CertificatePdf, Clock, Crypto, Database};
+use AdelPos\License\Config;
+use AdelPos\License\Domain\{Input, Problem, Protocol, Uuid};
+use AdelPos\License\Infrastructure\{Audit, CertificatePdf, Clock, Crypto, Database};
 
 final class DocumentService
 {

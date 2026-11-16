@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Integration;
+namespace AdelPos\License\Tests\Integration;
 
-use Aibid\Application\Actor;
-use Aibid\Domain\{ActivationCode, Problem, Protocol, Uuid};
-use Aibid\Tests\{FrozenClock, MySqlFixture, NativeStackFixture};
+use AdelPos\License\Application\Actor;
+use AdelPos\License\Domain\{ActivationCode, Problem, Protocol, Uuid};
+use AdelPos\License\Tests\{FrozenClock, MySqlFixture, NativeStackFixture};
 use PHPUnit\Framework\TestCase;
 
 final class CommercialDeliveryTest extends TestCase
@@ -38,7 +38,7 @@ final class CommercialDeliveryTest extends TestCase
     }
     private function text(string $pdf): string
     {
-        $path=tempnam(sys_get_temp_dir(),'aidex-pdf-');file_put_contents($path,$pdf);chmod($path,0600);
+        $path=tempnam(sys_get_temp_dir(),'adelpos-license-pdf-');file_put_contents($path,$pdf);chmod($path,0600);
         try { return NativeStackFixture::command([getenv('TEST_PDFTOTEXT_BIN') ?: 'pdftotext','-enc','UTF-8',$path,'-']); }
         finally { unlink($path); }
     }

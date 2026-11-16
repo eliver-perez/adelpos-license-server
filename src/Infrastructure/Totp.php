@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
 use OTPHP\TOTP as Otp;
 
@@ -29,7 +29,7 @@ final class Totp
     {
         $otp = Otp::createFromSecret($secret, $this->clock);
         $otp->setLabel($login);
-        $otp->setIssuer('AIDEX Licencias');
+        $otp->setIssuer('AD-EL POS Licencias');
         return $otp->getProvisioningUri();
     }
 }

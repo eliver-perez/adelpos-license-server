@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests;
+namespace AdelPos\License\Tests;
 
-use Aibid\{App, Config};
-use Aibid\Infrastructure\{Database, Migrator};
+use AdelPos\License\{App, Config};
+use AdelPos\License\Infrastructure\{Database, Migrator};
 
 final class MySqlFixture
 {
@@ -20,8 +20,8 @@ final class MySqlFixture
         if (!$dsn || !str_starts_with($dsn, 'mysql:')) { throw new \RuntimeException('TEST_MYSQL_DSN must explicitly identify an isolated MySQL 8 test server.'); }
         $this->server = new \PDO($dsn, getenv('TEST_MYSQL_USER') ?: 'root', getenv('TEST_MYSQL_PASSWORD') ?: '', [\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION]);
         $suffix = bin2hex(random_bytes(5));
-        $this->database = 'aibid_test_' . $suffix;
-        $this->username = 'aibid_test_' . $suffix;
+        $this->database = 'adelpos_license_test_' . $suffix;
+        $this->username = 'adelpos_license_test_' . $suffix;
         $password = bin2hex(random_bytes(24));
         $this->server->exec('CREATE DATABASE `' . $this->database . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
         $databaseDsn = preg_replace('/;?dbname=[^;]*/', '', $dsn) . ';dbname=' . $this->database;
@@ -45,14 +45,14 @@ final class MySqlFixture
     public function destroy(): void
     {
         // Only random databases/users created by this fixture can be removed.
-        if (!preg_match('/\Aaibid_test_[a-f0-9]{10}\z/', $this->database)) { throw new \LogicException('Unsafe fixture identifier.'); }
+        if (!preg_match('/\Aadelpos_license_test_[a-f0-9]{10}\z/', $this->database)) { throw new \LogicException('Unsafe fixture identifier.'); }
         $this->server->exec('DROP DATABASE `' . $this->database . '`');
         $this->server->exec("DROP USER '" . $this->username . "'@'localhost'");
         foreach (glob($this->values['SIGNING_KEY_DIR'].'/*.json') ?: [] as $file) { unlink($file); }
         if (is_dir($this->values['SIGNING_KEY_DIR'])) { rmdir($this->values['SIGNING_KEY_DIR']); }
     }
 
-    public function signingKeys(?FrozenClock $clock = null): \Aibid\Infrastructure\SigningKeys
+    public function signingKeys(?FrozenClock $clock = null): \AdelPos\License\Infrastructure\SigningKeys
     {
         return (new App(new Config($this->values, false), $this->owner, $clock))->signingKeys;
     }

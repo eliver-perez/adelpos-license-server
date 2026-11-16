@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
-use Aibid\Domain\{ApiProblem, OfflineRequest, Protocol, Uuid};
+use AdelPos\License\Domain\{ApiProblem, OfflineRequest, Protocol, Uuid};
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -11,7 +11,7 @@ final class OfflineRequestTest extends TestCase
     private function envelope(array $changes = [], ?string $inner = null): string
     {
         $pair = sodium_crypto_sign_seed_keypair(str_repeat('x',32));
-        $payload = ['action'=>'activate','request_id'=>Uuid::create(),'created_at'=>'2001-02-03T12:34:56.123456789+00:00','product_id'=>'gestor_documental','installation_id'=>Uuid::create(),'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($pair)),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('a',64),'license_key'=>'AIDEX-sensitive-optional'];
+        $payload = ['action'=>'activate','request_id'=>Uuid::create(),'created_at'=>'2001-02-03T12:34:56.123456789+00:00','product_id'=>'gestor_documental','installation_id'=>Uuid::create(),'installation_public_key'=>Protocol::encode(sodium_crypto_sign_publickey($pair)),'fingerprint_version'=>'1','fingerprint_hash'=>'sha256:'.str_repeat('a',64),'license_key'=>'ADELPOS-sensitive-optional'];
         $encoded = Protocol::encode($inner ?? Protocol::json(array_replace($payload,$changes)));
         return Protocol::json(['schema_version'=>'1.0','payload_b64u'=>$encoded,'signature_b64u'=>Protocol::encode(sodium_crypto_sign_detached("LICREQ-V1\n".$encoded,sodium_crypto_sign_secretkey($pair)))]);
     }

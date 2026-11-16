@@ -1,4 +1,4 @@
-<?php use Aibid\Http\View as V; ?>
+<?php use AdelPos\License\Http\View as V; ?>
 <span class="eyebrow">PORTAL ADMINISTRATIVO</span>
 <h1 class="auth-title">Bienvenido de nuevo</h1>
 <p class="text-secondary mb-4">Ingresa a tu cuenta para administrar las licencias.</p>

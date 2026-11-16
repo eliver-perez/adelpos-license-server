@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Domain\{Capabilities, Input, Problem, Uuid};
-use Aibid\Infrastructure\{Audit, Clock, Database};
+use AdelPos\License\Domain\{Capabilities, Input, Problem, Uuid};
+use AdelPos\License\Infrastructure\{Audit, Clock, Database};
 
 final class CatalogService
 {

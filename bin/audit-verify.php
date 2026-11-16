@@ -5,7 +5,7 @@ require __DIR__ . '/console.php';
 consoleRun(function (): void {
     $options = getopt('',['against:']);
     $expected = isset($options['against']) ? json_decode(file_get_contents($options['against']),true,16,JSON_THROW_ON_ERROR) : null;
-    $app = Aibid\App::boot();
+    $app = AdelPos\License\App::boot();
     $anchor = $app->db->transaction(function () use ($app,$expected): array {
         $app->db->one("SELECT * FROM audit_heads WHERE stream_id='admin' FOR SHARE");
         $count = $app->audit->verify();

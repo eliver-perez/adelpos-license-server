@@ -1,12 +1,12 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Tests\Unit;
+namespace AdelPos\License\Tests\Unit;
 
-use Aibid\Config;
-use Aibid\Domain\{Capabilities, Input, Problem, Uuid};
-use Aibid\Http\Network;
-use Aibid\Infrastructure\{Crypto, Totp};
-use Aibid\Tests\FrozenClock;
+use AdelPos\License\Config;
+use AdelPos\License\Domain\{Capabilities, Input, Problem, Uuid};
+use AdelPos\License\Http\Network;
+use AdelPos\License\Infrastructure\{Crypto, Totp};
+use AdelPos\License\Tests\FrozenClock;
 use PHPUnit\Framework\TestCase;
 
 final class RulesTest extends TestCase

@@ -45,11 +45,11 @@ function totp(secret) {
         assert.equal(await page.locator('.recovery-grid code').count(), 8);
         await page.getByRole('link', { name: 'Ya los guardé · Continuar' }).click();
         await page.waitForURL('**/trust-device');
-        assert.equal((await context.cookies()).some(cookie => cookie.name === '__Host-license_trusted_device'), false);
+        assert.equal((await context.cookies()).some(cookie => cookie.name === '__Host-adelpos_trusted_device'), false);
         await page.screenshot({ path: path.join(screenshotDir, 'trusted-device-offer-desktop.png'), fullPage: true, animations: 'disabled' });
         await submit(page.getByRole('button', { name: 'Confiar en este dispositivo', exact: true }));
         await page.waitForURL('**/admin');
-        const trust = (await context.cookies()).find(cookie => cookie.name === '__Host-license_trusted_device');
+        const trust = (await context.cookies()).find(cookie => cookie.name === '__Host-adelpos_trusted_device');
         assert.ok(trust);
         assert.equal(trust.secure, true);
         assert.equal(trust.httpOnly, true);
@@ -57,7 +57,7 @@ function totp(secret) {
         assert.equal(trust.domain, '127.0.0.1');
         assert.equal(trust.path, '/');
         assert.ok(trust.expires > Date.now() / 1000 + 29 * 86400);
-        assert.equal(await page.evaluate(() => document.cookie.includes('__Host-license_trusted_device')), false);
+        assert.equal(await page.evaluate(() => document.cookie.includes('__Host-adelpos_trusted_device')), false);
         await page.goto('/admin/security');
         assert.equal(await page.getByText('Dispositivo actual', { exact: true }).count(), 1);
         assert.equal((await page.content()).includes(trust.value), false);

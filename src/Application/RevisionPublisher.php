@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Application;
+namespace AdelPos\License\Application;
 
-use Aibid\Domain\{Capabilities, Protocol, Uuid};
-use Aibid\Infrastructure\{Clock, Database, SigningKeys};
+use AdelPos\License\Domain\{Capabilities, Protocol, Uuid};
+use AdelPos\License\Infrastructure\{Clock, Database, SigningKeys};
 
 final class RevisionPublisher
 {

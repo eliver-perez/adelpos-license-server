@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
-namespace Aibid\Infrastructure;
+namespace AdelPos\License\Infrastructure;
 
-use Aibid\App;
-use Aibid\Domain\{OfflineRequest,Protocol,StrictJson,Uuid};
+use AdelPos\License\App;
+use AdelPos\License\Domain\{OfflineRequest,Protocol,StrictJson,Uuid};
 
 final class RecoveryVerifier
 {

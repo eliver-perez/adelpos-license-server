@@ -1,5 +1,5 @@
 [Unit]
-Description=Daily AIDEX recovery copy
+Description=Daily AD-EL POS license server recovery copy
 
 [Timer]
 OnCalendar=*-*-* 03:15:00 UTC
