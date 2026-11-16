@@ -1,5 +1,5 @@
 <?php use AdelPos\License\Http\View as V; ?>
-<div class="page-heading"><div><span class="eyebrow">OPERACIÓN SIN CONEXIÓN</span><h1>Solicitudes offline</h1><p>Importa la solicitud del equipo, revisa sus derechos y entrega el archivo autorizado.</p></div></div>
+<div class="page-heading"><div><span class="eyebrow">OPERACIÓN SIN CONEXIÓN</span><h1>Solicitudes sin internet</h1><p>Importa la solicitud del equipo, revisa sus derechos y entrega el archivo autorizado.</p></div></div>
 <?php if ($actor->canWrite()): ?>
 <section class="panel form-panel mb-4">
     <h2>Importar .licreq</h2><p class="text-secondary">Importar verifica la firma y deja la solicitud pendiente de una decisión. No activa ni renueva la licencia.</p>
@@ -12,7 +12,7 @@
 <?php endif; ?>
 <section class="panel">
     <form class="filter-bar" method="get">
-        <input class="form-control" name="q" value="<?= V::escape($filters['q']) ?>" placeholder="Cliente o ID de solicitud" aria-label="Buscar solicitud">
+        <input class="form-control" name="q" value="<?= V::escape($filters['q']) ?>" placeholder="Cliente o identificador de solicitud" aria-label="Buscar solicitud">
         <select class="form-select" name="status" aria-label="Estado"><option value="">Todos los estados</option><?php foreach (['pending'=>'Pendiente','approved'=>'Aprobada','rejected'=>'Rechazada'] as $value=>$label): ?><option value="<?= $value ?>" <?= $filters['status']===$value?'selected':'' ?>><?= $label ?></option><?php endforeach; ?></select>
         <select class="form-select" name="product_id" aria-label="Producto"><option value="">Todos los productos</option><?php foreach ($products as $product): ?><option value="<?= V::escape($product['product_id']) ?>" <?= $filters['product_id']===$product['product_id']?'selected':'' ?>><?= V::escape($product['display_name']) ?></option><?php endforeach; ?></select>
         <button class="btn btn-outline-primary">Filtrar</button>

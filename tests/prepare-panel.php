@@ -10,7 +10,7 @@ $keys->generate('panel-random-signing-key', 'license');
 $keys->activate('panel-random-signing-key', 'Preparación aislada de prueba del panel');
 $adminId = $app->auth->bootstrap('admin@example.test', 'Administración de pruebas', 'Fixture-Password-Only-2026!');
 $actor = new AdelPos\License\Application\Actor($adminId, 'superadmin', 'Administración de pruebas');
-foreach (['Centro Documental del Norte', 'Archivo Histórico Regional', 'Instituto de Investigación Digital'] as $index => $name) {
+foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index => $name) {
     $customer = $app->catalog->saveCustomer($actor, AdelPos\License\Domain\Uuid::create(), null, ['name'=>$name,'legal_name'=>'','contact_name'=>'Contacto de prueba','email'=>'contacto'.$index.'@example.test','phone'=>'','state'=>'active']);
     $issued=$app->licenses->issue($actor, AdelPos\License\Domain\Uuid::create(), ['customer_id'=>$customer['id'],'product_id'=>'producto_prueba','license_type'=>$index===0?'perpetual':'subscription','entitled_release_until'=>gmdate('Y-m-d\TH:i'),'expires_at'=>gmdate('Y-m-d\TH:i',time()+($index===1?15:45)*86400),'features'=>['prueba_b','prueba_c','prueba_d'],'reason'=>'Datos sintéticos para verificar el panel','reference'=>'TEST-PANEL']);
     if ($index===0) {

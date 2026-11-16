@@ -11,7 +11,7 @@ final readonly class Actor
     public const PERMISSIONS = [
         'credentials.reveal'=>'Revelar códigos de activación',
         'documents.delivery'=>'Generar y descargar constancias de entrega para activación',
-        'offline.download'=>'Descargar archivos offline',
+        'offline.download'=>'Descargar archivos de licencia (.lic)',
     ];
 
     public function allows(string $permission): bool

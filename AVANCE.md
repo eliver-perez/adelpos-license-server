@@ -9,7 +9,7 @@ Especificación: `ETAPA_1_COPIA_BASE_Y_RENOMBRE.md`. Contrato de referencia (no 
 | 2 — Renombre de la identidad interna | **Cerrada.** 162 pruebas, 20 997 aserciones, todas OK. Verificador Go OK con archivos regenerados. |
 | 3 — Esquema inicial consolidado | **Cerrada.** 161 pruebas, 20 980 aserciones, todas OK. Equivalencia con la cadena original comprobada. |
 | 4 — Retirar lo exclusivo de AIDEX | **Cerrada.** 163 pruebas, 21 368 aserciones, todas OK. Verificador Go OK. 20 puntos heredados marcados. |
-| 5 — Marca y textos | **Adelantada en parte** (instrucción del propietario): nombre, logos y constancias en el commit «Marca AD-EL POS». Faltan Playwright y la revisión de textos. |
+| 5 — Marca y textos | **Cerrada.** 164 pruebas, 21 370 aserciones, todas OK. Playwright: panel y dispositivos de confianza OK. |
 | 6 — Documentación y cierre | Pendiente |
 
 ---
@@ -647,3 +647,70 @@ Otras comprobaciones:
 - El verificador Go da OK y `generate-fixtures.php --check` también.
 - `php bin/check-secrets.php` no encuentra nada.
 - No hay menciones de `aibid` ni `aidex` fuera de `*.md`.
+
+---
+
+## Fase 5 — Marca y textos
+
+Fecha: 2026-11-16. Estado: **cerrada**. El nombre, los logos y las constancias se adelantaron en el commit «Marca AD-EL POS» (sección anterior). Esta fase completa la revisión de textos y las pruebas del panel.
+
+### 5.1 Textos en español claro
+
+**26 textos cambiados en 14 archivos** (plantillas, mensajes de `src/`, títulos de página y nombres de permisos):
+
+| Antes | Ahora |
+| --- | --- |
+| «offline» / «online» (menú, títulos, solicitudes, entregas, transferencias, mensajes, constancias) | «sin internet» / «en línea» |
+| «MFA» (emisión, seguridad, administradores) | «verificación en dos pasos» |
+| «ID de solicitud» | «Identificador de la solicitud» |
+| «Huella · versión» | «Huella del equipo · versión» |
+| «Descargar archivo(s) offline» | «Descargar archivo(s) de licencia (.lic)» |
+| «Verifica firma Ed25519, producto, identidad y revisión.» (constancia) | «AD-EL POS comprueba la firma, el producto, la identidad del equipo y la revisión.» |
+
+Otros cambios:
+- **Auditoría.** 16 operaciones se mostraban con su clave interna; por ejemplo, «credential.disclosed_on_issue» aparecía en «Actividad reciente». Ahora tienen etiqueta en español, y «Segundo factor configurado» pasa a «Verificación en dos pasos configurada». La prueba nueva `tests/Unit/AuditLabelsTest.php` recorre `src/` y falla si una operación queda sin etiqueta. Se comprobó que, sin las etiquetas, lista exactamente las que faltaban.
+- **Frase eliminada.** «Las credenciales antiguas de desarrollo no son recuperables» (detalle de licencia) ya no aplica: el esquema exige la copia protegida.
+- **Términos técnicos que se conservan a propósito**, porque el panel los necesita y están en español:
+  - las extensiones `.lic` y `.licreq`;
+  - «SHA-256 del PDF original», el dato que el cliente debe comparar;
+  - «Clave pública de instalación» y «Huella del equipo».
+
+### 5.2 Pruebas del panel con Playwright
+
+- **Entorno:** Playwright 1.63.0, la versión fijada en `package-lock.json`, instalado con `npm ci --ignore-scripts`, sin descargar navegadores, y Google Chrome 157 del equipo.
+- **Nuevo `tests/run-panel-tests.php`.** Hace cuatro cosas:
+  - prepara los datos sintéticos;
+  - levanta el servidor local (`panel`) o la pila Nginx + PHP-FPM + TLS (`trusted`);
+  - ejecuta el script de Playwright;
+  - **siempre** elimina la base, el usuario, las llaves y la configuración temporal.
+
+  La conexión se toma de las variables `TEST_*`, sin contraseñas en el código.
+- **Ajustes a los scripts:**
+  1. **Marca.** `panel.cjs` comprueba, en la pantalla de acceso, el resumen y la vista móvil, que el título termina en «AD-EL POS — Licencias», que se ve un logo `adel-pos-tema-*.png` y que ninguna imagen visible falla al cargar.
+  2. **Producto.** Los dos formularios de emisión eligen `producto_prueba`, porque el esquema inicial ahora también trae `adel_pos` y el formulario lo mostraba primero.
+  3. **Defecto heredado del producto anterior.** La renovación sin internet escribía una hora UTC y esperaba recibirla igual, pero el panel interpreta las fechas en `America/Monterrey`, como indica junto al campo, y firma en UTC. La conversión entró en el commit `0759474` del origen (2026-10-22 12:35) y la prueba se actualizó por última vez en `c0e0305` (10:45 del mismo día): nunca se ajustó. Ahora la prueba calcula el UTC esperado con las reglas de la zona horaria. El código no cambia.
+  4. **Ícono de pestaña.** No hay ícono, así que el navegador pide `/favicon.ico` y recibe 404. Los scripts ya intentaban ignorar ese error, pero filtraban por el texto del mensaje, y Chrome ya no incluye ahí la URL. Ahora filtran por la URL del recurso, y cualquier otro error se reporta con su URL.
+  5. **Datos sintéticos.** Los clientes de archivos y bibliotecas pasan a ser restaurantes: «Restaurante del Norte», «Cocina Regional», «Café Central» y «Restaurante de Pruebas».
+- **Resultados:**
+  - **Panel OK:** acceso, verificación en dos pasos, roles, CSRF y origen, emisión, mantenimiento, renovación, flujo sin internet completo (importar, revisar, aprobar, rechazar, descargar), transferencia forzada con nueva autenticación, desactivación firmada y navegación en móvil.
+  - **Dispositivos de confianza OK:** sobre Nginx, PHP-FPM y TLS reales.
+  - **12 capturas** en `var/screenshots/` (ignorada por git). Se revisaron el acceso, el resumen, el detalle de licencia y la vista móvil.
+
+### 5.3 Búsqueda de cierre
+
+```sh
+git grep -n -i -E "aidex|gestor documental|gestor_documental" -- templates public src   # 0 resultados
+```
+
+### 5.4 Pruebas de la fase
+
+| Momento | Pruebas | Aserciones | Resultado |
+| --- | --- | --- | --- |
+| Cierre de la Fase 4 | 163 | 21 368 | OK |
+| **Cierre de la Fase 5** | **164** | **21 370** | **OK**: unitarias 75/20 567, integración 89/803 |
+
+Diferencia: +1 prueba y +2 aserciones, de `AuditLabelsTest`. Además: verificador Go OK, Playwright OK en los dos scripts, revisión de secretos sin hallazgos y 0 bases o usuarios de prueba residuales.
+
+**Pendientes del propietario:**
+- un ícono de pestaña, si quiere tenerlo;
+- el logo oscuro tiene píxeles sueltos alrededor de «ADEL» (observación; se usa tal cual).

@@ -36,7 +36,11 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         }
     });
     page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => { if (message.type() === 'error' && !message.text().includes('favicon')) errors.push(message.text()); });
+    // Chrome no longer puts the URL in the message text: the favicon request is recognised by its URL.
+    page.on('console', message => {
+        const url = message.location()?.url || '';
+        if (message.type() === 'error' && !/\/favicon\.ico(?:$|\?)/.test(url) && !message.text().includes('favicon')) errors.push(message.text() + (url ? ' · ' + url : ''));
+    });
     async function submit(button) {
         await Promise.all([page.waitForNavigation({ waitUntil: 'load' }), button.click()]);
     }
@@ -55,10 +59,18 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
     async function screenshot(name) {
         await page.screenshot({ path: path.join(screenshotDir, name + '.png'), fullPage: true, animations: 'disabled' });
     }
+    // AD-EL POS brand: product name in the title, the supplied logo shown, and no broken image.
+    async function assertBrand(where, logoVisible = true) {
+        assert.match(await page.title(), /AD-EL POS — Licencias$/, where);
+        const images = await page.locator('img').evaluateAll(list => list.map(img => ({ src: img.getAttribute('src'), loaded: img.complete && img.naturalWidth > 0, visible: img.offsetParent !== null })));
+        if (logoVisible) { assert.ok(images.some(image => image.visible && /^\/assets\/brand\/adel-pos-tema-(claro|oscuro)\.png$/.test(image.src)), where + ': logo de AD-EL POS'); }
+        for (const image of images.filter(image => image.visible)) { assert.equal(image.loaded, true, where + ': ' + image.src); }
+    }
     try {
         await page.goto('/admin/licenses');
         assert.equal(new URL(page.url()).pathname, '/login');
         await screenshot('login-desktop');
+        await assertBrand('acceso');
         await page.locator('#login').fill('admin@example.test');
         await page.locator('#password').fill('Fixture-Password-Only-2026!');
         await submit(page.getByRole('button', { name: 'Continuar' }));
@@ -73,10 +85,11 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         await submit(page.getByRole('button', { name: 'Ahora no' }));
         await page.waitForURL('**/admin');
         await screenshot('dashboard-desktop');
+        await assertBrand('resumen');
         assert.equal((await context.cookies()).find(cookie => cookie.name === 'adelpos_admin_dev').httpOnly, true);
 
         await page.goto('/admin/licenses');
-        await page.locator('tbody tr').filter({ hasText: 'Centro Documental del Norte' }).getByRole('link', { name: 'Detalle' }).click();
+        await page.locator('tbody tr').filter({ hasText: 'Restaurante del Norte' }).getByRole('link', { name: 'Detalle' }).click();
         await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
         const signedDownload = await page.getByRole('link', { name: 'Descargar .lic' }).getAttribute('href');
         const signedFile = await sensitiveDownload(signedDownload, secret);
@@ -90,10 +103,10 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         await screenshot('activated-license-desktop');
 
         await page.goto('/admin/customers/new');
-        await page.locator('#name').fill('Biblioteca de Pruebas');
+        await page.locator('#name').fill('Restaurante de Pruebas');
         await page.locator('#legal_name').fill('<script>window.unwantedScript=true</script>');
         await page.locator('#contact_name').fill('Contacto de pruebas');
-        await page.locator('#email').fill('biblioteca@example.test');
+        await page.locator('#email').fill('restaurante@example.test');
         await submit(page.getByRole('button', { name: 'Guardar cliente' }));
         const customerId = new URL(page.url()).pathname.split('/').pop();
         assert.match(customerId, /^[a-f0-9-]{36}$/);
@@ -102,6 +115,8 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
 
         await page.goto('/admin/licenses/new');
         await page.locator('#customer_id').selectOption(customerId);
+        // The initial schema also seeds adel_pos (no modules); the module checks use the synthetic product.
+        await page.locator('#product_id').selectOption('producto_prueba');
         await page.locator('[value="prueba_e"]').check();
         assert.equal(await page.locator('[value="prueba_a"]').isChecked(), true);
         assert.equal(await page.locator('[value="prueba_c"]').isChecked(), false);
@@ -146,6 +161,7 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
 
         await page.goto('/admin/licenses/new');
         await page.locator('#customer_id').selectOption(customerId);
+        await page.locator('#product_id').selectOption('producto_prueba');
         await page.locator('[value="subscription"]').check();
         assert.equal(await page.locator('#entitled_release_until').isDisabled(), true);
         await page.locator('#expires_at').fill(future(30));
@@ -167,6 +183,7 @@ const future = days => new Date(Date.now() + days * 86400000).toISOString().slic
         await page.setViewportSize({ width: 390, height: 844 });
         await page.goto('/admin');
         await screenshot('dashboard-mobile');
+        await assertBrand('resumen en móvil', false);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true,
             await page.evaluate(() => [...document.querySelectorAll('body *')].filter(element => element.getBoundingClientRect().right > window.innerWidth + 1 && getComputedStyle(element).position !== 'fixed').map(element => element.tagName + '.' + element.className).slice(0, 20).join(', ')));
         await page.getByRole('button', { name: 'Abrir navegación' }).click();

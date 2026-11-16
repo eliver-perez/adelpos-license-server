@@ -37,14 +37,14 @@ table { width: 100%; border-collapse: collapse; margin-top: 6pt; } th,td { borde
 <?php else: ?>
 <h2>Entrega al responsable técnico autorizado</h2>
 <?php if ($d['activation_method']==='online'): ?>
-<p>Método: activación online con código y conexión al servidor de licencias.</p>
+<p>Método: activación en línea, con el código y conexión al servidor de licencias.</p>
 <p class="code"><?= V::escape($d['activation_code']) ?></p>
 <p>Introduce el código en AD-EL POS, con o sin guiones. Completa la activación en la instalación autorizada. La entrega del código no confirma que la instalación esté activada. El código no sustituye el archivo firmado de una activación totalmente offline.</p>
 <?php else: ?>
-<p>Método: archivo firmado para activación offline. Instalación autorizada:<br><strong><?= V::escape($d['installation']) ?></strong></p>
+<p>Método: archivo firmado para activación sin internet. Instalación autorizada:<br><strong><?= V::escape($d['installation']) ?></strong></p>
 <p>Archivo: <?= V::escape($d['offline_filename']) ?><br>Revisión técnica: <?= (int)$d['license_revision'] ?> · Estado del archivo firmado: <?= V::escape($d['artifact_status']) ?></p>
 <p class="hash">SHA-256 del archivo:<br><?= V::escape($d['offline_sha256']) ?></p>
-<p>Importa el .lic en el equipo que creó la solicitud .licreq. Verifica firma Ed25519, producto, identidad y revisión. SHA-256 identifica el archivo; no sustituye su firma.</p>
+<p>Importa el .lic en el equipo que creó la solicitud .licreq. AD-EL POS comprueba la firma, el producto, la identidad del equipo y la revisión. SHA-256 identifica el archivo; no sustituye su firma.</p>
 <?php endif; ?>
 <p class="notice">CONFIDENCIAL. Custodia el código o archivo y entrégalo solo al responsable autorizado por un canal seguro. Esta entrega histórica no acredita vigencia actual.</p>
 <?php endif; ?>

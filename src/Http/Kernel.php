@@ -139,7 +139,7 @@ final class Kernel
             $this->download($document['bytes'],$document['filename'],'application/pdf'); return;
         }
         if ($this->path === '/admin' && $method === 'GET') { $this->render('dashboard', ['title' => 'Resumen', 'stats' => $this->app->read->dashboard()]); return; }
-        if ($this->path === '/admin/offline' && $method === 'GET') { $this->listing('offline','Solicitudes offline'); return; }
+        if ($this->path === '/admin/offline' && $method === 'GET') { $this->listing('offline','Solicitudes sin internet'); return; }
         if ($this->path === '/admin/offline/import' && $method === 'POST') {
             $this->actor->requireRole(['superadmin','operator']);
             $this->app->rate->consume('offline-import',$this->actor->id,30,60);
@@ -156,7 +156,7 @@ final class Kernel
                 $this->actor->requirePermission('offline.download');
                 $offline=$this->app->read->offline($matches[1]);
                 if ($offline['status']!=='approved') { throw new Problem('La solicitud no tiene un archivo autorizado.',409); }
-                if ($method==='GET') { $this->render('material-confirm',['title'=>'Descargar archivo offline']); return; }
+                if ($method==='GET') { $this->render('material-confirm',['title'=>'Descargar archivo de licencia (.lic)']); return; }
                 $revision=$this->app->materials->revision($this->actor,$offline['license_text'],$offline['revision_text'],$this->password('password'),Input::text($_POST,'code',6));
                 $this->download($revision['license_jws'],'request-'.$matches[1].'.lic','text/plain; charset=utf-8'); return;
             }
@@ -176,7 +176,7 @@ final class Kernel
                     $license = $selected === '' ? null : $this->app->read->license($selected);
                     if ($license !== null && $license['product_id'] !== $offline['product_id']) { throw new Problem('La licencia corresponde a otro producto.'); }
                     $query = Input::text($_GET,'q',100,false);
-                    $this->render('offline-detail',['title'=>'Revisar solicitud offline','offline'=>$offline,'license'=>$license,'candidates'=>$offline['payload']['action'] === 'activate' && $offline['status'] === 'pending' ? $this->app->read->offlineCandidates($offline['product_id'],$query) : [],'query'=>$query]); return;
+                    $this->render('offline-detail',['title'=>'Revisar solicitud sin internet','offline'=>$offline,'license'=>$license,'candidates'=>$offline['payload']['action'] === 'activate' && $offline['status'] === 'pending' ? $this->app->read->offlineCandidates($offline['product_id'],$query) : [],'query'=>$query]); return;
                 }
             }
         }

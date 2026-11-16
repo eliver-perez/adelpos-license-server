@@ -6,17 +6,17 @@ $active = null;
 foreach ($license['activations'] ?? [] as $activation) { if ($activation['state'] === 'active') { $active = $activation; } }
 $needsTransfer = $payload['action'] === 'activate' && $active !== null;
 ?>
-<div class="page-heading"><div><a class="text-link" href="/admin/offline">← Solicitudes offline</a><h1 class="mt-3"><?= V::escape(['activate'=>'Activación','renew'=>'Renovación','deactivate'=>'Desactivación'][$payload['action']]) ?> offline</h1><p>Revisa la instalación y la autorización comercial antes de decidir.</p></div><span class="tag large-tag"><?= V::escape(['pending'=>'Pendiente','approved'=>'Aprobada','rejected'=>'Rechazada'][$offline['status']]) ?></span></div>
+<div class="page-heading"><div><a class="text-link" href="/admin/offline">← Solicitudes sin internet</a><h1 class="mt-3"><?= V::escape(['activate'=>'Activación','renew'=>'Renovación','deactivate'=>'Desactivación'][$payload['action']]) ?> sin internet</h1><p>Revisa la instalación y la autorización comercial antes de decidir.</p></div><span class="tag large-tag"><?= V::escape(['pending'=>'Pendiente','approved'=>'Aprobada','rejected'=>'Rechazada'][$offline['status']]) ?></span></div>
 <div class="row g-4"><div class="col-xl-7">
 <section class="panel form-panel">
     <h2>Identidad de la solicitud</h2>
     <dl class="detail-grid">
-        <div class="wide"><dt>ID de solicitud</dt><dd class="mono"><?= V::escape($payload['request_id']) ?></dd></div>
+        <div class="wide"><dt>Identificador de la solicitud</dt><dd class="mono"><?= V::escape($payload['request_id']) ?></dd></div>
         <div><dt>Producto</dt><dd><?= V::escape($payload['product_id']) ?></dd></div>
         <div><dt>Fecha declarada por el equipo</dt><dd class="mono"><?= V::escape(V::date($payload['created_at'])) ?></dd></div>
         <div class="wide"><dt>Instalación</dt><dd class="mono"><?= V::escape($payload['installation_id']) ?></dd></div>
         <div class="wide"><dt>Clave pública de instalación</dt><dd class="mono"><?= V::escape($payload['installation_public_key']) ?></dd></div>
-        <div class="wide"><dt>Huella · versión <?= V::escape($payload['fingerprint_version']) ?></dt><dd class="mono"><?= V::escape($payload['fingerprint_hash']) ?></dd></div>
+        <div class="wide"><dt>Huella del equipo · versión <?= V::escape($payload['fingerprint_version']) ?></dt><dd class="mono"><?= V::escape($payload['fingerprint_hash']) ?></dd></div>
         <?php if (isset($payload['activation_id'])): ?><div class="wide"><dt>Activación vinculada</dt><dd class="mono"><?= V::escape($payload['activation_id']) ?></dd></div><?php endif; ?>
         <div><dt>Importada</dt><dd><?= V::escape(V::date($offline['imported_at'])) ?></dd></div><div><dt>Importada por</dt><dd><?= V::escape($offline['importer_name']) ?></dd></div>
     </dl>

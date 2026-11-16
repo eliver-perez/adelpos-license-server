@@ -26,7 +26,11 @@ function totp(secret) {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    page.on('console', message => { if (message.type() === 'error' && !message.text().includes('401')) errors.push(message.text()); });
+    // There is no tab icon yet, so the browser's own /favicon.ico request is recognised by its URL.
+    page.on('console', message => {
+        const url = message.location()?.url || '';
+        if (message.type() === 'error' && !message.text().includes('401') && !/\/favicon\.ico(?:$|\?)/.test(url)) errors.push(message.text() + (url ? ' · ' + url : ''));
+    });
     const screenshotDir = path.join(__dirname, '../var/screenshots');
     fs.mkdirSync(screenshotDir, { recursive: true });
     async function submit(button) { await Promise.all([page.waitForNavigation(), button.click()]); }

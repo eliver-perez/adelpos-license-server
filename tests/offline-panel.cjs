@@ -15,6 +15,13 @@ module.exports = async function offlinePanel({ page, context, secret, totp, fres
         const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
         return Buffer.from(JSON.stringify({ schema_version: '1.0', payload_b64u: encoded, signature_b64u: crypto.sign(null, Buffer.from('LICREQ-V1\n' + encoded), installation.private).toString('base64url') }));
     };
+    // 'YYYY-MM-DDTHH:MM' in the panel time zone to the signed UTC form, using the zone rules.
+    const panelLocalToUtc = local => {
+        const asUtc = new Date(local + ':00Z');
+        const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(asUtc).map(part => [part.type, part.value]));
+        const shown = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+        return new Date(2 * asUtc.getTime() - shown).toISOString().replace('.000Z', '.000000Z');
+    };
     const submit = async button => Promise.all([page.waitForNavigation({ waitUntil: 'load' }), button.click()]);
     async function upload(bytes) {
         await page.goto('/admin/offline');
@@ -102,7 +109,8 @@ module.exports = async function offlinePanel({ page, context, secret, totp, fres
     await page.locator('[name="until"]').fill(until);
     await page.locator('[name="reference"]').fill('BROWSER-OFFLINE-RENEW');
     const renewed = await approve();
-    assert.equal(renewed.payload.expires_at, until + ':00.000000Z');
+    // The panel reads date inputs in America/Monterrey (shown next to the field) and signs UTC.
+    assert.equal(renewed.payload.expires_at, panelLocalToUtc(until));
     assert.equal(renewed.payload.activation_id, subscription.payload.activation_id);
     assert.equal(renewed.payload.grace_days, 15);
 

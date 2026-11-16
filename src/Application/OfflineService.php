@@ -49,7 +49,7 @@ final class OfflineService
         $accepted = ($input['accept_offline_limit'] ?? '') === '1';
         $projection = $this->db->one('SELECT projection_json FROM offline_requests WHERE id=?',[Uuid::bytes($id)]) ?? throw new Problem('No se encontró la solicitud.',404);
         $deactivating = $decision==='approved' && (json_decode($projection['projection_json'],true,16,JSON_THROW_ON_ERROR)['action'] ?? '')==='deactivate';
-        if (($outgoing !== '' || $deactivating) && !$accepted) { throw new Problem('Confirma el límite de revocación offline: la firma no demuestra el borrado de copias del equipo anterior.'); }
+        if (($outgoing !== '' || $deactivating) && !$accepted) { throw new Problem('Confirma el límite de la revocación sin internet: la firma no demuestra el borrado de copias del equipo anterior.'); }
         $roles = $outgoing === '' && !$deactivating ? ['superadmin','operator'] : ['superadmin'];
         return $this->operations->run($actor, $roles, $operationId, 'offline.' . $decision, [$id,$reason,$licenseId,$version,$mode,$until?->format(DATE_ATOM),$reference,$outgoing,$accepted], function () use ($actor,$id,$decision,$reason,$licenseId,$version,$mode,$until,$reference,$outgoing): array {
             $offline = $this->db->one('SELECT * FROM offline_requests WHERE id=?', [Uuid::bytes($id)]) ?? throw new Problem('No se encontró la solicitud.',404);
@@ -104,7 +104,7 @@ final class OfflineService
         $reason = Input::text($input,'reason',500);
         $activationId = Input::text($input,'activation_id',36);
         $version = (int)($input['version'] ?? 0);
-        if (($input['accept_offline_limit'] ?? '') !== '1') { throw new Problem('Confirma el límite de revocación offline.'); }
+        if (($input['accept_offline_limit'] ?? '') !== '1') { throw new Problem('Confirma el límite de la revocación sin internet.'); }
         return $this->operations->run($actor, ['superadmin'], $operationId, 'license.force_release', [$licenseId,$activationId,$version,$reason,true], function () use ($actor,$licenseId,$activationId,$version,$reason): array {
             $candidate = $this->db->one('SELECT product_id FROM licenses WHERE license_id=?', [Uuid::bytes($licenseId)]) ?? throw new Problem('No se encontró la licencia.',404);
             $this->lockProduct($candidate['product_id']);
