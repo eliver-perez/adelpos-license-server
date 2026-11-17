@@ -939,95 +939,132 @@ $dates['maintenance'] = [
 ];
 
 // ---------------------------------------------------------------------------------------------
-// Bonificación de un cambio de plan (decisión 6 del propietario): monto pagado × segundos restantes ÷
-// segundos del periodo, con segundos completos y al centavo, la mitad hacia arriba. Los montos van en
-// centavos y en texto MXN. Útiles si algún día AD-EL POS muestra montos.
+// Bonificación de un cambio de plan (decisión 6 del propietario para la etapa 3, corregida por la
+// decisión 3 para la etapa 4; propuestas V1.1 n.º 27 y 28). Cuentan todos los periodos pagados que
+// todavía no terminan en el instante del pago:
+//
+//     valor del periodo = monto cobrado + bonificación aplicada en ese pago
+//     parte             = valor del periodo × segundos no consumidos ÷ segundos del periodo
+//
+// Los segundos son completos, un periodo que todavía no empieza cuenta completo, cada parte se redondea
+// al centavo (la mitad hacia arriba) y después se suman. Los montos van en centavos y en texto MXN.
+// Útiles si algún día AD-EL POS muestra montos.
 // ---------------------------------------------------------------------------------------------
 
-$credit = fn(
-	string $name,
-	int $paid,
-	string $start,
-	string $end,
-	string $paidAt,
-	int $remaining,
-	int $period,
-	int $expected,
-): array => [
-	'name' => $name,
-	'paid_cents' => $paid,
-	'paid_mxn' => sprintf('%d.%02d', intdiv($paid, 100), $paid % 100),
+$mxn = fn(int $cents): string => sprintf('%d.%02d', intdiv($cents, 100), $cents % 100);
+// Un periodo pagado: lo cobrado, la bonificación que se aplicó en ese pago, su inicio y su fin.
+$paidPeriod = fn(int $amount, int $applied, string $start, string $end): array => [
+	'amount_cents' => $amount,
+	'amount_mxn' => $mxn($amount),
+	'applied_credit_cents' => $applied,
+	'applied_credit_mxn' => $mxn($applied),
+	'value_cents' => $amount + $applied,
+	'value_mxn' => $mxn($amount + $applied),
 	'period_starts_at' => $start,
 	'expires_at' => $end,
+];
+// Resultado esperado de un periodo: segundos no consumidos, segundos del periodo y su parte.
+$part = fn(int $remaining, int $period, int $credit): array => [
+	'remaining_seconds' => $remaining,
+	'period_seconds' => $period,
+	'credit_cents' => $credit,
+	'credit_mxn' => $mxn($credit),
+];
+$credit = fn(string $name, string $paidAt, array $periods, array $parts): array => [
+	'name' => $name,
 	'paid_at' => $paidAt,
+	'periods' => $periods,
 	'expected' => [
-		'remaining_seconds' => $remaining,
-		'period_seconds' => $period,
-		'credit_cents' => $expected,
-		'credit_mxn' => sprintf('%d.%02d', intdiv($expected, 100), $expected % 100),
+		'parts' => $parts,
+		'credit_cents' => array_sum(array_column($parts, 'credit_cents')),
+		'credit_mxn' => $mxn(array_sum(array_column($parts, 'credit_cents'))),
 	],
 ];
 $march = ['2027-03-01T16:00:00.000000Z', '2027-04-01T16:00:00.000000Z'];
+$april = ['2027-04-01T16:00:00.000000Z', '2027-05-01T16:00:00.000000Z'];
+// Del 16 de marzo al 16 de abril (31 días) y del 16 de abril al 16 de mayo (30 días), a las 10:00 de Monterrey.
+$sixteenth = ['2027-03-16T16:00:00.000000Z', '2027-04-16T16:00:00.000000Z'];
+$nextSixteenth = ['2027-04-16T16:00:00.000000Z', '2027-05-16T16:00:00.000000Z'];
 $credits = [
 	// 900.00 × 1 382 400 ÷ 2 678 400 = 464.516… → 464.52
 	$credit(
 		'mensual de 900.00, faltan 16 de 31 días',
-		90000,
-		...$march,
-		...['2027-03-16T16:00:00.000000Z', 1382400, 2678400, 46452],
+		'2027-03-16T16:00:00.000000Z',
+		[$paidPeriod(90000, 0, ...$march)],
+		[$part(1382400, 2678400, 46452)],
 	),
 	// 850.00 × 16 ÷ 31 = 438.709… → 438.71
 	$credit(
 		'mensual de 850.00, faltan 16 de 31 días',
-		85000,
-		...$march,
-		...['2027-03-16T16:00:00.000000Z', 1382400, 2678400, 43871],
+		'2027-03-16T16:00:00.000000Z',
+		[$paidPeriod(85000, 0, ...$march)],
+		[$part(1382400, 2678400, 43871)],
 	),
 	// Anual de 9,000.00 del 1 de marzo de 2027 al 1 de marzo de 2028 (366 días); faltan 351 días.
 	$credit(
 		'anual de 9,000.00, mayor que el precio nuevo de un plan mensual',
-		900000,
-		'2027-03-01T16:00:00.000000Z',
-		'2028-03-01T16:00:00.000000Z',
 		'2027-03-16T16:00:00.000000Z',
-		30326400,
-		31622400,
-		863115,
+		[$paidPeriod(900000, 0, '2027-03-01T16:00:00.000000Z', '2028-03-01T16:00:00.000000Z')],
+		[$part(30326400, 31622400, 863115)],
 	),
 	$credit(
-		'al empezar el periodo, todo lo pagado',
-		90000,
-		...$march,
-		...['2027-03-01T16:00:00.000000Z', 2678400, 2678400, 90000],
+		'al empezar el periodo, todo su valor',
+		'2027-03-01T16:00:00.000000Z',
+		[$paidPeriod(90000, 0, ...$march)],
+		[$part(2678400, 2678400, 90000)],
 	),
-	$credit('al vencer, nada', 90000, ...$march, ...['2027-04-01T16:00:00.000000Z', 0, 2678400, 0]),
 	$credit(
-		'pagado antes del periodo, nunca más de lo pagado',
-		90000,
-		...$march,
-		...['2027-02-20T16:00:00.000000Z', 2678400, 2678400, 90000],
+		'al vencer, nada',
+		'2027-04-01T16:00:00.000000Z',
+		[$paidPeriod(90000, 0, ...$march)],
+		[$part(0, 2678400, 0)],
+	),
+	$credit(
+		'un periodo que todavía no empieza cuenta completo',
+		'2027-02-20T16:00:00.000000Z',
+		[$paidPeriod(90000, 0, ...$march)],
+		[$part(2678400, 2678400, 90000)],
 	),
 	// 1 centavo × 1 s ÷ 2 s = 0.5 → 1 centavo.
 	$credit(
 		'la mitad de un centavo sube',
-		1,
-		'2027-01-01T00:00:00.000000Z',
-		'2027-01-01T00:00:02.000000Z',
 		'2027-01-01T00:00:01.000000Z',
-		1,
-		2,
-		1,
+		[$paidPeriod(1, 0, '2027-01-01T00:00:00.000000Z', '2027-01-01T00:00:02.000000Z')],
+		[$part(1, 2, 1)],
 	),
 	// Faltan 1.999999 s: cuentan como 1. 3.00 × 1 ÷ 3 = 1.00.
 	$credit(
 		'segundos completos',
-		300,
-		'2027-01-01T00:00:00.000000Z',
-		'2027-01-01T00:00:03.000000Z',
 		'2027-01-01T00:00:01.000001Z',
-		1,
-		3,
-		100,
+		[$paidPeriod(300, 0, '2027-01-01T00:00:00.000000Z', '2027-01-01T00:00:03.000000Z')],
+		[$part(1, 3, 100)],
+	),
+	// Renovó el 20 de marzo un mes por adelantado (900.00) y el 28 de marzo sube de plan. Del periodo en curso
+	// faltan 4 de 31 días: 900.00 × 4 ÷ 31 = 116.129… → 116.13. El mes de abril no ha empezado: cuenta
+	// completo, 900.00. Total: 1,016.13.
+	$credit(
+		'renovación anticipada con subida de plan: 4 días del periodo en curso más el mes pagado por adelantado',
+		'2027-03-28T16:00:00.000000Z',
+		[$paidPeriod(90000, 0, ...$march), $paidPeriod(90000, 0, ...$april)],
+		[$part(345600, 2678400, 11613), $part(2592000, 2592000, 90000)],
+	),
+	// El 16 de marzo subió del plan básico (400.00, faltaban 16 de 31 días: 206.45) al elemental (900.00):
+	// cobró 693.55. Ese periodo vale 693.55 + 206.45 = 900.00. El 1 de abril vuelve a subir y faltan 15 de
+	// 31 días: 900.00 × 15 ÷ 31 = 435.483… → 435.48. Con solo lo cobrado habría sido 335.59.
+	$credit(
+		'segunda subida sobre un periodo pagado con bonificación: vale lo cobrado más la bonificación',
+		'2027-04-01T16:00:00.000000Z',
+		[$paidPeriod(69355, 20645, ...$sixteenth)],
+		[$part(1296000, 2678400, 43548)],
+	),
+	// El mismo periodo pagado con bonificación (900.00), más abril-mayo renovado por adelantado el 8 de abril
+	// (900.00). El 10 de abril sube de plan: faltan 6 de 31 días del periodo en curso, 900.00 × 6 ÷ 31 =
+	// 174.193… → 174.19, y el mes renovado cuenta completo. Total: 1,074.19.
+	$credit(
+		'combinación: periodo pagado con bonificación más el mes renovado por adelantado',
+		'2027-04-10T16:00:00.000000Z',
+		[$paidPeriod(69355, 20645, ...$sixteenth), $paidPeriod(90000, 0, ...$nextSixteenth)],
+		[$part(518400, 2678400, 17419), $part(2592000, 2592000, 90000)],
 	),
 ];
 

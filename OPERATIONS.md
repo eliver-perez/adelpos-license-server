@@ -114,7 +114,7 @@ Todo se hace en el panel:
 - **Ciclo comercial** (etapa 3), desde el detalle de la licencia. Cada operación muestra primero una revisión con las fechas nuevas y el monto sugerido, y después se confirma con el monto cobrado:
   - **Renovar** una suscripción activada: si paga antes de que termine la tolerancia, el periodo nuevo empieza en el vencimiento; si no, en la fecha de pago. Conserva sus cupos y puede cambiar la duración.
   - **Convertir** una prueba en suscripción o perpetua, con cualquier plan: desde la fecha de pago, sin bonificación.
-  - **Cambiar de plan o de cupos:** subir aplica de inmediato con un periodo nuevo desde la fecha de pago y una bonificación por lo que faltaba; bajar queda programado para el vencimiento y se puede cancelar en «Cambio programado». Una perpetua solo sube, pagando la diferencia de los precios perpetuos. En una prueba es libre.
+  - **Cambiar de plan o de cupos:** subir aplica de inmediato con un periodo nuevo desde la fecha de pago y una bonificación por lo que faltaba de todos los periodos ya pagados, también uno renovado por adelantado; bajar queda programado para el vencimiento y se puede cancelar en «Cambio programado». Una perpetua solo sube, pagando la diferencia de los precios perpetuos. En una prueba es libre.
   - **Comprar mantenimiento** de una perpetua activada: 12 meses desde la fecha posterior entre el pago y el fin de las actualizaciones.
   - **Editar el periodo inicial** de una licencia sin activar: tipo, condición, plan y cupos. No registra un pago.
   - Cada pago queda en la tabla **Pagos** del detalle, que no se puede editar ni borrar.

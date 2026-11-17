@@ -350,20 +350,35 @@ final class ContractFilesTest extends TestCase
 	public function testCreditCasesAreReproducedToTheCent(): void
 	{
 		$credits = ContractSchemas::vectors()['credits'];
-		self::assertCount(8, $credits);
+		self::assertCount(11, $credits);
 		foreach ($credits as $case) {
-			$result = Credit::remaining(
-				$case['paid_cents'],
-				new \DateTimeImmutable($case['period_starts_at']),
-				new \DateTimeImmutable($case['expires_at']),
-				new \DateTimeImmutable($case['paid_at']),
-			);
-			self::assertSame(Money::toSql($case['paid_cents']), $case['paid_mxn'], $case['name']);
+			$periods = [];
+			foreach ($case['periods'] as $period) {
+				// El valor del periodo es lo cobrado más la bonificación aplicada en ese pago (propuesta V1.1 n.º 28).
+				self::assertSame($period['amount_cents'] + $period['applied_credit_cents'], $period['value_cents']);
+				foreach (['amount', 'applied_credit', 'value'] as $field) {
+					self::assertSame(Money::toSql($period[$field . '_cents']), $period[$field . '_mxn'], $case['name']);
+				}
+				$periods[] = [
+					'value' => $period['value_cents'],
+					'starts_at' => new \DateTimeImmutable($period['period_starts_at']),
+					'ends_at' => new \DateTimeImmutable($period['expires_at']),
+				];
+			}
+			$result = Credit::total($periods, new \DateTimeImmutable($case['paid_at']));
+			$parts = [];
+			foreach ($result['parts'] as $part) {
+				$parts[] = [
+					'remaining_seconds' => $part['remaining_seconds'],
+					'period_seconds' => $part['period_seconds'],
+					'credit_cents' => $part['credit'],
+					'credit_mxn' => Money::toSql($part['credit']),
+				];
+			}
 			self::assertSame(
 				$case['expected'],
 				[
-					'remaining_seconds' => $result['remaining_seconds'],
-					'period_seconds' => $result['period_seconds'],
+					'parts' => $parts,
 					'credit_cents' => $result['credit'],
 					'credit_mxn' => Money::toSql($result['credit']),
 				],

@@ -1495,114 +1495,342 @@
     "credits": [
         {
             "name": "mensual de 900.00, faltan 16 de 31 días",
-            "paid_cents": 90000,
-            "paid_mxn": "900.00",
-            "period_starts_at": "2027-03-01T16:00:00.000000Z",
-            "expires_at": "2027-04-01T16:00:00.000000Z",
             "paid_at": "2027-03-16T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2027-04-01T16:00:00.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 1382400,
-                "period_seconds": 2678400,
+                "parts": [
+                    {
+                        "remaining_seconds": 1382400,
+                        "period_seconds": 2678400,
+                        "credit_cents": 46452,
+                        "credit_mxn": "464.52"
+                    }
+                ],
                 "credit_cents": 46452,
                 "credit_mxn": "464.52"
             }
         },
         {
             "name": "mensual de 850.00, faltan 16 de 31 días",
-            "paid_cents": 85000,
-            "paid_mxn": "850.00",
-            "period_starts_at": "2027-03-01T16:00:00.000000Z",
-            "expires_at": "2027-04-01T16:00:00.000000Z",
             "paid_at": "2027-03-16T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 85000,
+                    "amount_mxn": "850.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 85000,
+                    "value_mxn": "850.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2027-04-01T16:00:00.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 1382400,
-                "period_seconds": 2678400,
+                "parts": [
+                    {
+                        "remaining_seconds": 1382400,
+                        "period_seconds": 2678400,
+                        "credit_cents": 43871,
+                        "credit_mxn": "438.71"
+                    }
+                ],
                 "credit_cents": 43871,
                 "credit_mxn": "438.71"
             }
         },
         {
             "name": "anual de 9,000.00, mayor que el precio nuevo de un plan mensual",
-            "paid_cents": 900000,
-            "paid_mxn": "9000.00",
-            "period_starts_at": "2027-03-01T16:00:00.000000Z",
-            "expires_at": "2028-03-01T16:00:00.000000Z",
             "paid_at": "2027-03-16T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 900000,
+                    "amount_mxn": "9000.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 900000,
+                    "value_mxn": "9000.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2028-03-01T16:00:00.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 30326400,
-                "period_seconds": 31622400,
+                "parts": [
+                    {
+                        "remaining_seconds": 30326400,
+                        "period_seconds": 31622400,
+                        "credit_cents": 863115,
+                        "credit_mxn": "8631.15"
+                    }
+                ],
                 "credit_cents": 863115,
                 "credit_mxn": "8631.15"
             }
         },
         {
-            "name": "al empezar el periodo, todo lo pagado",
-            "paid_cents": 90000,
-            "paid_mxn": "900.00",
-            "period_starts_at": "2027-03-01T16:00:00.000000Z",
-            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "name": "al empezar el periodo, todo su valor",
             "paid_at": "2027-03-01T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2027-04-01T16:00:00.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 2678400,
-                "period_seconds": 2678400,
+                "parts": [
+                    {
+                        "remaining_seconds": 2678400,
+                        "period_seconds": 2678400,
+                        "credit_cents": 90000,
+                        "credit_mxn": "900.00"
+                    }
+                ],
                 "credit_cents": 90000,
                 "credit_mxn": "900.00"
             }
         },
         {
             "name": "al vencer, nada",
-            "paid_cents": 90000,
-            "paid_mxn": "900.00",
-            "period_starts_at": "2027-03-01T16:00:00.000000Z",
-            "expires_at": "2027-04-01T16:00:00.000000Z",
             "paid_at": "2027-04-01T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2027-04-01T16:00:00.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 0,
-                "period_seconds": 2678400,
+                "parts": [
+                    {
+                        "remaining_seconds": 0,
+                        "period_seconds": 2678400,
+                        "credit_cents": 0,
+                        "credit_mxn": "0.00"
+                    }
+                ],
                 "credit_cents": 0,
                 "credit_mxn": "0.00"
             }
         },
         {
-            "name": "pagado antes del periodo, nunca más de lo pagado",
-            "paid_cents": 90000,
-            "paid_mxn": "900.00",
-            "period_starts_at": "2027-03-01T16:00:00.000000Z",
-            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "name": "un periodo que todavía no empieza cuenta completo",
             "paid_at": "2027-02-20T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2027-04-01T16:00:00.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 2678400,
-                "period_seconds": 2678400,
+                "parts": [
+                    {
+                        "remaining_seconds": 2678400,
+                        "period_seconds": 2678400,
+                        "credit_cents": 90000,
+                        "credit_mxn": "900.00"
+                    }
+                ],
                 "credit_cents": 90000,
                 "credit_mxn": "900.00"
             }
         },
         {
             "name": "la mitad de un centavo sube",
-            "paid_cents": 1,
-            "paid_mxn": "0.01",
-            "period_starts_at": "2027-01-01T00:00:00.000000Z",
-            "expires_at": "2027-01-01T00:00:02.000000Z",
             "paid_at": "2027-01-01T00:00:01.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 1,
+                    "amount_mxn": "0.01",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 1,
+                    "value_mxn": "0.01",
+                    "period_starts_at": "2027-01-01T00:00:00.000000Z",
+                    "expires_at": "2027-01-01T00:00:02.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 1,
-                "period_seconds": 2,
+                "parts": [
+                    {
+                        "remaining_seconds": 1,
+                        "period_seconds": 2,
+                        "credit_cents": 1,
+                        "credit_mxn": "0.01"
+                    }
+                ],
                 "credit_cents": 1,
                 "credit_mxn": "0.01"
             }
         },
         {
             "name": "segundos completos",
-            "paid_cents": 300,
-            "paid_mxn": "3.00",
-            "period_starts_at": "2027-01-01T00:00:00.000000Z",
-            "expires_at": "2027-01-01T00:00:03.000000Z",
             "paid_at": "2027-01-01T00:00:01.000001Z",
+            "periods": [
+                {
+                    "amount_cents": 300,
+                    "amount_mxn": "3.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 300,
+                    "value_mxn": "3.00",
+                    "period_starts_at": "2027-01-01T00:00:00.000000Z",
+                    "expires_at": "2027-01-01T00:00:03.000000Z"
+                }
+            ],
             "expected": {
-                "remaining_seconds": 1,
-                "period_seconds": 3,
+                "parts": [
+                    {
+                        "remaining_seconds": 1,
+                        "period_seconds": 3,
+                        "credit_cents": 100,
+                        "credit_mxn": "1.00"
+                    }
+                ],
                 "credit_cents": 100,
                 "credit_mxn": "1.00"
+            }
+        },
+        {
+            "name": "renovación anticipada con subida de plan: 4 días del periodo en curso más el mes pagado por adelantado",
+            "paid_at": "2027-03-28T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-01T16:00:00.000000Z",
+                    "expires_at": "2027-04-01T16:00:00.000000Z"
+                },
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-04-01T16:00:00.000000Z",
+                    "expires_at": "2027-05-01T16:00:00.000000Z"
+                }
+            ],
+            "expected": {
+                "parts": [
+                    {
+                        "remaining_seconds": 345600,
+                        "period_seconds": 2678400,
+                        "credit_cents": 11613,
+                        "credit_mxn": "116.13"
+                    },
+                    {
+                        "remaining_seconds": 2592000,
+                        "period_seconds": 2592000,
+                        "credit_cents": 90000,
+                        "credit_mxn": "900.00"
+                    }
+                ],
+                "credit_cents": 101613,
+                "credit_mxn": "1016.13"
+            }
+        },
+        {
+            "name": "segunda subida sobre un periodo pagado con bonificación: vale lo cobrado más la bonificación",
+            "paid_at": "2027-04-01T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 69355,
+                    "amount_mxn": "693.55",
+                    "applied_credit_cents": 20645,
+                    "applied_credit_mxn": "206.45",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-16T16:00:00.000000Z",
+                    "expires_at": "2027-04-16T16:00:00.000000Z"
+                }
+            ],
+            "expected": {
+                "parts": [
+                    {
+                        "remaining_seconds": 1296000,
+                        "period_seconds": 2678400,
+                        "credit_cents": 43548,
+                        "credit_mxn": "435.48"
+                    }
+                ],
+                "credit_cents": 43548,
+                "credit_mxn": "435.48"
+            }
+        },
+        {
+            "name": "combinación: periodo pagado con bonificación más el mes renovado por adelantado",
+            "paid_at": "2027-04-10T16:00:00.000000Z",
+            "periods": [
+                {
+                    "amount_cents": 69355,
+                    "amount_mxn": "693.55",
+                    "applied_credit_cents": 20645,
+                    "applied_credit_mxn": "206.45",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-03-16T16:00:00.000000Z",
+                    "expires_at": "2027-04-16T16:00:00.000000Z"
+                },
+                {
+                    "amount_cents": 90000,
+                    "amount_mxn": "900.00",
+                    "applied_credit_cents": 0,
+                    "applied_credit_mxn": "0.00",
+                    "value_cents": 90000,
+                    "value_mxn": "900.00",
+                    "period_starts_at": "2027-04-16T16:00:00.000000Z",
+                    "expires_at": "2027-05-16T16:00:00.000000Z"
+                }
+            ],
+            "expected": {
+                "parts": [
+                    {
+                        "remaining_seconds": 518400,
+                        "period_seconds": 2678400,
+                        "credit_cents": 17419,
+                        "credit_mxn": "174.19"
+                    },
+                    {
+                        "remaining_seconds": 2592000,
+                        "period_seconds": 2592000,
+                        "credit_cents": 90000,
+                        "credit_mxn": "900.00"
+                    }
+                ],
+                "credit_cents": 107419,
+                "credit_mxn": "1074.19"
             }
         }
     ],

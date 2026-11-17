@@ -55,7 +55,11 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 	await submit(page.getByRole('button', { name: 'Revisar cambio de plan' }));
 	assert.match(await page.locator('h1').innerText(), /Aumento/);
 	const planQuote = await page.locator('#plan-change-quote').innerText();
-	assert.match(planQuote, /Monto pagado del periodo\s*\$1,500\.00 MXN/);
+	// Cuentan el periodo en curso (alta de 0.00) y el trimestre renovado por adelantado, que no ha empezado
+	// y cuenta completo (decisión 3 de la etapa 4).
+	assert.equal(await page.locator('[data-testid="credit-parts"] tbody tr').count(), 2);
+	assert.match(planQuote, /\$0\.00 MXN\s*Cobrado: \$0\.00 MXN/);
+	assert.match(planQuote, /\$1,500\.00 MXN\s*Cobrado: \$1,500\.00 MXN/);
 	assert.match(planQuote, /Bonificación\s*\$1,500\.00 MXN/);
 	assert.match(planQuote, /Precio del plan nuevo\s*\$899\.00 MXN/);
 	assert.match(await page.locator('[data-testid="suggested"]').innerText(), /\$0\.00 MXN/);

@@ -160,7 +160,7 @@ La vida comercial de una licencia después de emitirla cambia sus condiciones y 
 | Editor de planes | `PlanService` | Crea, edita y archiva planes (solo el superadministrador). Propaga solo aumentos, y solo si se elige, en una transacción |
 | Renovación | `CommercialService::renew` | §5.3: base según la tolerancia, cambio de duración, misma activación. También al aprobar un `renew` sin internet |
 | Conversión | `CommercialService::convert` | Prueba a suscripción o perpetua, desde la fecha de pago |
-| Cambio de plan | `CommercialService::changePlan` | Cupo por cupo: aumentos con bonificación (`Domain\Credit`), reducciones programadas, perpetua que solo sube, prueba sin cobro |
+| Cambio de plan | `CommercialService::changePlan` | Cupo por cupo: aumentos con bonificación de todos los periodos pagados que no terminan (`PaidPeriods` y `Domain\Credit`), reducciones programadas, perpetua que solo sube, prueba sin cobro |
 | Cambio programado | `ScheduledChanges` y `bin/apply-scheduled-changes.php` | Se aplica una sola vez al llegar su instante, por la tarea diaria o por la renovación |
 | Mantenimiento | `CommercialService::buyMaintenance` | 12 meses desde la fecha posterior entre el pago y el fin vigente |
 | Periodo inicial | `CommercialService::editInitialTerms` | Tipo, condición, plan y cupos de una licencia sin activar |

@@ -4,41 +4,75 @@ namespace AdelPos\License\Domain;
 
 /**
  * Bonificación de un cambio de plan de una suscripción vigente (decisión 6 del propietario para la
- * etapa 3; propuesta V1.1 n.º 22):
+ * etapa 3, corregida por la decisión 3 para la etapa 4; propuestas V1.1 n.º 27 y 28):
  *
- *     bonificación = monto pagado del periodo vigente × segundos restantes ÷ segundos del periodo
+ *     valor del periodo = monto cobrado + bonificación aplicada en ese pago
+ *
+ *     bonificación = Σ sobre cada periodo pagado que todavía no termina en el instante del pago:
+ *                    valor del periodo × segundos no consumidos ÷ segundos del periodo
  *
  * - Los segundos son segundos completos: la diferencia en microsegundos, truncada.
- * - Los segundos restantes van del pago al vencimiento, y nunca son menos de 0 ni más que el
- *   periodo: la bonificación nunca supera lo que se pagó por el periodo.
- * - Se redondea al centavo, la mitad hacia arriba.
+ * - Los segundos no consumidos van del pago al final del periodo, y nunca son menos de 0 ni más
+ *   que el periodo: un periodo que todavía no empieza (renovación anticipada) cuenta completo.
+ * - Cada parte se redondea al centavo, la mitad hacia arriba, y después se suman.
  *
- * Se calcula con enteros: con montos de hasta 99,999,999.99 MXN y periodos de hasta un año, el
- * producto cabe en un entero de 64 bits.
+ * Se calcula con enteros. El valor de un periodo es a lo sumo dos veces el monto máximo (lo cobrado
+ * más una bonificación, cada uno de hasta 99,999,999.99 MXN) y un periodo dura a lo sumo un año:
+ * el producto cabe en un entero de 64 bits.
  */
 final class Credit
 {
+	/** Valor máximo de un periodo: lo cobrado más la bonificación aplicada, cada uno hasta el monto máximo. */
+	public const MAX_VALUE_CENTS = 2 * Money::MAX_CENTS;
+
+	/** Duración máxima de un periodo: un año con holgura (366 días más un cambio de horario). */
+	public const MAX_PERIOD_SECONDS = 400 * 86400;
+
 	/**
+	 * Parte de la bonificación que aporta un periodo pagado.
+	 *
 	 * @return array{credit: int, remaining_seconds: int, period_seconds: int}
 	 */
 	public static function remaining(
-		int $paidCents,
+		int $valueCents,
 		\DateTimeImmutable $periodStart,
 		\DateTimeImmutable $periodEnd,
 		\DateTimeImmutable $paidAt,
 	): array {
-		if ($paidCents < 0 || $paidCents > Money::MAX_CENTS) {
+		if ($valueCents < 0 || $valueCents > self::MAX_VALUE_CENTS) {
 			throw new \InvalidArgumentException('Amount out of range.');
 		}
 		$period = intdiv(self::microseconds($periodStart, $periodEnd), 1_000_000);
 		if ($period <= 0) {
 			throw new \InvalidArgumentException('The period must end after it starts.');
 		}
+		if ($period > self::MAX_PERIOD_SECONDS) {
+			throw new \InvalidArgumentException('The period is longer than a year.');
+		}
 		$remaining = intdiv(self::microseconds($paidAt, $periodEnd), 1_000_000);
 		$remaining = max(0, min($period, $remaining));
-		// Redondeo al centavo, la mitad hacia arriba: ⌊(2 × monto × restante + periodo) ÷ (2 × periodo)⌋.
-		$credit = intdiv(2 * $paidCents * $remaining + $period, 2 * $period);
+		// Redondeo al centavo, la mitad hacia arriba: ⌊(2 × valor × restante + periodo) ÷ (2 × periodo)⌋.
+		$credit = intdiv(2 * $valueCents * $remaining + $period, 2 * $period);
 		return ['credit' => $credit, 'remaining_seconds' => $remaining, 'period_seconds' => $period];
+	}
+
+	/**
+	 * Bonificación de todos los periodos pagados que todavía no terminan en el instante del pago.
+	 * Cada parte se redondea por separado y después se suman.
+	 *
+	 * @param list<array{value: int, starts_at: \DateTimeImmutable, ends_at: \DateTimeImmutable}> $periods
+	 * @return array{credit: int, parts: list<array{credit: int, remaining_seconds: int, period_seconds: int}>}
+	 */
+	public static function total(array $periods, \DateTimeImmutable $paidAt): array
+	{
+		$parts = [];
+		$total = 0;
+		foreach ($periods as $period) {
+			$part = self::remaining($period['value'], $period['starts_at'], $period['ends_at'], $paidAt);
+			$parts[] = $part;
+			$total += $part['credit'];
+		}
+		return ['credit' => $total, 'parts' => $parts];
 	}
 
 	/** Microsegundos de $from a $to; negativo si $to es anterior. */

@@ -153,7 +153,7 @@ final class PlanChangeTest extends TestCase
 				$quote['credit'],
 				$quote['catalog'],
 				$quote['suggested'],
-				$quote['credit_basis']['remaining_seconds'],
+				$quote['credit_basis']['parts'][0]['remaining_seconds'],
 				$quote['credit_basis']['source'],
 			],
 		);
@@ -219,6 +219,151 @@ final class PlanChangeTest extends TestCase
 				$this->lastPayment($older)['credit_amount'],
 				$this->lastPayment($older)['override_reason'],
 			],
+		);
+	}
+
+	/** Renueva una suscripción con su monto (y el motivo si no es el sugerido), en la fecha del reloj. */
+	private function renew(string $id, string $amount, string $reason = ''): void
+	{
+		$this->app->commercial->renew($this->actor, Uuid::create(), $id, [
+			'version' => (int) $this->license($id)['row_version'],
+			'amount' => $amount,
+			'amount_reason' => $reason,
+		]);
+	}
+
+	/** Bonificación, sugerido y cada parte (valor, segundos no consumidos y lo que aporta) de una vista previa. */
+	private static function credit(array $quote): array
+	{
+		$parts = [];
+		foreach ($quote['credit_basis']['parts'] as $part) {
+			$parts[] = [$part['concept'], $part['value'], $part['remaining_seconds'], $part['credit']];
+		}
+		return [$quote['credit'], $quote['suggested'], $parts];
+	}
+
+	public function testAnAdvanceRenewalAddsTheRestOfTheCurrentPeriodAndTheWholePrepaidOne(): void
+	{
+		// Elemental mensual de 900.00 del 1 de marzo al 1 de abril. El 20 de marzo renueva por adelantado
+		// (900.00): abril-mayo. El 28 de marzo sube a premium (1,500.00): faltan 4 de 31 días del periodo en
+		// curso (116.13) y el mes pagado por adelantado no ha empezado (900.00). Bonificación: 1,016.13.
+		[$license, $installation] = $this->activated('subscription', ['amount' => '900']);
+		$this->clock->instant = new \DateTimeImmutable('2027-03-20T16:00:00Z');
+		$this->renew($license, '900');
+		$this->clock->instant = new \DateTimeImmutable('2027-03-28T16:00:00Z');
+		$quote = $this->app->commercial->quotePlanChange($license, ['plan_id' => 'premium']);
+		self::assertSame(
+			[101613, 48387, [['issue', 90000, 4 * 86400, 11613], ['renewal', 90000, 30 * 86400, 90000]]],
+			self::credit($quote),
+		);
+		self::assertSame('payment', $quote['credit_basis']['source']);
+		$this->change($license, ['plan_id' => 'premium', 'amount' => '483.87']);
+		$payment = $this->lastPayment($license);
+		self::assertSame(
+			['483.87', '1016.13', '483.87', '2027-03-28 16:00:00.000000', '2027-04-28 16:00:00.000000'],
+			[
+				$payment['amount'],
+				$payment['credit_amount'],
+				$payment['suggested_amount'],
+				$payment['covers_from'],
+				$payment['covers_until'],
+			],
+		);
+		// El periodo nuevo empieza en la fecha de pago: el mes pagado por adelantado quedó dentro de la bonificación.
+		self::assertSame('2027-04-28T16:00:00.000000Z', $installation->refresh()['expires_at']);
+	}
+
+	public function testASecondIncreaseValuesThePeriodAtWhatWasChargedPlusTheCreditItUsed(): void
+	{
+		// Básico mensual de 400.00 desde el 1 de marzo. El 16 de marzo sube al elemental: faltan 16 de 31 días
+		// (206.45) y cobra 693.55. Ese periodo, del 16 de marzo al 16 de abril, vale 693.55 + 206.45 = 900.00.
+		[$license] = $this->activated('subscription', ['amount' => '400'], 'basico');
+		$this->clock->instant = new \DateTimeImmutable('2027-03-16T16:00:00Z');
+		$first = $this->app->commercial->quotePlanChange($license, ['plan_id' => 'elemental']);
+		self::assertSame([20645, 69355, [['issue', 40000, 16 * 86400, 20645]]], self::credit($first));
+		$this->change($license, ['plan_id' => 'elemental', 'amount' => '693.55']);
+		// El 1 de abril sube a premium: faltan 15 de 31 días del periodo de 900.00: 435.48. Con solo lo
+		// cobrado (693.55) habría sido 335.59.
+		$this->clock->instant = new \DateTimeImmutable('2027-04-01T16:00:00Z');
+		$second = $this->app->commercial->quotePlanChange($license, ['plan_id' => 'premium']);
+		self::assertSame([43548, 106452, [['plan_change', 90000, 15 * 86400, 43548]]], self::credit($second));
+		self::assertSame(
+			[69355, 20645],
+			[$second['credit_basis']['parts'][0]['amount'], $second['credit_basis']['parts'][0]['applied_credit']],
+		);
+		$this->change($license, ['plan_id' => 'premium', 'amount' => '1064.52']);
+		self::assertSame(
+			['1064.52', '435.48'],
+			[$this->lastPayment($license)['amount'], $this->lastPayment($license)['credit_amount']],
+		);
+	}
+
+	public function testAnAdvanceRenewalOverAPeriodPaidWithCreditAddsBoth(): void
+	{
+		// Básico de 400.00 el 1 de marzo; el 16 de marzo sube al elemental (cobra 693.55, el periodo vale 900.00
+		// hasta el 16 de abril). El 8 de abril renueva por adelantado (900.00): 16 de abril al 16 de mayo. El 10 de
+		// abril sube a premium: faltan 6 de 31 días del periodo pagado con bonificación (174.19) y el mes renovado
+		// cuenta completo (900.00). Bonificación: 1,074.19.
+		[$license] = $this->activated('subscription', ['amount' => '400'], 'basico');
+		$this->clock->instant = new \DateTimeImmutable('2027-03-16T16:00:00Z');
+		$this->change($license, ['plan_id' => 'elemental', 'amount' => '693.55']);
+		$this->clock->instant = new \DateTimeImmutable('2027-04-08T16:00:00Z');
+		$this->renew($license, '900');
+		self::assertSame('2027-04-16 16:00:00.000000', $this->license($license)['period_starts_at']);
+		$this->clock->instant = new \DateTimeImmutable('2027-04-10T16:00:00Z');
+		$quote = $this->app->commercial->quotePlanChange($license, ['plan_id' => 'premium']);
+		self::assertSame(
+			[107419, 42581, [['plan_change', 90000, 6 * 86400, 17419], ['renewal', 90000, 30 * 86400, 90000]]],
+			self::credit($quote),
+		);
+		// Un pago registrado después pero fechado antes de la renovación no se acepta: los pagos van en orden.
+		$this->rejected(
+			'anterior al último pago registrado',
+			fn() => $this->app->commercial->quotePlanChange($license, [
+				'plan_id' => 'premium',
+				'paid_at' => '2027-04-01T10:00',
+			]),
+		);
+		// Pagado el 20 de abril, ya empezó el mes renovado: el periodo pagado con bonificación terminó.
+		$this->clock->instant = new \DateTimeImmutable('2027-04-20T16:00:00Z');
+		$later = $this->app->commercial->quotePlanChange($license, ['plan_id' => 'premium']);
+		self::assertSame([[['renewal', 90000, 26 * 86400, 78000]]], [self::credit($later)[2]]);
+	}
+
+	public function testUnusualChainsOfPaidPeriods(): void
+	{
+		// Pagado antes de activar: el periodo en curso empieza después del pago y cuenta completo, sin buscar
+		// periodos anteriores (el alta no es una renovación).
+		$issued = $this->app->licenses->issue($this->actor, Uuid::create(), [
+			'customer_id' => $this->customer,
+			'product_id' => 'adel_pos',
+			...MySqlFixture::terms('subscription'),
+			'amount' => '900',
+		]);
+		$this->clock->instant = new \DateTimeImmutable('2027-03-05T16:00:00Z');
+		(new Installation($this->app))->activate($issued['secret']);
+		$quote = $this->app->commercial->quotePlanChange($issued['id'], [
+			'plan_id' => 'premium',
+			'paid_at' => '2027-03-03T10:00',
+		]);
+		self::assertSame([90000, 60000, [['issue', 90000, 31 * 86400, 90000]]], self::credit($quote));
+		// Un periodo anterior sin pago registrado (licencia emitida antes de la etapa 3, con una renovación
+		// anticipada después): no se sabe cuánto valía, así que no hay sugerencia.
+		[$license] = $this->activated('subscription', ['amount' => '900']);
+		$this->clock->instant = new \DateTimeImmutable('2027-03-20T16:00:00Z');
+		$this->renew($license, '900');
+		$this->fixture->owner->execute("DELETE FROM license_payments WHERE license_id=? AND concept='issue'", [
+			Uuid::bytes($license),
+		]);
+		$quote = $this->app->commercial->quotePlanChange($license, ['plan_id' => 'premium']);
+		self::assertSame([0, null, null], [$quote['credit'], $quote['suggested'], $quote['credit_basis']]);
+		// Una bonificación mayor que el monto máximo no se puede registrar.
+		[$large] = $this->activated('subscription', ['amount' => '99999999.99', 'amount_reason' => 'Caso límite']);
+		$this->clock->instant = new \DateTimeImmutable('2027-03-21T16:00:00Z');
+		$this->renew($large, '99999999.99', 'Caso límite');
+		$this->rejected(
+			'supera el monto máximo',
+			fn() => $this->app->commercial->quotePlanChange($large, ['plan_id' => 'premium']),
 		);
 	}
 

@@ -33,6 +33,7 @@ final class CommercialService
 		private Payments $payments,
 		private LicenseHistory $history,
 		private ScheduledChanges $scheduled,
+		private PaidPeriods $paidPeriods,
 	) {}
 
 	/**
@@ -365,8 +366,8 @@ final class CommercialService
 	 * - prueba: cambio libre, inmediato y sin cobro; sus fechas no cambian;
 	 * - perpetua: solo sube, pagando la diferencia de los precios perpetuos; aplica de inmediato;
 	 * - suscripción vigente con algún aumento: periodo nuevo desde la fecha de pago, con bonificación
-	 *   por lo que faltaba del periodo pagado; los aumentos aplican de inmediato y las reducciones se
-	 *   programan para el vencimiento anterior;
+	 *   por lo no consumido de todos los periodos pagados que todavía no terminan (PaidPeriods); los
+	 *   aumentos aplican de inmediato y las reducciones se programan para el vencimiento anterior;
 	 * - suscripción vigente sin aumentos: el cambio se programa para el vencimiento, sin cobro;
 	 * - suscripción pagada después del vencimiento: es una renovación con plan nuevo, sin bonificación.
 	 */
@@ -563,47 +564,29 @@ final class CommercialService
 		if ($down !== []) {
 			$change['scheduled_at'] = $expiresAt;
 		}
-		$basis = $this->creditBasis($license);
-		if ($basis !== null) {
-			$credit = Credit::remaining(
-				$basis['amount'],
-				new \DateTimeImmutable($license['period_starts_at'], self::utc()),
-				$expiresAt,
-				$paidAt,
-			);
+		// Bonificación: lo no consumido de todos los periodos pagados que todavía no terminan, sobre su
+		// valor completo (decisión 3 del propietario para la etapa 4).
+		$periods = $this->paidPeriods->live($license, $paidAt);
+		if ($periods !== null) {
+			$credit = Credit::total($periods, $paidAt);
+			if ($credit['credit'] > Money::MAX_CENTS) {
+				throw new Problem('La bonificación supera el monto máximo que se puede registrar: $99,999,999.99 MXN.');
+			}
+			$parts = [];
+			foreach ($periods as $position => $period) {
+				$parts[] = $period + $credit['parts'][$position];
+			}
 			$change['credit'] = $credit['credit'];
-			$change['credit_basis'] = $basis + $credit;
+			$change['credit_basis'] = [
+				'source' => in_array('catalog', array_column($parts, 'source'), true) ? 'catalog' : 'payment',
+				'parts' => $parts,
+			];
 			if ($catalog !== null) {
 				$change['catalog'] = $catalog;
 				$change['suggested'] = max(0, $catalog - $credit['credit']);
 			}
 		}
 		return ['kind' => 'increase'] + $change;
-	}
-
-	/**
-	 * Monto pagado del periodo vigente, para la bonificación: el del pago que cubre el periodo. Una
-	 * licencia sin ese pago (emitida antes de la etapa 3) usa el precio del catálogo vigente de su
-	 * plan y su periodo. Si tampoco hay precio, o es personalizada, no se puede calcular.
-	 *
-	 * @return ?array{source: string, amount: int}
-	 */
-	private function creditBasis(array $license): ?array
-	{
-		if ($license['period_payment_id'] !== null) {
-			$amount = $this->db
-				->execute('SELECT amount FROM license_payments WHERE payment_id=? AND license_id=?', [
-					$license['period_payment_id'],
-					$license['license_id'],
-				])
-				->fetchColumn();
-			return ['source' => 'payment', 'amount' => Money::fromSql($amount)];
-		}
-		if ($license['plan_custom']) {
-			return null;
-		}
-		$price = LicenseTerms::catalogPrice($this->plan($license['plan_id']), $license['billing_period']);
-		return $price === null ? null : ['source' => 'catalog', 'amount' => $price];
 	}
 
 	/** Escribe el cambio de plan que calculó planPlanChange(). */
@@ -740,6 +723,7 @@ final class CommercialService
 				'paid_at' => $change['paid_at'] === null ? null : CalendarPeriod::utc($change['paid_at']),
 				'credit' => Money::toSql($change['credit']),
 				'credit_basis' => $change['credit_basis']['source'] ?? null,
+				'credit_parts' => self::creditParts($change['credit_basis']),
 				'scheduled_change_id' => $scheduled['change_id'] ?? null,
 				'scheduled_at' =>
 					$change['scheduled_at'] === null ? null : CalendarPeriod::utc($change['scheduled_at']),
@@ -1089,6 +1073,25 @@ final class CommercialService
 			'reference' => Input::text($input, 'reference', 190, false),
 			'note' => Input::text($input, 'reason', 500, false),
 		] + Payments::input($input);
+	}
+
+	/** Partes de la bonificación para el historial: cada periodo, su valor y lo que aportó. */
+	private static function creditParts(?array $basis): array
+	{
+		$parts = [];
+		foreach ($basis['parts'] ?? [] as $part) {
+			$parts[] = [
+				'payment_id' => $part['payment_id'],
+				'source' => $part['source'],
+				'value' => Money::toSql($part['value']),
+				'starts_at' => CalendarPeriod::utc($part['starts_at']),
+				'ends_at' => CalendarPeriod::utc($part['ends_at']),
+				'remaining_seconds' => $part['remaining_seconds'],
+				'period_seconds' => $part['period_seconds'],
+				'credit' => Money::toSql($part['credit']),
+			];
+		}
+		return $parts;
 	}
 
 	private static function sqlOrNull(?\DateTimeImmutable $instant): ?string

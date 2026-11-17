@@ -2628,3 +2628,126 @@ git grep -n "PENDIENTE etapa" -- src bin templates
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
 | Marcas `PENDIENTE etapa 3` | 0 |
 | Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |
+
+---
+
+# Avance — Etapa 4: transferencias y alertas
+
+Especificación: [docs/ETAPA_4_TRANSFERENCIAS_Y_ALERTAS.md](docs/ETAPA_4_TRANSFERENCIAS_Y_ALERTAS.md). Fuente de verdad: el contrato V1.0, que no se modifica. Las decisiones del propietario para la etapa están en `DECISIONS.md`, sección 13.
+
+El propietario pidió trabajar las fases 0 a 6 sin detenerse entre ellas, y aprobó al encargarla las propuestas V1.1 n.º 33, 34 y 35 tal como las escribe la especificación. Lo que el contrato o la especificación no resuelven se decide con el criterio más conservador y coherente con el contrato, se aplica y queda como propuesta V1.1 nueva (desde la n.º 36) en las consultas del cierre.
+
+## Etapa 4 · Fase 0 — Verificación y corrección de la bonificación
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E4-0.1 Estado de partida
+
+| Comprobación | Resultado |
+| --- | --- |
+| Commit | `d45651a` «Etapa 3, Fase 9: panel y cierre de la etapa». Árbol limpio, salvo la especificación de esta etapa, que llegó sin versionar y se agrega en este commit. |
+| PHPUnit, PHP 8.5.7 | 432 pruebas, 28 135 aserciones, todas OK (3 min 18 s) |
+| PHPUnit, PHP 8.3.36 | 432 pruebas, 28 135 aserciones, todas OK. Se corrió en una copia limpia de `d45651a` (`git worktree`, con su propia copia de `vendor/`), porque una primera corrida empezó junto con los primeros cambios de esta fase y cargó código a medio editar. |
+| `generate-fixtures.php --check` | Comprobado: 17 licencias, 17 casos negativos, 7 de revisión, 40 de fechas, 8 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go 1.25.5 | OK en todos los casos |
+| Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |
+
+### E4-0.2 `DECISIONS.md`
+
+- **Sección 9:** las propuestas n.º 23 a 32 llevan su estado: aprobadas (24, 25, 26, 29, 31 y 32), aprobadas con una regla para el contrato `_v2` (23 y 30) o sustituidas por su alternativa (27 y 28). Se agrega la tabla de las propuestas de la etapa 4 con las n.º 33, 34 y 35, **aprobadas**.
+- **Sección 12:** las decisiones de la etapa 3 que aplicaban las n.º 27 y 28 quedan marcadas como sustituidas.
+- **Sección 13, nueva:** las decisiones 1 a 6 del propietario para esta etapa, más la 7, la aprobación de las n.º 33 a 35.
+- **Sección 14, nueva:** decisiones técnicas de la etapa 4, por fase.
+
+### E4-0.3 Bonificación corregida (decisión 3)
+
+```
+valor_del_periodo(pago) = monto_cobrado + bonificación_aplicada_en_ese_pago
+
+bonificación = Σ sobre cada periodo pagado que todavía no termina en el instante del nuevo pago:
+               valor_del_periodo × segundos_no_consumidos ÷ segundos_del_periodo
+```
+
+- **`Application\PaidPeriods` (nueva):** reconstruye la cadena de periodos pagados que todavía corren. Parte del periodo vigente (`period_payment_id`). Si ese periodo todavía no empieza (renovación anticipada), el anterior termina donde él empieza y también cuenta; así hasta llegar a uno que ya empezó. El anterior es el pago que cubre hasta ese instante o, si ninguno, el primer periodo, que empieza en la primera activación.
+- **`Domain\Credit::total()`:** cada parte con `Credit::remaining()` (segundos completos, tope en el periodo, redondeo de la mitad hacia arriba) y después la suma. Un periodo que no empieza cuenta completo.
+- **El monto sugerido** sigue siendo `máximo(0, precio_nuevo − bonificación)`. Sin pago del periodo vigente se usa el precio del catálogo, como hasta ahora.
+- **Pantalla de revisión:** una tabla con cada periodo que aporta (fechas, valor con lo cobrado y la bonificación aplicada, días sin usar y su parte) y la bonificación total. El historial guarda las partes (`credit_parts`).
+
+### E4-0.4 Marcas `PENDIENTE etapa 4` y la fase que las resuelve
+
+```sh
+git grep -n "PENDIENTE etapa 4" -- src bin templates
+```
+
+| Archivo | Qué queda pendiente | Fase |
+| --- | --- | --- |
+| `src/Domain/Protocol.php:56` | Aceptar la acción `transfer` en el desafío y la petición de transferencia | 2 |
+| `src/Http/ApiKernel.php:12` | Ruta `POST /v1/activations/transfer` | 2 |
+| `src/Application/ActivationService.php:185` | Calcular `transfer_available` en `ACTIVATION_LIMIT` | 2 |
+| `src/Application/OfflineService.php:311` | Las transferencias del propietario se registran con la vía `owner` (Fase 1), no consumen el autoservicio (Fase 3) y cuentan para la alerta de 12 meses (Fase 4) | 1, 3 y 4 |
+
+Los pendientes de etapa 4 que `AVANCE.md` (E3-9.6) y `SCHEMA.md` (sección 9) registran fuera del código:
+
+| Pendiente | Fase |
+| --- | --- |
+| `activation_challenges.action` sin `transfer` | 1 (esquema) y 2 (protocolo) |
+| `license_transfers` solo con las transferencias del panel | 1 |
+| Alertas del panel | 1 (esquema) y 4 (panel) |
+| `transfer` en `openapi.yaml` | 5 |
+| Tabla consolidada de propuestas V1.1 para el contrato `_v2` | 6 |
+
+### E4-0.5 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Unit/CreditTest.php` | +1 (3 en total) | `Credit::total()`: renovación anticipada (116.13 + 900.00), cada parte redondeada por separado (dos medios centavos son 2), sin periodos; el valor máximo de un periodo y la duración máxima |
+| `tests/Integration/PlanChangeTest.php` | +4 (12 en total) | **Renovación anticipada con subida de plan:** 4 días del periodo en curso más el mes pagado por adelantado, 1,016.13, y el periodo nuevo desde la fecha de pago. **Segunda subida sobre un periodo pagado con bonificación:** vale 693.55 + 206.45 = 900.00 y bonifica 435.48 (con solo lo cobrado habrían sido 335.59). **Combinación:** 174.19 + 900.00 = 1,074.19, y el 20 de abril solo cuenta el mes renovado (780.00). **Cadenas poco comunes:** pago anterior a la activación (el periodo cuenta completo), periodo anterior sin pago (sin sugerencia) y bonificación mayor que el máximo (rechazada). Las pruebas existentes leen la bonificación de sus partes |
+| `tests/Unit/ContractFilesTest.php` | — | Los 11 casos `credits` se reproducen al centavo con `Credit::total()`, y en cada periodo el valor es lo cobrado más la bonificación aplicada |
+| `tests/commercial-panel.cjs` | — | La vista previa del cambio de plan muestra los dos periodos que aportan (el alta de 0.00 y el trimestre renovado por adelantado) y la bonificación de 1,500.00 |
+
+Los montos esperados se calcularon a mano, por separado, y están escritos en las pruebas y en el generador con su cuenta.
+
+### E4-0.6 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **14 reglas** con `PlanChangeTest`, `CreditTest` y `ContractFilesTest`:
+
+| Regla | Resultado |
+| --- | --- |
+| El valor del periodo suma la bonificación aplicada | Detectada |
+| Un periodo que no empieza cuenta completo (tope en el periodo) | Detectada |
+| Una renovación anticipada suma el periodo anterior | Detectada |
+| El anterior es el pago que cubre hasta el inicio | Detectada |
+| Sin ese pago, el primer periodo (alta o conversión sin fechas) | Detectada |
+| El primer periodo empieza en la primera activación | Detectada |
+| Cada parte se redondea por separado | Detectada |
+| Solo cuentan los periodos que no terminan | **No detectada:** la condición nunca podía fallar. Todo periodo de la cadena termina después del pago (el vigente, porque un pago posterior a su vencimiento es una renovación; cada anterior, porque termina donde empieza uno futuro). Se quitó del código y se dejó la explicación en un comentario |
+| Solo una renovación anticipada busca el periodo anterior | Detectada (pago anterior a la activación) |
+| La bonificación no pasa del monto máximo | Detectada |
+| Un periodo anterior sin pago deja sin sugerencia | Detectada |
+| Valor máximo de un periodo | Detectada |
+| Duración máxima de un periodo | Detectada |
+| Lo sugerido descuenta la bonificación total | Detectada |
+
+### E4-0.7 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 437 pruebas, 28 203 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 437 pruebas, 28 203 aserciones, todas OK |
+| `generate-fixtures.php --check` | 17 licencias, 17 casos negativos, 7 de revisión, 40 de fechas, **11 de bonificación**, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go | Sin cambios en lo que verifica; OK |
+| Playwright | Panel (con el ciclo comercial), sin internet y dispositivos de confianza OK; datos sintéticos eliminados |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
+Una corrida detenida a mano dejó una base sintética `adelpos_license_test_*` sin limpiar; se eliminó. No quedan bases ni usuarios de prueba.
+
+### E4-0.8 Plan de la etapa
+
+| Fase | Migración | Contenido |
+| --- | --- | --- |
+| 1 | `008` | `license_transfers` con vía, estado y confirmación, y una sola pendiente por licencia en la base; `license_alerts` con una abierta por tipo y licencia; desafío `transfer` en la base |
+| 2 | — | `POST /v1/activations/transfer`, `transfer_available` y `TRANSFER_LIMIT` |
+| 3 | — | Confirmación por `refresh`, `deactivate` y sin internet; liberación manual |
+| 4 | — | Alertas en la barra superior y en el resumen; transferencias en el detalle |
+| 5 | — | `openapi.yaml`, archivos de prueba, verificador Go y `contracts/v1/README.md` |
+| 6 | — | Playwright, documentación, tabla consolidada de propuestas V1.1 y paquete |

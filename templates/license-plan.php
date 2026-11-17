@@ -23,8 +23,8 @@ $kindNotes = [
 		'Se paga la diferencia entre los precios perpetuos de los dos planes. El cambio aplica de inmediato y no ' .
 		'cambia el fin de las actualizaciones.',
 	'increase' =>
-		'El periodo nuevo empieza en la fecha de pago, y se descuenta la parte del periodo pagado que faltaba ' .
-		'por usar. Los aumentos aplican de inmediato.',
+		'El periodo nuevo empieza en la fecha de pago, y se descuenta lo que faltaba por usar de los periodos ya ' .
+		'pagados, también de uno pagado por adelantado. Los aumentos aplican de inmediato.',
 	'reduction' =>
 		'El plan y los cupos nuevos entran en vigor cuando vence el tiempo pagado. No se cobra nada ahora: el ' .
 		'cobro llega con la renovación, que sugiere el precio del plan nuevo.',
@@ -42,6 +42,28 @@ foreach (LicenseTerms::LIMITS as $limit => $label) {
 }
 if ($quote['paid_at'] !== null) {
 	$hidden['paid_at'] = CalendarPeriod::utc($quote['paid_at']);
+}
+// Cada periodo pagado que todavía no termina aporta su parte de la bonificación (decisión 3 de la etapa 4).
+$creditRows = [];
+foreach ($basis['parts'] ?? [] as $part) {
+	$valueNote = 'Precio del catálogo: el periodo no tiene un pago registrado';
+	if ($part['source'] === 'payment') {
+		$valueNote = 'Cobrado: ' . Money::format($part['amount']);
+	}
+	if ($part['source'] === 'payment' && $part['applied_credit'] > 0) {
+		$valueNote .= ' + bonificación aplicada: ' . Money::format($part['applied_credit']);
+	}
+	$creditRows[] = [
+		'from' => V::date(CalendarPeriod::sql($part['starts_at']), $zone),
+		'until' => V::date(CalendarPeriod::sql($part['ends_at']), $zone),
+		'value' => Money::format($part['value']),
+		'note' => $valueNote,
+		'days' =>
+			number_format($part['remaining_seconds'] / 86400, 2) .
+			' de ' .
+			number_format($part['period_seconds'] / 86400, 2),
+		'credit' => Money::format($part['credit']),
+	];
 }
 $priceNote = '';
 if ($quote['charges'] && $suggested === null) {
@@ -74,17 +96,39 @@ if ($quote['charges'] && $suggested === null) {
 						<dd><?= V::escape(V::date(CalendarPeriod::sql($quote['paid_at']), $zone)) ?></dd>
 					</div>
 				<?php endif; ?>
-				<?php if ($basis !== null && isset($basis['remaining_seconds'])): ?>
-					<div>
-						<dt>Días restantes del periodo pagado</dt>
-						<dd data-testid="remaining-days">
-							<?= V::escape(number_format($basis['remaining_seconds'] / 86400, 2)) ?> de
-							<?= V::escape(number_format($basis['period_seconds'] / 86400, 2)) ?>
+				<?php if ($creditRows !== []): ?>
+					<div class="wide">
+						<dt>Periodos pagados que todavía no terminan</dt>
+						<dd>
+							<div class="table-responsive">
+								<table class="table table-sm mb-0" data-testid="credit-parts">
+									<thead>
+										<tr>
+											<th>Periodo</th>
+											<th>Valor del periodo</th>
+											<th>Días sin usar</th>
+											<th>Bonificación</th>
+										</tr>
+									</thead>
+									<tbody>
+										<?php foreach ($creditRows as $row): ?>
+											<tr>
+												<td>
+													<?= V::escape($row['from']) ?>
+													<small class="cell-sub">al <?= V::escape($row['until']) ?></small>
+												</td>
+												<td>
+													<?= V::escape($row['value']) ?>
+													<small class="cell-sub"><?= V::escape($row['note']) ?></small>
+												</td>
+												<td data-testid="remaining-days"><?= V::escape($row['days']) ?></td>
+												<td><?= V::escape($row['credit']) ?></td>
+											</tr>
+										<?php endforeach; ?>
+									</tbody>
+								</table>
+							</div>
 						</dd>
-					</div>
-					<div>
-						<dt><?= $basis['source'] === 'payment' ? 'Monto pagado del periodo' : 'Precio del catálogo del periodo' ?></dt>
-						<dd><?= V::escape(Money::format($basis['amount'])) ?></dd>
 					</div>
 				<?php endif; ?>
 				<?php if ($kind === 'increase' || $kind === 'perpetual'): ?>

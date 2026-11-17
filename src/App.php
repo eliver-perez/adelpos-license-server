@@ -16,6 +16,7 @@ use AdelPos\License\Application\{
 	LicenseService,
 	OfflineService,
 	Operations,
+	PaidPeriods,
 	Payments,
 	PlanService,
 	RevisionPublisher,
@@ -116,6 +117,7 @@ final class App
 			$this->payments,
 			$history,
 			$this->scheduledChanges,
+			new PaidPeriods($db),
 		);
 		$this->offline = new OfflineService(
 			$db,
