@@ -2879,3 +2879,41 @@ Las 18 se detectan ahora.
 | PHPUnit, PHP 8.5.7 | No se corrió (se corre en el cierre, Fase 6) |
 | Playwright | Panel, sin internet y dispositivos de confianza OK (la fase cambia el detalle de la licencia) |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
+---
+
+## Etapa 4 · Fase 4 — Alertas en el panel (decisión 4)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E4-4.1 Qué cambió
+
+- **`Alerts::frequentTransfers()`:** después de cada transferencia (de autoservicio o del propietario, con destino o «recuperar plaza»), cuenta las de la licencia en los 12 meses de calendario anteriores, en la zona del cliente, con el inicio incluido (propuesta n.º 37); con dos o más, abre la alerta o suma un caso. Se quitó la última marca `PENDIENTE etapa 4` (`OfflineService`).
+- **`CalendarPeriod::monthsBefore()`:** «12 meses antes» con las reglas de §5.1.
+- **`Alerts::review()`:** «Marcar como revisada», para el operador y el superadministrador, con quién y cuándo en la alerta y en la auditoría.
+- **Panel:** botón de notificaciones en la barra superior, con el número sin revisar y las más recientes; pantalla «Alertas» con filtro; sección «Alertas» en el resumen; alertas de la licencia en su detalle. Cada una enlaza a su licencia.
+- **Detalle de la licencia:** el historial de transferencias, la pendiente y la liberación manual ya quedaron en la Fase 3 (punto 4 de esta fase).
+
+### E4-4.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/AlertsTest.php` (nueva) | 6 | **Creación de cada tipo:** el intento bloqueado, y las transferencias frecuentes en la segunda transferencia (una sola no basta), con su detalle (cuántas, inicio de la ventana, zona y vías) y la auditoría que la nombra. **Una abierta con su contador** (3 transferencias: 2 casos) y **una nueva después de revisar**, para los dos tipos. **Límite exacto de los 12 meses en la zona del cliente** (Tijuana, con cambio de horario entre los dos años): el instante exacto cuenta, un microsegundo después ya no, y una transferencia que en UTC quedaría fuera entra en la zona del cliente. **Las del propietario cuentan** («recuperar plaza» antes y después de una de autoservicio). **Permisos para revisar:** la cuenta de consulta no puede, el operador sí, queda quién y cuándo y la auditoría; repetir la operación no cambia nada y revisar dos veces se rechaza. **Número sin revisar en la barra:** la plantilla muestra el número y las alertas recientes, y no muestra número sin alertas; la lista empieza por las sin revisar y filtra por estado y tipo |
+| `CalendarPeriodTest` | +1 | 12 meses antes: horario de verano en un año y estándar en otro, 29 de febrero, hora inexistente, hora repetida, microsegundos y límites |
+| `ViewTest` | +1 | Los textos de las dos alertas, con la ventana en la zona del cliente |
+| `StageClosureTest` | — | Ya no queda ninguna marca `PENDIENTE etapa 4` |
+
+### E4-4.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **18 reglas**: dos o más transferencias; el inicio exacto de la ventana; la zona del cliente; los 12 meses; las del propietario; confirmadas y pendientes; la evaluación después de cada transferencia de autoservicio y del propietario; quién puede revisar, quién revisó, la auditoría y una sola revisión; el resumen solo con las sin revisar; la lista con las sin revisar primero y el filtro de revisadas; el número de la barra solo con alertas; el mismo día y hora locales en `monthsBefore`, y la ventana mostrada en la zona del cliente. **Todas se detectan.** Tres mutaciones se rehicieron porque no probaban la regla: dos rompían la sintaxis de PHP y una elegía al administrador por fecha de alta, que es la misma para todos con el reloj fijo.
+
+La primera corrida completa encontró una prueba de la Fase 3 que esperaba cero alertas en la carrera entre una confirmación y una transferencia: cuando gana la confirmación, la licencia suma dos transferencias y ahora se abre, correctamente, la alerta de transferencias frecuentes. La prueba cuenta desde entonces solo las alertas de intento bloqueado, y se corrió tres veces seguidas sin fallas.
+
+### E4-4.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, **PHP 8.3.36** | 464 pruebas, 28 867 aserciones, todas OK |
+| PHPUnit, PHP 8.5.7 | No se corrió (se corre en el cierre, Fase 6) |
+| Playwright | Panel, sin internet y dispositivos de confianza OK, con la barra superior nueva en todas las pantallas. Los recorridos de las alertas se agregan en la Fase 6 |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |

@@ -89,7 +89,7 @@ final class App
 		);
 		$operations = new Operations($db, $this->crypto, $this->clock);
 		$activator = new LicenseActivator($db, $this->clock, $this->publisher);
-		$this->alerts = new Alerts($db, $this->clock, $this->audit);
+		$this->alerts = new Alerts($db, $this->clock, $this->audit, $operations);
 		$this->transfers = new Transfers(
 			$db,
 			$this->clock,
@@ -98,6 +98,7 @@ final class App
 			$activator,
 			$operations,
 			$this->auth,
+			$this->alerts,
 		);
 		$this->activations = new ActivationService(
 			$db,

@@ -109,6 +109,21 @@ final class ReadRepository
 				$where[] = 'o.product_id=?';
 				$parameters[] = $filters['product_id'];
 			}
+		} elseif ($kind === 'alerts') {
+			// Las sin revisar primero, y después las revisadas; dentro de cada grupo, la más reciente primero.
+			$from = self::ALERTS_FROM;
+			$select = self::ALERTS_SELECT;
+			$order = 'a.reviewed_at IS NOT NULL,a.last_seen_at DESC,a.alert_id';
+			if (($filters['status'] ?? '') === 'open') {
+				$where[] = 'a.reviewed_at IS NULL';
+			}
+			if (($filters['status'] ?? '') === 'reviewed') {
+				$where[] = 'a.reviewed_at IS NOT NULL';
+			}
+			if (($filters['type'] ?? '') !== '') {
+				$where[] = 'a.alert_type=?';
+				$parameters[] = $filters['type'];
+			}
 		} elseif ($kind === 'audit') {
 			$from = 'audit_events a LEFT JOIN admin_users u ON u.id=a.actor_id';
 			$select = 'a.*,u.display_name AS actor_name';
@@ -130,7 +145,68 @@ final class ReadRepository
 			'SELECT ' . $select . ' FROM ' . $from . ' WHERE ' . $clause . ' ORDER BY ' . $order . ' LIMIT ? OFFSET ?',
 			[...$parameters, 20, ($page - 1) * 20],
 		);
+		if ($kind === 'alerts') {
+			$rows = array_map(self::alert(...), $rows);
+		}
 		return compact('rows', 'total', 'page', 'pages');
+	}
+
+	private const ALERTS_FROM = 'license_alerts a
+			JOIN licenses l ON l.license_id=a.license_id
+			JOIN customers c ON c.id=l.customer_id
+			LEFT JOIN admin_users u ON u.id=a.reviewed_by';
+
+	private const ALERTS_SELECT = 'BIN_TO_UUID(a.alert_id) AS id_text,BIN_TO_UUID(a.license_id) AS license_text,
+			a.alert_type,a.attempts,a.detail_json,a.created_at,a.last_seen_at,a.reviewed_at,
+			u.display_name AS reviewer_name,c.display_name AS customer_name,c.time_zone';
+
+	/**
+	 * Alertas sin revisar para la barra superior y el resumen: cuántas hay y las más recientes.
+	 *
+	 * @return array{open: int, recent: list<array>}
+	 */
+	public function alertSummary(int $recent = 5): array
+	{
+		return [
+			'open' => (int) $this->db
+				->execute('SELECT COUNT(*) FROM license_alerts WHERE reviewed_at IS NULL')
+				->fetchColumn(),
+			'recent' => array_map(
+				self::alert(...),
+				$this->db->all(
+					'SELECT ' .
+						self::ALERTS_SELECT .
+						' FROM ' .
+						self::ALERTS_FROM .
+						' WHERE a.reviewed_at IS NULL ORDER BY a.last_seen_at DESC,a.alert_id LIMIT ?',
+					[$recent],
+				),
+			),
+		];
+	}
+
+	/** Alertas de una licencia, abiertas primero, para su detalle. */
+	public function licenseAlerts(string $licenseId): array
+	{
+		return array_map(
+			self::alert(...),
+			$this->db->all(
+				'SELECT ' .
+					self::ALERTS_SELECT .
+					' FROM ' .
+					self::ALERTS_FROM .
+					' WHERE a.license_id=? ORDER BY a.reviewed_at IS NOT NULL,a.last_seen_at DESC,a.alert_id LIMIT 20',
+				[Uuid::bytes($licenseId)],
+			),
+		);
+	}
+
+	private static function alert(array $row): array
+	{
+		$row['detail'] = json_decode($row['detail_json'], true, 16, JSON_THROW_ON_ERROR);
+		unset($row['detail_json']);
+		$row['attempts'] = (int) $row['attempts'];
+		return $row;
 	}
 
 	public function customers(): array
@@ -319,6 +395,7 @@ final class ReadRepository
 				$license['scheduled'] = $change;
 			}
 		}
+		$license['alerts'] = $this->licenseAlerts($id);
 		// Historial comercial: cada pago tal como se registró, del más reciente al más antiguo.
 		$license['payments'] = $this->db->all(
 			'SELECT BIN_TO_UUID(p.payment_id) AS id_text,p.concept,p.term,p.plan_id,p.paid_at,p.currency,

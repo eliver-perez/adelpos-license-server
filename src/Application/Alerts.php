@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Application;
 
-use AdelPos\License\Domain\{Protocol, Uuid};
+use AdelPos\License\Domain\{CalendarPeriod, Problem, Protocol, Uuid};
 use AdelPos\License\Infrastructure\{Audit, Clock, Database};
 
 /**
@@ -23,7 +23,109 @@ final class Alerts
 	/** Servidores distintos que se guardan en el detalle de un intento bloqueado. */
 	private const MAX_SERVERS = 20;
 
-	public function __construct(private Database $db, private Clock $clock, private Audit $audit) {}
+	/** Transferencias que se nombran en el detalle de la alerta de transferencias frecuentes. */
+	private const MAX_TRANSFERS = 20;
+
+	/** Ventana de la alerta de transferencias frecuentes: los 12 meses de calendario anteriores. */
+	public const WINDOW_MONTHS = 12;
+
+	/** Cuentas que pueden marcar una alerta como revisada; la de consulta solo las ve. */
+	public const REVIEWERS = ['superadmin', 'operator'];
+
+	public function __construct(
+		private Database $db,
+		private Clock $clock,
+		private Audit $audit,
+		private Operations $operations,
+	) {}
+
+	/**
+	 * Alerta de transferencias frecuentes (contrato §8.4, regla 5; decisión 6 del propietario): una licencia
+	 * suma dos o más transferencias, de autoservicio o del propietario y confirmadas o no, dentro de los
+	 * 12 meses de calendario anteriores, en la zona horaria del cliente. La ventana incluye su inicio
+	 * exacto (propuesta V1.1 n.º 37). Se evalúa después de registrar cada transferencia, con la licencia
+	 * bloqueada.
+	 *
+	 * @return ?array{alert_id: string, attempts: int, opened: bool} null si no hay alerta
+	 */
+	public function frequentTransfers(string $licenseId): ?array
+	{
+		$zone = $this->db
+			->execute(
+				'SELECT c.time_zone FROM licenses l JOIN customers c ON c.id=l.customer_id WHERE l.license_id=?',
+				[$licenseId],
+			)
+			->fetchColumn();
+		if (!is_string($zone)) {
+			throw new \RuntimeException('License without customer.');
+		}
+		$now = $this->clock->now();
+		$since = CalendarPeriod::monthsBefore($now, self::WINDOW_MONTHS, $zone);
+		$transfers = $this->db->all(
+			'SELECT id,via,created_at
+				FROM license_transfers
+				WHERE license_id=? AND created_at>=? AND created_at<=?
+				ORDER BY created_at DESC,id',
+			[$licenseId, CalendarPeriod::sql($since), CalendarPeriod::sql($now)],
+		);
+		if (count($transfers) < 2) {
+			return null;
+		}
+		$listed = [];
+		foreach (array_slice($transfers, 0, self::MAX_TRANSFERS) as $transfer) {
+			$listed[] = [
+				'transfer_id' => Uuid::text($transfer['id']),
+				'via' => $transfer['via'],
+				'created_at' => Protocol::utc($transfer['created_at']),
+			];
+		}
+		return $this->raise(
+			$licenseId,
+			'frequent_transfers',
+			fn(?array $previous): array => [
+				'transfers' => count($transfers),
+				'window_starts_at' => CalendarPeriod::utc($since),
+				'time_zone' => $zone,
+				'latest' => $listed,
+			],
+		);
+	}
+
+	/**
+	 * Marca una alerta como revisada: queda quién y cuándo, también en la auditoría. Lo pueden hacer el
+	 * operador y el superadministrador. Revisada, deja de estar abierta, y si la situación se repite se
+	 * abre otra.
+	 */
+	public function review(Actor $actor, string $operationId, string $alertId): array
+	{
+		return $this->operations->run(
+			$actor,
+			self::REVIEWERS,
+			$operationId,
+			'alert.review',
+			[$alertId],
+			function () use ($actor, $alertId): array {
+				$alert =
+					$this->db->one('SELECT * FROM license_alerts WHERE alert_id=? FOR UPDATE', [
+						Uuid::bytes($alertId),
+					]) ?? throw new Problem('No se encontró la alerta.', 404);
+				if ($alert['reviewed_at'] !== null) {
+					throw new Problem('La alerta ya estaba revisada.', 409);
+				}
+				$this->db->execute('UPDATE license_alerts SET reviewed_at=?,reviewed_by=? WHERE alert_id=?', [
+					$this->clock->sql(),
+					Uuid::bytes($actor->id),
+					$alert['alert_id'],
+				]);
+				$this->audit->append($actor->id, 'alert.reviewed', 'alert', $alertId, [
+					'license_id' => Uuid::text($alert['license_id']),
+					'alert_type' => $alert['alert_type'],
+					'attempts' => (int) $alert['attempts'],
+				]);
+				return ['id' => $alertId, 'license_id' => Uuid::text($alert['license_id'])];
+			},
+		);
+	}
 
 	/**
 	 * Un intento de transferencia por autoservicio bloqueado con TRANSFER_LIMIT. El detalle permite al

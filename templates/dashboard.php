@@ -1,4 +1,13 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Http\View as V;
+
+// Alertas sin revisar, las más recientes (decisión 4 del propietario para la etapa 4).
+$returnTo = '/admin';
+$notice = ($_GET['notice'] ?? '') === 'alert-reviewed' ? 'Alerta marcada como revisada.' : '';
+?>
+<?php if ($notice): ?>
+	<div class="alert alert-success" role="status"><?= V::escape($notice) ?></div>
+<?php endif; ?>
 <div class="page-heading">
 	<div>
 		<span class="eyebrow">VISTA GENERAL</span>
@@ -26,6 +35,21 @@
 		</a>
 	<?php endforeach; ?>
 </div>
+<section class="panel mt-4" id="alerts">
+	<div class="panel-heading">
+		<div>
+			<h2>Alertas</h2>
+			<p>Las más recientes sin revisar.</p>
+		</div>
+		<a href="/admin/alerts" class="text-link">Ver todas →</a>
+	</div>
+	<?php foreach ($alerts['recent'] as $alert): ?>
+		<?php require __DIR__ . '/alert-item.php'; ?>
+	<?php endforeach; ?>
+	<?php if (!$alerts['recent']): ?>
+		<p class="text-secondary mb-0">No hay alertas sin revisar.</p>
+	<?php endif; ?>
+</section>
 <div class="row g-4 mt-1">
 	<div class="col-xl-8">
 		<section class="panel">

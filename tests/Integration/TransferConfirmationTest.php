@@ -337,13 +337,14 @@ final class TransferConfirmationTest extends TestCase
 		]);
 		self::assertSame(['confirmed', 'refresh'], [$first['state'], $first['confirmation']]);
 		if ($results[1]['status'] === 200) {
-			// La confirmación llegó primero: la transferencia nueva queda pendiente y no hubo alerta.
+			// La confirmación llegó primero: la transferencia nueva queda pendiente y no hubo intento bloqueado (sí la
+			// alerta de transferencias frecuentes, porque ya son dos).
 			self::assertSame(
 				[2, 1, 0],
 				[
 					$this->rows('license_transfers'),
 					$this->rows('license_transfers', "state='pending'"),
-					$this->rows('license_alerts'),
+					$this->rows('license_alerts', "alert_type='transfer_blocked'"),
 				],
 			);
 		} else {
@@ -354,7 +355,7 @@ final class TransferConfirmationTest extends TestCase
 				[
 					$this->rows('license_transfers'),
 					$this->rows('license_transfers', "state='pending'"),
-					$this->rows('license_alerts'),
+					$this->rows('license_alerts', "alert_type='transfer_blocked'"),
 				],
 			);
 		}

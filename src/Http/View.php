@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Http;
 
-use AdelPos\License\Application\Payments;
+use AdelPos\License\Application\{Alerts, Payments};
 use AdelPos\License\Domain\{Money, TimeZones, Uuid};
 
 final class View
@@ -114,6 +114,38 @@ final class View
 	public static function paymentConcept(string $concept): string
 	{
 		return Payments::CONCEPTS[$concept] ?? $concept;
+	}
+
+	/** Nombre de un tipo de alerta del panel. */
+	public static function alertType(string $type): string
+	{
+		return Alerts::TYPES[$type] ?? $type;
+	}
+
+	/**
+	 * Lo que pasó, en una frase, con lo que el propietario necesita para decidir. Las fechas de la ventana
+	 * de 12 meses van en la zona del cliente, que es en la que se calculan.
+	 */
+	public static function alertDetail(array $alert): string
+	{
+		$detail = $alert['detail'];
+		if ($alert['alert_type'] === 'transfer_blocked') {
+			return 'La computadora ' .
+				$detail['server_id'] .
+				' (AD-EL POS ' .
+				$detail['app_version'] .
+				') intentó transferir la licencia mientras otra transferencia está pendiente de confirmar desde el ' .
+				self::date($detail['pending_since']) .
+				'. Intentos: ' .
+				$alert['attempts'] .
+				'.';
+		}
+		return $detail['transfers'] .
+			' transferencias en los 12 meses anteriores, desde el ' .
+			self::date($detail['window_starts_at'], $detail['time_zone']) .
+			'. Veces que se repitió: ' .
+			$alert['attempts'] .
+			'.';
 	}
 
 	public static function role(string $role): string

@@ -283,6 +283,21 @@ final class Kernel
 			$this->render('dashboard', ['title' => 'Resumen', 'stats' => $this->app->read->dashboard()]);
 			return;
 		}
+		if ($this->path === '/admin/alerts' && $method === 'GET') {
+			$this->listing('alerts', 'Alertas');
+			return;
+		}
+		if (preg_match('~^/admin/alerts/([a-f0-9-]{36})/review$~', $this->path, $matches) && $method === 'POST') {
+			// Marcar como revisada: el operador y el superadministrador; el servicio lo vuelve a comprobar.
+			$this->actor->requireRole(['superadmin', 'operator']);
+			$this->app->alerts->review($this->actor, $operationId, $matches[1]);
+			$return = Input::text($_POST, 'return_to', 64, false);
+			if (!preg_match('~\A/admin(?:/alerts|/licenses/[a-f0-9-]{36})?\z~', $return)) {
+				$return = '/admin/alerts';
+			}
+			$this->redirect($return . '?notice=alert-reviewed');
+			return;
+		}
 		if ($this->path === '/admin/offline' && $method === 'GET') {
 			$this->listing('offline', 'Solicitudes sin internet');
 			return;
@@ -832,6 +847,8 @@ final class Kernel
 				'csrf' => $this->token === '' ? '' : $this->app->sessions->csrf($this->token),
 				'path' => $this->path,
 				'now' => $this->app->clock->now(),
+				// Botón de notificaciones de la barra superior, en todas las pantallas del panel.
+				'alerts' => $this->actor === null ? null : $this->app->read->alertSummary(),
 			],
 		);
 	}

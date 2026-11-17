@@ -14,6 +14,7 @@ $notices = [
 	'scheduled-cancel' => 'Cambio programado cancelado. La licencia conserva su plan y sus cupos.',
 	'maintenance' => 'Mantenimiento registrado con su pago. Se firmó una revisión nueva para la computadora activa.',
 	'terms' => 'Periodo inicial actualizado. Las fechas se fijan al activar la licencia.',
+	'alert-reviewed' => 'Alerta marcada como revisada.',
 	'transfer-released' =>
 		'Contador de autoservicio liberado. La transferencia quedó confirmada a mano y AD-EL POS puede volver a transferir.',
 ];

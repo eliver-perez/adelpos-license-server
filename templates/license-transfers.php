@@ -42,6 +42,8 @@ foreach ($license['transfers'] as $transfer) {
 	];
 }
 $canRelease = $pendingTransfer !== null && $actor->role === 'superadmin';
+// Las alertas de la licencia vuelven a su detalle al marcarse como revisadas.
+$returnTo = '/admin/licenses/' . $licenseId;
 $releaseUrl = '/admin/licenses/' . $licenseId . '/transfer-release';
 ?>
 <section class="panel form-panel mt-4" id="transfers">
@@ -99,6 +101,12 @@ $releaseUrl = '/admin/licenses/' . $licenseId . '/transfer-release';
 				</tbody>
 			</table>
 		</div>
+	<?php endif; ?>
+	<?php if ($license['alerts']): ?>
+		<h3 class="h6 mt-4">Alertas de esta licencia</h3>
+		<?php foreach ($license['alerts'] as $alert): ?>
+			<?php require __DIR__ . '/alert-item.php'; ?>
+		<?php endforeach; ?>
 	<?php endif; ?>
 	<?php if ($canRelease): ?>
 		<details class="mt-4">

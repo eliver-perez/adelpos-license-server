@@ -174,6 +174,23 @@ final class CalendarPeriod
 		return self::resolve($zone, sprintf('%04d-%02d-%02d', $year, $month, min($anchorDay, $lastDay)), $anchorTime);
 	}
 
+	/**
+	 * El mismo día y la misma hora local, $months meses de calendario antes de $end, en la zona del
+	 * cliente. Con las reglas de la sección 5.1: si el día no existe en el mes de destino se usa su
+	 * último día, y una hora local que no existe es el primer instante después del salto. Es el inicio
+	 * de la ventana de la alerta de transferencias frecuentes (etapa 4): «los 12 meses anteriores».
+	 */
+	public static function monthsBefore(\DateTimeImmutable $end, int $months, string $zone): \DateTimeImmutable
+	{
+		if ($months < 0 || $months > 1200) {
+			throw new \InvalidArgumentException('Months must be between 0 and 1200.');
+		}
+		$timeZone = self::zone($zone);
+		$local = $end->setTimezone($timeZone);
+		$index = (int) $local->format('Y') * 12 + (int) $local->format('n') - 1;
+		return self::anchoredIn($timeZone, $index - $months, (int) $local->format('j'), $local->format('H:i:s.u'));
+	}
+
 	/** Suma días de calendario a la fecha local de $start, a su misma hora local. */
 	public static function addDays(\DateTimeImmutable $start, int $days, string $zone): \DateTimeImmutable
 	{

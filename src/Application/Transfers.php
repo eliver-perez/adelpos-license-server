@@ -30,6 +30,7 @@ final class Transfers
 		private LicenseActivator $activator,
 		private Operations $operations,
 		private AuthService $auth,
+		private Alerts $alerts,
 	) {}
 
 	/** Formas en que la computadora anterior confirma, según la operación con la que se autenticó. */
@@ -186,6 +187,7 @@ final class Transfers
 				$this->clock->sql(),
 			],
 		);
+		$alert = $this->alerts->frequentTransfers($license['license_id']);
 		$this->audit->append(null, 'license.transferred', 'license', Uuid::text($license['license_id']), [
 			'transfer_id' => $id,
 			'via' => 'self_service',
@@ -195,13 +197,18 @@ final class Transfers
 			'incoming_activation_id' => Uuid::text($incoming['activation_id']),
 			'incoming_server_id' => Uuid::text($serverId),
 			'revision' => $incoming['revision']['revision'],
+			'frequent_alert' => $alert,
 		]);
 		return ['transfer_id' => $id] + $incoming;
 	}
 
 	/**
-	 * Registra una transferencia del propietario, ya confirmada. Quien llama ya retiró la activación de
-	 * origen y, si hay destino, creó la nueva, dentro de la misma transacción.
+	 * Registra una transferencia del propietario, ya confirmada: no consume la transferencia por
+	 * autoservicio, pero cuenta para la alerta de transferencias frecuentes (contrato §8.4, regla 6).
+	 * Quien llama ya retiró la activación de origen y, si hay destino, creó la nueva, dentro de la
+	 * misma transacción, y audita al final.
+	 *
+	 * @return array{transfer_id: string, alert: ?array}
 	 */
 	public function recordOwner(
 		Actor $actor,
@@ -209,7 +216,7 @@ final class Transfers
 		string $outgoing,
 		?string $incoming,
 		string $reason,
-	): string {
+	): array {
 		$id = Uuid::bytes(Uuid::create());
 		$now = $this->clock->sql();
 		$this->db->execute(
@@ -218,6 +225,6 @@ final class Transfers
 				VALUES (?,?,?,?,'owner',?,?,1,'confirmed',?,'owner',?)",
 			[$id, $licenseId, $outgoing, $incoming, Uuid::bytes($actor->id), $reason, $now, $now],
 		);
-		return $id;
+		return ['transfer_id' => Uuid::text($id), 'alert' => $this->alerts->frequentTransfers($licenseId)];
 	}
 }

@@ -271,8 +271,10 @@ final class OfflineService
 						$revision = $this->currentRevision($activation);
 					}
 				}
+				$ownerTransfer = null;
 				if ($outgoing !== '') {
-					$this->transfers->recordOwner(
+					// No consume la transferencia por autoservicio, pero cuenta para la alerta de 12 meses.
+					$ownerTransfer = $this->transfers->recordOwner(
 						$actor,
 						$license['license_id'],
 						Uuid::bytes($outgoing),
@@ -303,6 +305,7 @@ final class OfflineService
 						'revision' => $revision['revision'],
 						'action' => $payload['action'],
 						'forced' => $outgoing !== '',
+						'frequent_alert' => $ownerTransfer['alert'] ?? null,
 					],
 					$reason,
 				);
@@ -316,8 +319,6 @@ final class OfflineService
 	 * Quien llama por HTTP ya confirmó su contraseña y su código; aquí se vuelven a comprobar
 	 * el rol y el estado vigente.
 	 */
-	// PENDIENTE etapa 4: las transferencias del propietario cuentan para la alerta de más de una
-	// transferencia en 12 meses (contrato, sección 8.4). Ya se registran con la vía «owner».
 	public function release(Actor $actor, string $operationId, string $licenseId, array $input): array
 	{
 		$reason = Input::text($input, 'reason', 500);
@@ -349,7 +350,8 @@ final class OfflineService
 					throw new Problem('La instalación ya no está activa.', 409);
 				}
 				$revision = $this->retire($license['license_id'], Uuid::bytes($activationId), true);
-				$this->transfers->recordOwner(
+				// No consume la transferencia por autoservicio, pero cuenta para la alerta de 12 meses.
+				$ownerTransfer = $this->transfers->recordOwner(
 					$actor,
 					$license['license_id'],
 					Uuid::bytes($activationId),
@@ -365,6 +367,7 @@ final class OfflineService
 						'activation_id' => $activationId,
 						'revision' => $revision['revision'],
 						'offline_limit_accepted' => true,
+						'frequent_alert' => $ownerTransfer['alert'],
 					],
 					$reason,
 				);

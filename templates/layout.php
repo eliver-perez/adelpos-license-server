@@ -1,4 +1,18 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Http\View as V;
+
+// Botón de notificaciones de la barra superior: alertas sin revisar y las más recientes.
+$alertCount = (int) ($alerts['open'] ?? 0);
+$alertLabel = $alertCount === 1 ? '1 alerta sin revisar' : $alertCount . ' alertas sin revisar';
+$recentAlerts = [];
+foreach ($alerts['recent'] ?? [] as $recent) {
+	$recentAlerts[] = [
+		'url' => '/admin/licenses/' . $recent['license_text'],
+		'title' => V::alertType($recent['alert_type']),
+		'note' => $recent['customer_name'] . ' · ' . V::date($recent['last_seen_at']),
+	];
+}
+?>
 <!doctype html>
 <html lang="es">
 	<head>
@@ -31,6 +45,7 @@
 						'/admin' => ['Resumen', '◫'],
 						'/admin/licenses' => ['Licencias', '⌘'],
 						'/admin/offline' => ['Solicitudes sin internet', '⇄'],
+						'/admin/alerts' => ['Alertas', '△'],
 						'/admin/customers' => ['Clientes', '◎'],
 						'/admin/products' => ['Productos', '◇'],
 						'/admin/plans' => ['Planes', '▤'],
@@ -78,6 +93,46 @@
 						<span class="breadcrumb-label">Licencias <span>/</span> <?= V::escape($title) ?></span>
 					</div>
 					<div class="account-area">
+						<div class="dropdown notifications">
+							<button
+								class="notification-button"
+								type="button"
+								data-bs-toggle="dropdown"
+								aria-expanded="false"
+								aria-label="Notificaciones: <?= V::escape($alertLabel) ?>"
+								data-testid="notifications"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="20"
+									height="20"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.8"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+									<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
+									<path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+								</svg>
+								<?php if ($alertCount > 0): ?>
+									<span class="notification-count" data-testid="notification-count"><?= $alertCount ?></span>
+								<?php endif; ?>
+							</button>
+							<div class="dropdown-menu dropdown-menu-end notification-menu">
+								<div class="dropdown-header"><?= V::escape($alertLabel) ?></div>
+								<?php foreach ($recentAlerts as $recent): ?>
+									<a class="dropdown-item" href="<?= V::escape($recent['url']) ?>">
+										<?= V::escape($recent['title']) ?>
+										<small><?= V::escape($recent['note']) ?></small>
+									</a>
+								<?php endforeach; ?>
+								<div class="dropdown-divider"></div>
+								<a class="dropdown-item" href="/admin/alerts">Ver todas las alertas</a>
+							</div>
+						</div>
 						<span class="avatar"><?= V::escape(mb_strtoupper(mb_substr($actor->name, 0, 1))) ?></span>
 						<div class="account-name">
 							<?= V::escape($actor->name) ?><small><?= V::escape(V::role($actor->role)) ?></small>

@@ -731,4 +731,40 @@ final class CalendarPeriodTest extends TestCase
 			}
 		}
 	}
+
+	public function testTwelveMonthsBeforeAreCalendarMonthsInTheCustomerZone(): void
+	{
+		// Inicio de la ventana de la alerta de transferencias frecuentes (etapa 4): el mismo día y la misma hora
+		// local, 12 meses de calendario antes, con las reglas de la sección 5.1.
+		$cases = [
+			// Tijuana: el 10 de marzo a las 10:00 es horario de verano en 2026 y estándar en 2027.
+			['2027-03-10T18:00:00.000000Z', 'America/Tijuana', '2026-03-10T17:00:00.000000Z'],
+			// El 29 de febrero no existe un año antes: el último día de febrero.
+			['2028-02-29T18:00:00.000000Z', 'America/Monterrey', '2027-02-28T18:00:00.000000Z'],
+			// Las 02:30 del 8 de marzo de 2026 no existen en Tijuana: el primer instante después del salto.
+			['2027-03-08T10:30:00.000000Z', 'America/Tijuana', '2026-03-08T10:00:00.000000Z'],
+			// La 01:30 del 1 de noviembre de 2026 se repite en Tijuana: la primera vez.
+			['2027-11-01T08:30:00.000000Z', 'America/Tijuana', '2026-11-01T08:30:00.000000Z'],
+			// Los microsegundos se conservan.
+			['2027-01-15T12:00:00.123456Z', 'America/Monterrey', '2026-01-15T12:00:00.123456Z'],
+		];
+		foreach ($cases as [$end, $zone, $expected]) {
+			self::assertSame(
+				$expected,
+				CalendarPeriod::utc(CalendarPeriod::monthsBefore(new \DateTimeImmutable($end), 12, $zone)),
+				$end . ' ' . $zone,
+			);
+		}
+		self::assertSame(
+			'2027-01-15T12:00:00.000000Z',
+			CalendarPeriod::utc(CalendarPeriod::monthsBefore(new \DateTimeImmutable('2027-01-15T12:00:00Z'), 0, 'UTC')),
+		);
+		foreach ([-1, 1201] as $months) {
+			try {
+				CalendarPeriod::monthsBefore(new \DateTimeImmutable('2027-01-15T12:00:00Z'), $months, 'UTC');
+				self::fail('Accepted ' . $months . ' months');
+			} catch (\InvalidArgumentException) {
+			}
+		}
+	}
 }

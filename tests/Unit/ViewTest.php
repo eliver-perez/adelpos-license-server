@@ -71,4 +71,38 @@ final class ViewTest extends TestCase
 		self::assertSame('Revocada · revocada por el propietario', View::revisionStatus('revoked', 'revoked'));
 		self::assertSame('Revocada · sin motivo registrado', View::revisionStatus('revoked', null));
 	}
+
+	public function testAlertsSayWhatHappenedWithWhatTheOwnerNeedsToDecide(): void
+	{
+		self::assertSame('Transferencia por autoservicio bloqueada', View::alertType('transfer_blocked'));
+		self::assertSame('Transferencias frecuentes', View::alertType('frequent_transfers'));
+		self::assertSame(
+			'La computadora 66666666-6666-4666-8666-666666666666 (AD-EL POS 1.4.0) intentó transferir la licencia ' .
+				'mientras otra transferencia está pendiente de confirmar desde el 25/09/2026 · 06:00 America/Monterrey. ' .
+				'Intentos: 3.',
+			View::alertDetail([
+				'alert_type' => 'transfer_blocked',
+				'attempts' => 3,
+				'detail' => [
+					'server_id' => '66666666-6666-4666-8666-666666666666',
+					'app_version' => '1.4.0',
+					'pending_since' => '2026-09-25T12:00:00.000000Z',
+				],
+			]),
+		);
+		// La ventana de 12 meses, en la zona del cliente.
+		self::assertSame(
+			'2 transferencias en los 12 meses anteriores, desde el 10/03/2026 · 10:00 America/Tijuana. ' .
+				'Veces que se repitió: 1.',
+			View::alertDetail([
+				'alert_type' => 'frequent_transfers',
+				'attempts' => 1,
+				'detail' => [
+					'transfers' => 2,
+					'window_starts_at' => '2026-03-10T17:00:00.000000Z',
+					'time_zone' => 'America/Tijuana',
+				],
+			]),
+		);
+	}
 }
