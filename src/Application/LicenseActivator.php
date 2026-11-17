@@ -28,6 +28,24 @@ final class LicenseActivator
 		// Un solo instante para todo: el inicio del periodo es el momento de la activación.
 		$now = $this->clock->now();
 		$this->startFirstPeriod($license, $now);
+		return $this->attach($license, $serverId, $publicKey, $appVersion, $now);
+	}
+
+	/**
+	 * Crea la activación y firma su primera revisión con las fechas que la licencia ya tiene. Es lo que
+	 * hace una transferencia: transferir nunca reinicia, extiende ni modifica las fechas de la licencia,
+	 * porque son de la licencia y no de la activación (decisión 5 del propietario para la etapa 4).
+	 *
+	 * @return array{activation_id: string, revision: array{revision: int, revision_id: string, jws: string}}
+	 */
+	public function attach(
+		array $license,
+		string $serverId,
+		string $publicKey,
+		?string $appVersion,
+		?\DateTimeImmutable $now = null,
+	): array {
+		$now ??= $this->clock->now();
 		$activationId = Uuid::bytes(Uuid::create());
 		$this->db->execute(
 			"INSERT INTO activations(activation_id,license_id,product_id,server_id,

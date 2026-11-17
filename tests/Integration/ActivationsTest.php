@@ -521,12 +521,13 @@ final class ActivationsTest extends TestCase
 		$input = $this->request('activate', $other);
 		$response = $this->app->activations->execute('activate', $input);
 		self::assertSame(409, $response->status);
-		// Formato de error del contrato, con «transfer_available» en los detalles.
+		// Formato de error del contrato, con «transfer_available» en los detalles: sin transferencia pendiente, la
+		// otra computadora puede transferir por autoservicio (etapa 4).
 		self::assertSame(
 			'{"error":{"code":"ACTIVATION_LIMIT","message":"La licencia ya está activa en otra computadora.",' .
 				'"request_id":"' .
 				$input['request_id'] .
-				'","details":{"transfer_available":false}}}',
+				'","details":{"transfer_available":true}}}',
 			$response->body,
 		);
 		self::assertSame($response->body, $this->app->activations->execute('activate', $input)->body);
@@ -909,7 +910,7 @@ final class ActivationsTest extends TestCase
 		$refused = $this->app->activations->execute('activate', $this->request('activate', $impostor));
 		self::assertSame(409, $refused->status);
 		self::assertSame(
-			['code' => 'ACTIVATION_LIMIT', 'details' => ['transfer_available' => false]],
+			['code' => 'ACTIVATION_LIMIT', 'details' => ['transfer_available' => true]],
 			array_intersect_key(json_decode($refused->body, true)['error'], ['code' => 1, 'details' => 1]),
 		);
 		// Y la misma llave con otra identidad, también.
@@ -1006,12 +1007,20 @@ final class ActivationsTest extends TestCase
 		unset($renamed['server_id']);
 		$renamed['installation_id'] = $this->device['id'];
 		$invalid(fn() => $this->app->activations->challenge($renamed), 'installation_id in a challenge');
-		// La transferencia por autoservicio llega en la etapa 4: todavía no existe como acción.
+		// La transferencia por autoservicio (etapa 4) no lleva activación en el desafío, igual que activar.
 		$invalid(
-			fn() => $this->app->activations->challenge(array_replace($challenge, ['action' => 'transfer'])),
-			'transfer challenge',
+			fn() => $this->app->activations->challenge(
+				array_replace($challenge, ['action' => 'transfer', 'activation_id' => Uuid::create()]),
+			),
+			'transfer challenge with activation',
 		);
-		$invalid(fn() => $this->app->activations->execute('transfer', $this->request()), 'transfer operation');
+		$invalid(
+			fn() => $this->app->activations->execute(
+				'transfer',
+				array_diff_key($this->request(), ['license_key' => 1]),
+			),
+			'transfer without code',
+		);
 
 		$input = $this->request();
 		$fingerprint = ['fingerprint_version' => '1', 'fingerprint_hash' => 'sha256:' . str_repeat('a', 64)];

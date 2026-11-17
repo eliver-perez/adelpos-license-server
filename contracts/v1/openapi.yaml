@@ -27,11 +27,12 @@ info:
     el método no es `POST` (con el encabezado `Allow: POST`), `415` si el tipo de contenido no es
     JSON y `413` si el cuerpo pasa de 16 KiB.
 
-    **Todavía no disponible**
+    **Transferencia por autoservicio**
 
-    La transferencia por autoservicio (`POST /v1/activations/transfer`, la acción `transfer` del
-    desafío y el error `TRANSFER_LIMIT`) llega en una etapa posterior. Hasta entonces la ruta
-    responde `404`, la acción recibe `INVALID_REQUEST` y `transfer_available` es siempre `false`.
+    `POST /v1/activations/transfer` (sección 8.4) recibe los mismos campos que activar y responde
+    igual cuando tiene éxito. Solo puede haber una transferencia por autoservicio pendiente de
+    confirmar: mientras la computadora anterior no consulte (`refresh`) o se desactive, otra
+    transferencia recibe `409 TRANSFER_LIMIT`.
 servers:
   - url: https://licensing.sicrat.com
     description: Servidor de pruebas. Firma con llaves del entorno `test`.
@@ -59,6 +60,12 @@ paths:
                   action: activate
                   product_id: adel_pos
                   server_id: 22222222-2222-4222-8222-222222222222
+                  activation_id: null
+              transferir:
+                value:
+                  action: transfer
+                  product_id: adel_pos
+                  server_id: 66666666-6666-4666-8666-666666666666
                   activation_id: null
               consultar:
                 value:
@@ -171,6 +178,14 @@ paths:
                       message: La licencia ya está activa en otra computadora.
                       request_id: 44444444-4444-4444-8444-444444444441
                       details:
+                        transfer_available: true
+                transferenciaPendiente:
+                  value:
+                    error:
+                      code: ACTIVATION_LIMIT
+                      message: La licencia ya está activa en otra computadora.
+                      request_id: 44444444-4444-4444-8444-444444444441
+                      details:
                         transfer_available: false
                 conflicto:
                   value:
@@ -178,6 +193,117 @@ paths:
                       code: REQUEST_CONFLICT
                       message: El identificador de la solicitud ya se usó con otro contenido.
                       request_id: 44444444-4444-4444-8444-444444444441
+                      details: {}
+        '413':
+          $ref: '#/components/responses/InvalidRequest'
+        '415':
+          $ref: '#/components/responses/InvalidRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/TemporaryUnavailable'
+  /v1/activations/transfer:
+    post:
+      tags: [Activaciones]
+      operationId: transfer
+      summary: Transferir por autoservicio
+      description: |
+        Mueve la licencia del código comercial a esta instalación (sección 8.4). Recibe los mismos
+        campos que activar y responde igual cuando tiene éxito: la revisión `active` de la
+        activación nueva. En la misma transacción, la activación anterior recibe su revisión de
+        cierre `revoked` / `transferred`, que conocerá al consultar.
+
+        Las reglas se aplican en este orden:
+
+        1. Código inexistente, retirado o de otro producto: `404 LICENSE_NOT_FOUND`.
+        2. Licencia revocada: `403 REVOKED`.
+        3. La misma instalación ya está activa: recibe su revisión vigente. No es una transferencia.
+        4. Sin ninguna activación vigente: es una activación normal, que no cuenta como
+           transferencia. Si es la primera activación, empieza el primer periodo.
+        5. Con una transferencia por autoservicio pendiente de confirmar: `409 TRANSFER_LIMIT`.
+        6. Si no, la transferencia queda pendiente hasta que la computadora anterior se autentica
+           con `refresh` o `deactivate` y recibe su revisión de cierre.
+
+        Transferir nunca cambia las fechas de la licencia: la revisión nueva lleva las mismas
+        fechas, cupos, plan y módulos. Una prueba o suscripción vencida se transfiere, pero sigue
+        vencida.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivationRequest'
+            examples:
+              transferir:
+                value:
+                  request_id: 44444444-4444-4444-8444-444444444444
+                  product_id: adel_pos
+                  license_key: K7M-9R3X-6TVP-8CHD
+                  server_id: 66666666-6666-4666-8666-666666666666
+                  installation_public_key: QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw
+                  challenge_id: 55555555-5555-4555-8555-555555555555
+                  proof: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+                  app_version: 0.12.0
+      responses:
+        '200':
+          $ref: '#/components/responses/License'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/InvalidProof'
+        '403':
+          description: '`REVOKED`: el propietario revocó la licencia.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                revocada:
+                  value:
+                    error:
+                      code: REVOKED
+                      message: La licencia fue revocada.
+                      request_id: 44444444-4444-4444-8444-444444444444
+                      details: {}
+        '404':
+          description: |
+            `LICENSE_NOT_FOUND`: código inexistente, retirado o de otro producto. La respuesta es la
+            misma en todos los casos.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                desconocida:
+                  value:
+                    error:
+                      code: LICENSE_NOT_FOUND
+                      message: El código y el producto no corresponden a una licencia.
+                      request_id: 44444444-4444-4444-8444-444444444444
+                      details: {}
+        '409':
+          description: |
+            `TRANSFER_LIMIT`: hay una transferencia por autoservicio pendiente de confirmar; en
+            AD-EL POS, «Comunícate con soporte». El intento genera una alerta en el panel.
+            `REQUEST_CONFLICT`: el `request_id` ya se usó con otro contenido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                transferenciaPendiente:
+                  value:
+                    error:
+                      code: TRANSFER_LIMIT
+                      message: Hay una transferencia pendiente de confirmar.
+                      request_id: 44444444-4444-4444-8444-444444444444
+                      details: {}
+                conflicto:
+                  value:
+                    error:
+                      code: REQUEST_CONFLICT
+                      message: El identificador de la solicitud ya se usó con otro contenido.
+                      request_id: 44444444-4444-4444-8444-444444444444
                       details: {}
         '413':
           $ref: '#/components/responses/InvalidRequest'
@@ -432,13 +558,13 @@ components:
       required: [action, product_id, server_id, activation_id]
       properties:
         action:
-          enum: [activate, refresh, deactivate]
+          enum: [activate, transfer, refresh, deactivate]
         product_id:
           $ref: '#/components/schemas/ProductId'
         server_id:
           $ref: '#/components/schemas/ServerId'
         activation_id:
-          description: '`null` en `activate`; obligatorio en `refresh` y `deactivate`.'
+          description: '`null` en `activate` y `transfer`; obligatorio en `refresh` y `deactivate`.'
           anyOf:
             - $ref: '#/components/schemas/Uuid'
             - type: 'null'
@@ -456,6 +582,7 @@ components:
         expires_at:
           $ref: '#/components/schemas/Instant'
     ActivationRequest:
+      description: Petición de `activate` y de `transfer`.
       type: object
       additionalProperties: false
       required:

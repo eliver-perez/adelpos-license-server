@@ -468,6 +468,7 @@ final class ContractFilesTest extends TestCase
 		$expected = [
 			'/v1/activations/challenge' => [200, 400, 413, 415, 429, 503],
 			'/v1/activations' => [200, 400, 401, 403, 404, 409, 413, 415, 429, 503],
+			'/v1/activations/transfer' => [200, 400, 401, 403, 404, 409, 413, 415, 429, 503],
 			'/v1/activations/refresh' => [200, 400, 401, 409, 413, 415, 429, 503],
 			'/v1/activations/deactivate' => [200, 400, 401, 409, 413, 415, 429, 503],
 		];
@@ -510,7 +511,7 @@ final class ContractFilesTest extends TestCase
 		foreach ($openapi['components']['responses'] as $name => $response) {
 			$check($response['content'], 'respuesta ' . $name);
 		}
-		self::assertSame(17, $checked);
+		self::assertSame(24, $checked);
 		// El contenido de la licencia del OpenAPI es el esquema publicado.
 		self::assertSame('license.schema.json', $openapi['components']['schemas']['LicenseContent']['$ref']);
 		self::assertNull(

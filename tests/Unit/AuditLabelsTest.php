@@ -13,6 +13,7 @@ final class AuditLabelsTest extends TestCase
 		'activation.activate',
 		'activation.refresh',
 		'activation.deactivate',
+		'activation.transfer',
 		'license.features',
 		'license.reissue',
 		'license.revoke',

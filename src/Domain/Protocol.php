@@ -52,14 +52,27 @@ final class Protocol
 		return $value;
 	}
 
-	/** Acciones que admite un desafío. */
-	// PENDIENTE etapa 4: aceptar «transfer», la transferencia por autoservicio (contrato, sección 8.4).
-	public const CHALLENGE_ACTIONS = ['activate', 'refresh', 'deactivate'];
+	/** Acciones que admite un desafío (contrato, sección 8.1). */
+	public const CHALLENGE_ACTIONS = ['activate', 'transfer', 'refresh', 'deactivate'];
 
-	/** Campos exactos de cada petición (contrato, secciones 8.1, 8.3, 8.5 y 8.6). */
+	/** Acciones que presentan el código comercial y la llave de la instalación, sin activación previa. */
+	public const CLAIMS = ['activate', 'transfer'];
+
+	/** Campos exactos de cada petición (contrato, secciones 8.1, 8.3, 8.4, 8.5 y 8.6). */
 	public const REQUEST_FIELDS = [
 		'challenge' => ['action', 'product_id', 'server_id', 'activation_id'],
 		'activate' => [
+			'request_id',
+			'product_id',
+			'license_key',
+			'server_id',
+			'installation_public_key',
+			'challenge_id',
+			'proof',
+			'app_version',
+		],
+		// Transferir recibe los mismos campos que activar (contrato, sección 8.4).
+		'transfer' => [
 			'request_id',
 			'product_id',
 			'license_key',
@@ -95,7 +108,7 @@ final class Protocol
 			throw new ApiProblem('INVALID_REQUEST');
 		}
 		foreach ($input as $field => $value) {
-			// El único valor que puede no ser texto: el desafío para activar no lleva activación.
+			// El único valor que puede no ser texto: el desafío para activar o transferir no lleva activación.
 			if ($action === 'challenge' && $field === 'activation_id' && $value === null) {
 				continue;
 			}
@@ -127,7 +140,7 @@ final class Protocol
 		if (!in_array($input['action'], self::CHALLENGE_ACTIONS, true)) {
 			throw new ApiProblem('INVALID_REQUEST');
 		}
-		if ($input['action'] !== 'activate') {
+		if (!in_array($input['action'], self::CLAIMS, true)) {
 			self::uuid($input['activation_id']);
 		} elseif ($input['activation_id'] !== null) {
 			throw new ApiProblem('INVALID_REQUEST');
@@ -142,7 +155,7 @@ final class Protocol
 		if (strlen($input['app_version']) > 100) {
 			throw new ApiProblem('INVALID_REQUEST');
 		}
-		if ($action !== 'activate') {
+		if (!in_array($action, self::CLAIMS, true)) {
 			self::uuid($input['activation_id']);
 			return;
 		}

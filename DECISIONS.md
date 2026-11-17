@@ -185,6 +185,7 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 33 | §8.4 | `transfer` sin ninguna activación vigente hace una **activación normal**, que no cuenta como transferencia; si es la primera activación, calcula el primer periodo. Alternativa descartada: responder con un error y pedir a AD-EL POS que use `activate`. | Aprobada |
 | 34 | §8.4, §9.1 | La transferencia también **se confirma sin internet**, al aprobar el `.licreq` de `renew` o `deactivate` de la computadora anterior: la solicitud firmada demuestra lo mismo que `refresh` o `deactivate` en línea. | Aprobada |
 | 35 | §8.4 | **Liberación manual del contador** por el superadministrador, con motivo obligatorio y nueva autenticación, cuando la computadora anterior nunca va a volver a conectarse. La transferencia queda confirmada con la forma `manual` y el motivo, en la auditoría. | Aprobada |
+| 36 | §8.4, §8.7 | Un código **retirado de una licencia revocada** (al revocar, el código vigente queda retirado). La especificación pone primero «código retirado → `LICENSE_NOT_FOUND`» y después «revocada → `REVOKED`», con lo que `REVOKED` nunca llegaría. **Criterio aplicado:** `REVOKED`, igual que `activate` desde la etapa 2. Mismo código, misma respuesta en las dos rutas. **Alternativa:** `LICENSE_NOT_FOUND` para los códigos que se retiraron antes de revocar (por un reemplazo de código). | Pendiente |
 
 ## 10. Decisiones técnicas de la etapa 2
 
@@ -497,3 +498,18 @@ Todas son del 2026-11-17 y están al inicio de la especificación de la etapa (`
 | 7 | El desafío admite `transfer` en la base desde esta fase, sin activación, como `activate`. `Protocol` lo sigue rechazando hasta la Fase 2. | El esquema de la etapa va en una sola migración, la `008`. |
 | 8 | `Application\Transfers::recordOwner()` registra las transferencias del propietario (transferencia sin internet con destino y «recuperar plaza»). El apartado sin internet del detalle muestra solo esas. | Especificación, Fase 1, punto 2. Las de autoservicio no son operaciones sin internet; el historial completo llega en la Fase 4. |
 | 9 | Las etiquetas de auditoría de la etapa se agregan en esta fase. | Especificación, Fase 1, punto 4. |
+
+### Fase 2 — Transferencia por autoservicio
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `transfer` comparte con `activate` la búsqueda del código (`licenseForCode`), el límite de intentos por código (10 cada 15 minutos, en el mismo contador), la verificación de la prueba con la llave enviada y la definición de «la misma instalación». Las reglas se aplican en el orden de la especificación. | Especificación, Fase 2, puntos 2 y 5. Un mismo código no debe tener dos cupos de intentos ni dos respuestas. |
+| 2 | Un código retirado de una licencia revocada responde `REVOKED`, como en `activate`. | **Propuesta V1.1 n.º 36.** |
+| 3 | `LicenseActivator::attach()` crea la activación y firma su revisión sin tocar las fechas; `activate()` fija el primer periodo y después la usa. La transferencia usa solo `attach()` y se niega a correr sobre una licencia sin periodo. | Decisión 5 del propietario: transferir nunca cambia las fechas. |
+| 4 | En una sola transacción y en este orden: la activación anterior pasa a `transferred` y se firma su cierre; se crea la nueva y se firma su revisión (número mayor); se registra la transferencia `self_service` / `pending`; se audita (`license.transferred`, del sistema). La cabeza de la auditoría es el último bloqueo. | Contrato §8.4, regla 3. |
+| 5 | `TRANSFER_LIMIT` se guarda como respuesta, consume el desafío y abre o actualiza la alerta `transfer_blocked`. El detalle guarda el `server_id` y la versión del último intento, las computadoras que lo intentaron (hasta 20), la transferencia pendiente y desde cuándo, y de qué computadora a cuál fue. El número de intentos es el contador de la alerta. Cada intento se audita (`license.transfer_blocked`) con la alerta que provocó. | Especificación, Fase 2, punto 2.5, y Fase 4, punto 1. |
+| 6 | `Alerts` no escribe en la auditoría: lo hace el evento que provoca la alerta, al final de la transacción. | El orden de bloqueo de todo el servidor deja la cabeza de la auditoría al final. |
+| 7 | `transfer_available` es `true` si no hay una transferencia por autoservicio pendiente. `ACTIVATION_LIMIT` nunca se responde a una licencia revocada (antes responde `REVOKED`), así que la otra condición siempre se cumple ahí. | Especificación, Fase 2, punto 3. |
+| 8 | La ruta, la acción y el error se documentan en `openapi.yaml` en esta fase. | La prueba que compara las rutas de `ApiKernel` con el OpenAPI debe pasar en cada commit. En la Fase 5 se completan los archivos de prueba y el README. |
+| 9 | El «historial de la licencia» de una transferencia por autoservicio es su registro en `license_transfers` (que el detalle mostrará en la Fase 4) más la auditoría. No se escribe en `license_changes`. | `license_changes` es el historial **comercial**: cada fila es una versión de los derechos (`row_version`), y la transferencia no cambia derechos. Escribir ahí obligaría a subir la versión de la licencia y haría fallar los formularios abiertos del panel («Los derechos cambiaron»). Las transferencias del propietario tampoco escriben ahí. Va como decisión más allá de la especificación en las consultas del cierre. |
+

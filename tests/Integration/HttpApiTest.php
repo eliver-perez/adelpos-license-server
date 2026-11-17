@@ -271,7 +271,7 @@ final class HttpApiTest extends TestCase
 					'code' => 'ACTIVATION_LIMIT',
 					'message' => 'La licencia ya está activa en otra computadora.',
 					'request_id' => $occupied['request_id'],
-					'details' => ['transfer_available' => false],
+					'details' => ['transfer_available' => true],
 				],
 			],
 			$limit['json'],
@@ -368,7 +368,8 @@ final class HttpApiTest extends TestCase
 		foreach (
 			[
 				[404, $this->http('/v1/other')],
-				[404, $this->http('/v1/activations/transfer', '{}')],
+				[404, $this->http('/v1/activations/renew', '{}')],
+				[400, $this->http('/v1/activations/transfer', '{}')],
 				[415, $this->http($path, '{}', 'POST', ['Content-Type: text/plain'])],
 				[400, $this->http($path, '{"action":"activate","action":"refresh"}')],
 				[400, $this->http($path, '[]')],

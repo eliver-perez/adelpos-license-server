@@ -15,6 +15,8 @@ final class ActivationService
 		private RevisionPublisher $publisher,
 		private LicenseActivator $activator,
 		private RateLimiter $rate,
+		private Transfers $transfers,
+		private Alerts $alerts,
 	) {}
 
 	public function challenge(array $input): ApiResponse
@@ -44,7 +46,9 @@ final class ActivationService
 	public function execute(string $action, array $input): ApiResponse
 	{
 		$input = Protocol::input($action, $input);
-		if ($action === 'activate') {
+		// Activar y transferir presentan el código comercial: comparten el límite de intentos por código.
+		$claims = in_array($action, Protocol::CLAIMS, true);
+		if ($claims) {
 			$normalized = ActivationCode::normalize($input['license_key']);
 			if ($normalized !== null) {
 				$input['license_key'] = $normalized;
@@ -70,10 +74,9 @@ final class ActivationService
 			Uuid::bytes($input['challenge_id']),
 		]);
 		$this->matchChallenge($challenge, $input, $action, false);
-		$public =
-			$action === 'activate'
-				? Protocol::decode($input['installation_public_key'], 32)
-				: $this->identity($input)['installation_public_key'];
+		$public = $claims
+			? Protocol::decode($input['installation_public_key'], 32)
+			: $this->identity($input)['installation_public_key'];
 		$message = Protocol::proofMessage($action, $input, $challenge['nonce']);
 		$this->verify($input['proof'], $message, $public);
 		$this->limitIdentity($input, $public);
@@ -118,7 +121,11 @@ final class ActivationService
 			$this->verify($input['proof'], Protocol::proofMessage($action, $input, $challenge['nonce']), $public);
 
 			$this->db->one('SELECT product_id FROM products WHERE product_id=? FOR SHARE', [$input['product_id']]);
-			$response = $action === 'activate' ? $this->activate($input) : $this->existing($action, $input, $public);
+			$response = match ($action) {
+				'activate' => $this->activate($input),
+				'transfer' => $this->transfer($input),
+				default => $this->existing($action, $input, $public),
+			};
 			// Authenticated commercial refusals also consume their challenge and
 			// persist their response. Infrastructure/proof failures roll back.
 			$this->db->execute(
@@ -139,7 +146,12 @@ final class ActivationService
 		}, 2);
 	}
 
-	private function activate(array $input): ApiResponse
+	/**
+	 * Licencia del código comercial, bloqueada. Un código inexistente, retirado o de otro producto
+	 * recibe siempre la misma respuesta (contrato §8.7). Una licencia revocada responde REVOKED, aunque
+	 * su código haya quedado retirado al revocarla.
+	 */
+	private function licenseForCode(array $input): array|ApiResponse
 	{
 		if (ActivationCode::normalize($input['license_key']) === null) {
 			return $this->failure('LICENSE_NOT_FOUND', $input);
@@ -166,25 +178,99 @@ final class ActivationService
 		if (!$credential || $credential['state'] !== 'active') {
 			return $this->failure('LICENSE_NOT_FOUND', $input);
 		}
-		$serverId = Uuid::bytes($input['server_id']);
-		$publicKey = Protocol::decode($input['installation_public_key'], 32);
-		// Una licencia vale para una sola computadora principal a la vez (contrato, sección 1).
-		$active = $this->db->one("SELECT * FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [
+		return $license;
+	}
+
+	/** La activación vigente de la licencia, bloqueada, o null. Una licencia tiene a lo sumo una. */
+	private function activeInstallation(array $license): ?array
+	{
+		return $this->db->one("SELECT * FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [
 			$license['license_id'],
 		]);
+	}
+
+	/** La misma instalación es la misma identidad con la misma llave (contrato §8.3; propuesta V1.1 n.º 20). */
+	private static function sameInstallation(array $active, array $input): bool
+	{
+		return $active['server_id'] === Uuid::bytes($input['server_id']) &&
+			hash_equals($active['installation_public_key'], Protocol::decode($input['installation_public_key'], 32));
+	}
+
+	private function activate(array $input): ApiResponse
+	{
+		$license = $this->licenseForCode($input);
+		if ($license instanceof ApiResponse) {
+			return $license;
+		}
+		// Una licencia vale para una sola computadora principal a la vez (contrato, sección 1).
+		$active = $this->activeInstallation($license);
+		if (!$active) {
+			$activation = $this->activator->activate(
+				$license,
+				Uuid::bytes($input['server_id']),
+				Protocol::decode($input['installation_public_key'], 32),
+				$input['app_version'],
+			);
+			return $this->licenseResponse($activation['revision']['jws'], $input);
+		}
+		// La misma instalación vuelve a recibir su revisión vigente: no se crea otra activación ni cambian las fechas.
+		if (self::sameInstallation($active, $input)) {
+			$this->recordVersion($active, $input);
+			return $this->licenseResponse($this->currentJws($active), $input);
+		}
+		// Contrato §8.3: la transferencia por autoservicio está disponible si la licencia no está revocada (aquí
+		// nunca lo está) y no tiene otra transferencia por autoservicio pendiente de confirmar.
+		return $this->failure('ACTIVATION_LIMIT', $input, [
+			'transfer_available' => $this->transfers->pending($license['license_id']) === null,
+		]);
+	}
+
+	/**
+	 * Transferencia por autoservicio (contrato §8.4). Las reglas se aplican en este orden:
+	 * 1. código inexistente, retirado o de otro producto: LICENSE_NOT_FOUND;
+	 * 2. licencia revocada: REVOKED;
+	 * 3. la misma instalación ya está activa: su revisión vigente, como al volver a activar;
+	 * 4. sin activación vigente: una activación normal, que no cuenta como transferencia (propuesta
+	 *    V1.1 n.º 33);
+	 * 5. con una transferencia por autoservicio pendiente: TRANSFER_LIMIT y la alerta del panel;
+	 * 6. si no, la transferencia, en esta misma transacción.
+	 * Transferir nunca cambia las fechas de la licencia (decisión 5 del propietario para la etapa 4).
+	 */
+	private function transfer(array $input): ApiResponse
+	{
+		$license = $this->licenseForCode($input);
+		if ($license instanceof ApiResponse) {
+			return $license;
+		}
+		$serverId = Uuid::bytes($input['server_id']);
+		$publicKey = Protocol::decode($input['installation_public_key'], 32);
+		$active = $this->activeInstallation($license);
+		if ($active && self::sameInstallation($active, $input)) {
+			$this->recordVersion($active, $input);
+			return $this->licenseResponse($this->currentJws($active), $input);
+		}
 		if (!$active) {
 			$activation = $this->activator->activate($license, $serverId, $publicKey, $input['app_version']);
 			return $this->licenseResponse($activation['revision']['jws'], $input);
 		}
-		// La misma instalación es la misma identidad con la misma llave. Vuelve a recibir su
-		// revisión vigente: no se crea otra activación ni cambian las fechas.
-		if ($active['server_id'] === $serverId && hash_equals($active['installation_public_key'], $publicKey)) {
-			$this->recordVersion($active, $input);
-			return $this->licenseResponse($this->currentJws($active), $input);
+		$pending = $this->transfers->pending($license['license_id']);
+		if ($pending !== null) {
+			// La negativa se guarda como respuesta, igual que las demás negativas comerciales, y consume el desafío.
+			$alert = $this->alerts->transferBlocked($license['license_id'], $pending, [
+				'server_id' => $input['server_id'],
+				'app_version' => $input['app_version'],
+			]);
+			$this->audit->append(null, 'license.transfer_blocked', 'license', Uuid::text($license['license_id']), [
+				'pending_transfer_id' => Uuid::text($pending['id']),
+				'server_id' => $input['server_id'],
+				'alert_id' => $alert['alert_id'],
+				'alert_opened' => $alert['opened'],
+				'attempts' => $alert['attempts'],
+			]);
+			return $this->failure('TRANSFER_LIMIT', $input);
 		}
-		// PENDIENTE etapa 4: calcular «transfer_available» con las reglas de la transferencia
-		// por autoservicio (contrato, sección 8.4). Hasta entonces siempre es false.
-		return $this->failure('ACTIVATION_LIMIT', $input, ['transfer_available' => false]);
+		$transfer = $this->transfers->selfService($license, $active, $serverId, $publicKey, $input['app_version']);
+		return $this->licenseResponse($transfer['revision']['jws'], $input);
 	}
 
 	/** «refresh» y «deactivate»: operaciones de una activación que ya existe. */

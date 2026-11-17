@@ -9,10 +9,10 @@ use AdelPos\License\Domain\{ApiProblem, ApiResponse, Problem, Protocol, StrictJs
 final class ApiKernel
 {
 	/** Rutas de la API. Todas son POST y deben coincidir con contracts/v1/openapi.yaml. */
-	// PENDIENTE etapa 4: agregar «/v1/activations/transfer» (contrato, sección 8.4).
 	public const ROUTES = [
 		'/v1/activations/challenge' => 'challenge',
 		'/v1/activations' => 'activate',
+		'/v1/activations/transfer' => 'transfer',
 		'/v1/activations/refresh' => 'refresh',
 		'/v1/activations/deactivate' => 'deactivate',
 	];

@@ -146,6 +146,9 @@ final class ProtocolTest extends TestCase
 			array_keys(Protocol::input('challenge', $challenge)),
 		);
 		self::assertCount(8, Protocol::input('activate', $activation));
+		// Transferir recibe los mismos campos que activar, y su desafío tampoco lleva activación (contrato §8.4).
+		self::assertSame(Protocol::input('activate', $activation), Protocol::input('transfer', $activation));
+		Protocol::input('challenge', array_replace($challenge, ['action' => 'transfer']));
 		foreach (['refresh', 'deactivate'] as $action) {
 			self::assertCount(7, Protocol::input($action, $existing));
 			Protocol::input(
@@ -171,7 +174,6 @@ final class ProtocolTest extends TestCase
 				array_replace($challenge, ['activation_id' => $existing['activation_id']]),
 			],
 			'consultar sin activación' => ['challenge', array_replace($challenge, ['action' => 'refresh'])],
-			'acción transfer' => ['challenge', array_replace($challenge, ['action' => 'transfer'])],
 			'acción transfer con activación' => [
 				'challenge',
 				array_replace($challenge, ['action' => 'transfer', 'activation_id' => $existing['activation_id']]),
@@ -214,7 +216,15 @@ final class ProtocolTest extends TestCase
 			'activar con activation_id' => ['activate', $activation + ['activation_id' => $existing['activation_id']]],
 			'consultar con código' => ['refresh', $existing + ['license_key' => 'K7M-9R3X-6TVP-8CHD']],
 			'desactivar sin activación' => ['deactivate', array_diff_key($existing, ['activation_id' => 1])],
-			'ruta desconocida' => ['transfer', $activation],
+			'ruta desconocida' => ['renew', $activation],
+			'transferir con activation_id' => [
+				'transfer',
+				$activation + ['activation_id' => $existing['activation_id']],
+			],
+			'transferir sin llave de la instalación' => [
+				'transfer',
+				array_diff_key($activation, ['installation_public_key' => 1]),
+			],
 		];
 		foreach ($invalid as $label => [$action, $input]) {
 			try {

@@ -2795,3 +2795,47 @@ Las 36 se detectan ahora: la pendiente única, las 2 listas de la transferencia,
 | Playwright | Panel, sin internet y dispositivos de confianza OK |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 
+
+---
+
+## Etapa 4 · Fase 2 — Transferencia por autoservicio (contrato §8.4)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+**Versiones de PHP desde esta fase.** A mitad de la etapa el propietario pidió correr en cada fase la suite completa **solo en PHP 8.3** (la versión del VPS), y PHP 8.5 una sola vez en el cierre (Fase 6), junto con la verificación final. Playwright, solo en las fases que cambian el panel y en el cierre. Las fases 0 y 1 se corrieron en las dos versiones.
+
+### E4-2.1 Qué cambió
+
+- **`Protocol`:** la acción `transfer` en el desafío (sin activación) y la petición de transferencia, con los mismos campos que activar. Se quitó su marca `PENDIENTE etapa 4`.
+- **`ApiKernel`:** la ruta `POST /v1/activations/transfer`. Se quitó su marca.
+- **`ActivationService::transfer()`**, con las reglas en el orden de la especificación: código inexistente, retirado o de otro producto (`404`); revocada (`403`); la misma instalación (su revisión vigente); sin activación vigente (activación normal, propuesta n.º 33); con una pendiente (`409 TRANSFER_LIMIT` y la alerta); si no, la transferencia. La búsqueda del código es la misma que la de activar.
+- **`transfer_available`** en `ACTIVATION_LIMIT`: `true` si no hay una transferencia por autoservicio pendiente. Se quitó su marca.
+- **`Transfers::selfService()`:** cierre `revoked` / `transferred` de la anterior, activación nueva con `LicenseActivator::attach()` (sin tocar fechas), registro `self_service` / `pending` y auditoría, en una transacción.
+- **`Alerts::transferBlocked()`:** una alerta abierta por licencia; cada intento suma uno a su contador y actualiza su detalle.
+- **`openapi.yaml`:** la ruta, la acción `transfer`, `TRANSFER_LIMIT` y ejemplos de `transfer_available` en los dos valores.
+
+### E4-2.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/SelfServiceTransferTest.php` (nueva) | 8 | **Cada tipo de licencia:** prueba vigente y vencida, suscripción vigente, en tolerancia y vencida, y perpetua. La licencia queda idéntica (fechas al microsegundo, derechos y versión), la computadora nueva firma las mismas fechas y derechos, la anterior recibe su cierre con las mismas fechas y la transferencia queda pendiente. **Revisiones:** el cierre de la anterior (2) y la nueva (3), y la anterior conserva su cierre al volver a consultar. **Lo que no es transferencia:** sin activación vigente (primer periodo y, después de liberar, activación sin cambiar fechas), la misma instalación, revocada, y código inexistente, mal formado, retirado o de otro producto con la misma respuesta. **`TRANSFER_LIMIT`:** respuesta exacta, desafío consumido, reintento idéntico, una sola alerta con su detalle y su contador (3 intentos, de otra computadora y de la anterior). **`transfer_available`** verdadero y falso. **Reintentos, conflictos, desafío de otra acción, prueba con otra llave y límite compartido por código**; el código no se guarda. **Concurrencia:** dos transferencias simultáneas (gana una, la otra recibe `TRANSFER_LIMIT`) y una transferencia contra la desactivación de la anterior (las dos terminan bien y el resultado es coherente con su orden) |
+| `ProtocolTest` | — | `transfer` con los mismos campos que activar; su desafío sin activación; transferir con activación o sin llave se rechaza |
+| `ActivationsTest`, `HttpApiTest` | — | `transfer_available` es `true` sin transferencia pendiente; la ruta de transferir existe (`400` con un cuerpo vacío) y una desconocida responde `404` |
+| `ContractFilesTest` | — | La ruta en el OpenAPI, sus códigos HTTP y 7 ejemplos nuevos que cumplen su esquema (24 en total) |
+| `StageClosureTest`, `AuditLabelsTest` | — | Queda una marca `PENDIENTE etapa 4` (la alerta de 12 meses, Fase 4); `activation.transfer` tiene etiqueta |
+
+Las dos pruebas de concurrencia se corrieron tres veces seguidas, sin fallas.
+
+### E4-2.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **20 reglas**, todas detectadas: la búsqueda compartida del código con `REVOKED`; la misma instalación; la activación normal sin activación vigente; `TRANSFER_LIMIT` con una pendiente; la negativa guardada que consume el desafío; la alerta y su auditoría; la alerta única, su contador, su último instante y las computadoras que lo intentaron; la anterior transferida y su cierre firmado; las fechas sin cambio; la transferencia pendiente; `transfer_available`; el límite por código al transferir; el desafío sin activación y la ruta. Una primera versión de la mutación «queda pendiente» rompía la sentencia en lugar de quitar la regla; se repitió registrándola como confirmada.
+
+### E4-2.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, **PHP 8.3.36** | 451 pruebas, 28 542 aserciones, todas OK |
+| PHPUnit, PHP 8.5.7 | No se corrió (se corre en el cierre, Fase 6) |
+| Playwright | No se corrió: la fase no cambia el panel |
+| `generate-fixtures.php --check` y verificador Go | Sin cambios; OK |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |

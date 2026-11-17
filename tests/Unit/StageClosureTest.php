@@ -99,12 +99,8 @@ final class StageClosureTest extends TestCase
 		ksort($marks);
 		self::assertSame(
 			[
-				// Transferencia por autoservicio.
-				'src/Application/ActivationService.php' => [4],
-				// Alertas de transferencias.
+				// Alerta de transferencias frecuentes (etapa 4, Fase 4).
 				'src/Application/OfflineService.php' => [4],
-				'src/Domain/Protocol.php' => [4],
-				'src/Http/ApiKernel.php' => [4],
 				// Diseño final de las constancias.
 				'templates/certificate-pdf.php' => [5],
 			],

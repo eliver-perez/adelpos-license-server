@@ -5,6 +5,7 @@ namespace AdelPos\License;
 use AdelPos\License\Application\{
 	Access,
 	ActivationService,
+	Alerts,
 	AdminService,
 	AuthService,
 	CatalogService,
@@ -62,6 +63,7 @@ final class App
 	public readonly CommercialService $commercial;
 	public readonly ScheduledChanges $scheduledChanges;
 	public readonly Transfers $transfers;
+	public readonly Alerts $alerts;
 
 	public function __construct(public readonly Config $config, public readonly Database $db, ?Clock $clock = null)
 	{
@@ -75,6 +77,8 @@ final class App
 		$this->signingKeys = new SigningKeys($config, $db, $this->clock, $this->audit);
 		$this->publisher = new RevisionPublisher($db, $this->clock, $this->signingKeys);
 		$activator = new LicenseActivator($db, $this->clock, $this->publisher);
+		$this->alerts = new Alerts($db, $this->clock, $this->audit);
+		$this->transfers = new Transfers($db, $this->clock, $this->audit, $this->publisher, $activator);
 		$this->activations = new ActivationService(
 			$db,
 			$this->clock,
@@ -83,6 +87,8 @@ final class App
 			$this->publisher,
 			$activator,
 			$rate,
+			$this->transfers,
+			$this->alerts,
 		);
 		$this->trustedDevices = new TrustedDevices($db, $this->clock, $this->audit, $this->sessions);
 		$this->auth = new AuthService(
@@ -121,7 +127,6 @@ final class App
 			$this->scheduledChanges,
 			new PaidPeriods($db),
 		);
-		$this->transfers = new Transfers($db, $this->clock);
 		$this->offline = new OfflineService(
 			$db,
 			$operations,
