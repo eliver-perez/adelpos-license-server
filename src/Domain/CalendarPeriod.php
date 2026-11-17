@@ -139,6 +139,22 @@ final class CalendarPeriod
 		];
 	}
 
+	/**
+	 * Instante UTC de una fecha y una hora locales de la zona ($date «2026-11-16», $time
+	 * «10:30:00.000000»), con las reglas de la sección 5.1: una hora que se repite es su primera
+	 * vez, y una que no existe es el primer instante después del salto.
+	 */
+	public static function localInstant(string $date, string $time, string $zone): \DateTimeImmutable
+	{
+		if (
+			!preg_match('/\A(\d{4})-(\d{2})-(\d{2})\z/', $date, $parts) ||
+			!checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])
+		) {
+			throw new \InvalidArgumentException('The date must be a real YYYY-MM-DD date.');
+		}
+		return self::resolve(self::zone($zone), $date, $time);
+	}
+
 	/** Instante como lo firma el servidor: UTC, seis decimales y terminado en Z (sección 3). */
 	public static function utc(\DateTimeImmutable $instant): string
 	{

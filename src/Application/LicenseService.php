@@ -22,11 +22,15 @@ final class LicenseService
 		private Clock $clock,
 		private Crypto $crypto,
 		private RevisionPublisher $publisher,
+		private Payments $payments,
 	) {}
 
 	/**
 	 * Emite una licencia con las condiciones del contrato. No fija fechas: el primer periodo
 	 * empieza al activar en línea o al aprobar la solicitud sin internet (contrato, sección 5.2).
+	 *
+	 * Registra en la misma transacción el pago de alta: el monto cobrado, el precio del catálogo
+	 * que se sugirió y el motivo si el monto es otro. Una prueba no tiene costo.
 	 */
 	public function issue(Actor $actor, string $operationId, array $input): array
 	{
@@ -46,7 +50,11 @@ final class LicenseService
 		$features = $this->featureInput($input);
 		$reason = Input::text($input, 'reason', 500, false);
 		$reference = Input::text($input, 'reference', 190, false);
-		$data = [$customerId, $productId, $terms, $planId, $limits, $features, $reason, $reference];
+		$payment = Payments::input($input);
+		if ($payment['amount'] === null && $terms['license_type'] !== 'trial') {
+			throw new Problem('Escribe el monto cobrado.');
+		}
+		$data = [$customerId, $productId, $terms, $planId, $limits, $features, $reason, $reference, $payment];
 		return $this->operations->run(
 			$actor,
 			['superadmin', 'operator'],
@@ -55,6 +63,7 @@ final class LicenseService
 			$data,
 			function () use (
 				$actor,
+				$operationId,
 				$customerId,
 				$productId,
 				$terms,
@@ -63,6 +72,7 @@ final class LicenseService
 				$features,
 				$reason,
 				$reference,
+				$payment,
 			): array {
 				$customer = $this->db->one('SELECT * FROM customers WHERE id=? FOR SHARE', [Uuid::bytes($customerId)]);
 				$product = $this->db->one('SELECT * FROM products WHERE product_id=? FOR SHARE', [$productId]);
@@ -83,6 +93,7 @@ final class LicenseService
 					$custom = $custom || $limits[$key] !== (int) $plan[$key];
 				}
 				$catalog = $this->validateFeatures($productId, $features);
+				$paidAt = $this->payments->paidAt($payment['paid_at'], $customer['time_zone'], null);
 				$id = Uuid::create();
 				$bytes = Uuid::bytes($id);
 				$this->db->execute(
@@ -113,6 +124,22 @@ final class LicenseService
 					],
 				);
 				$this->writeFeatures($bytes, $productId, $catalog, $features);
+				// El pago de alta paga el primer periodo, cuyas fechas se fijan al activar.
+				$term = LicenseTerms::term($terms);
+				$paymentId = $this->payments->record($actor, $operationId, $bytes, [
+					'concept' => 'issue',
+					'term' => $term,
+					'plan_id' => $plan['plan_id'],
+					'paid_at' => $paidAt,
+					'amount' => $payment['amount'] ?? 0,
+					// Una licencia personalizada no tiene precio en el catálogo: su monto se escribe a mano.
+					'catalog' => $custom && $term !== 'trial' ? null : LicenseTerms::catalogPrice($plan, $term),
+					'credit' => 0,
+					'reason' => $payment['reason'],
+					'reference' => $reference,
+					'covers' => null,
+				]);
+				$this->db->execute('UPDATE licenses SET period_payment_id=? WHERE license_id=?', [$paymentId, $bytes]);
 				$secret = $this->credential($bytes);
 				$this->record($actor, $id, 'license.issued', $reason, $reference);
 				return $this->credentialResult($actor, $id, $secret);

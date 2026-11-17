@@ -146,7 +146,8 @@ $termNotes = [
 		<?php require __DIR__ . '/license-commercial.php'; ?>
 		<?php require __DIR__ . '/license-activations.php'; ?>
 		<?php require __DIR__ . '/license-offline.php'; ?>
-		<section class="panel mt-4">
+		<?php require __DIR__ . '/license-payments.php'; ?>
+		<section class="panel mt-4" id="commercial-history">
 			<div class="panel-heading">
 				<div>
 					<h2>Historial comercial</h2>

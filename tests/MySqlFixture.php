@@ -88,10 +88,13 @@ final class MySqlFixture
 		'prueba_e' => 'Módulo de prueba E',
 	];
 
-	/** Valid commercial terms of the contract model for a license type; each test overrides what it exercises. */
+	/**
+	 * Valid commercial terms of the contract model for a license type; each test overrides what it exercises.
+	 * The issue payment is 0 MXN: the initial catalog has no prices, so nothing is suggested.
+	 */
 	public static function terms(string $type = 'perpetual', string $plan = 'elemental'): array
 	{
-		return ['license_type' => $type, 'plan_id' => $plan] +
+		return ['license_type' => $type, 'plan_id' => $plan, 'amount' => '0'] +
 			[
 				'perpetual' => ['updates_months' => '6'],
 				'subscription' => ['billing_period' => 'monthly'],

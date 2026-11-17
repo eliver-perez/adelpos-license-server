@@ -14,6 +14,7 @@ use AdelPos\License\Application\{
 	LicenseService,
 	OfflineService,
 	Operations,
+	Payments,
 	RevisionPublisher,
 	TrustedDevices,
 };
@@ -50,6 +51,7 @@ final class App
 	public readonly Access $access;
 	public readonly LicenseMaterials $materials;
 	public readonly DocumentService $documents;
+	public readonly Payments $payments;
 
 	public function __construct(public readonly Config $config, public readonly Database $db, ?Clock $clock = null)
 	{
@@ -85,6 +87,7 @@ final class App
 		);
 		$operations = new Operations($db, $this->crypto, $this->clock);
 		$this->catalog = new CatalogService($db, $operations, $this->audit, $this->clock);
+		$this->payments = new Payments($db, $this->clock, $this->audit);
 		$this->licenses = new LicenseService(
 			$db,
 			$operations,
@@ -92,6 +95,7 @@ final class App
 			$this->clock,
 			$this->crypto,
 			$this->publisher,
+			$this->payments,
 		);
 		$this->offline = new OfflineService(
 			$db,

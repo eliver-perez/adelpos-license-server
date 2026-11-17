@@ -24,6 +24,7 @@ final class InitialSchemaTest extends TestCase
 		'002_entornos_de_firma.sql',
 		'003_contrato_v1.sql',
 		'004_retiro_de_lo_heredado.sql',
+		'005_precios_y_pagos.sql',
 	];
 	private \PDO $server;
 	private string $dsn;
@@ -115,8 +116,9 @@ final class InitialSchemaTest extends TestCase
 				),
 			),
 		);
-		// 33 tablas del esquema inicial, más «plans» y «schema_migrations», menos «license_limits».
-		self::assertCount(34, $schema['tables']);
+		// 33 tablas del esquema inicial, más «plans», «license_payments» y «schema_migrations», menos
+		// «license_limits», «subscription_periods» y «maintenance_purchases».
+		self::assertCount(33, $schema['tables']);
 		self::assertSame(1, (int) $db->execute('SELECT COUNT(*) FROM security_state')->fetchColumn());
 		self::assertSame(
 			['admin', 0],

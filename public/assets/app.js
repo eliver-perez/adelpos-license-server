@@ -72,16 +72,77 @@ function updatePlanLimits(fill) {
 	});
 	licenseForm.querySelector('#custom-notice').hidden = !custom;
 }
-licenseForm?.querySelector('[name="plan_id"]').addEventListener('change', () => updatePlanLimits(true));
-licenseForm
-	?.querySelectorAll('[data-plan-limit]')
-	.forEach((input) => input.addEventListener('input', () => updatePlanLimits(false)));
+// Monto de alta: el formulario sugiere el precio del catálogo del plan y del plazo elegidos.
+// Es solo una ayuda: el servidor vuelve a calcular la sugerencia y exige el motivo si el monto es otro.
+function formatMoney(value) {
+	const [whole, cents] = Number(value).toFixed(2).split('.');
+	return '$' + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + cents + ' MXN';
+}
+function suggestedIssueAmount() {
+	const type = licenseForm.querySelector('[name="license_type"]:checked').value;
+	if (type === 'trial') {
+		return { amount: '0.00', note: 'Una licencia de prueba no tiene costo: su monto es 0.' };
+	}
+	if (!licenseForm.querySelector('#custom-notice').hidden) {
+		return {
+			amount: null,
+			note: 'Una licencia personalizada no tiene precio en el catálogo. Escribe el monto cobrado.',
+		};
+	}
+	const term = type === 'perpetual' ? 'perpetual' : licenseForm.querySelector('[name="billing_period"]').value;
+	const price =
+		licenseForm.querySelector('[name="plan_id"]').selectedOptions[0].dataset[
+			'price' + term[0].toUpperCase() + term.slice(1)
+		];
+	if (!price) {
+		return { amount: null, note: 'El plan no tiene precio para este plazo. Escribe el monto cobrado.' };
+	}
+	return { amount: price, note: 'Precio del catálogo: ' + formatMoney(price) + '.' };
+}
+function updateIssueAmount() {
+	if (!licenseForm) return;
+	const amount = licenseForm.querySelector('#amount');
+	const reason = licenseForm.querySelector('#amount_reason');
+	const suggestion = suggestedIssueAmount();
+	const type = licenseForm.querySelector('[name="license_type"]:checked').value;
+	if (!amount.dataset.touched || type === 'trial') {
+		amount.value = suggestion.amount ?? '';
+	}
+	amount.readOnly = type === 'trial';
+	licenseForm.querySelector('#price-note').textContent = suggestion.note;
+	// El motivo solo se escribe cuando el monto es distinto del sugerido.
+	const changed = suggestion.amount !== null && Number(amount.value) !== Number(suggestion.amount);
+	reason.disabled = !changed;
+	reason.required = changed;
+	if (!changed) {
+		reason.value = '';
+	}
+}
+licenseForm?.querySelector('[name="plan_id"]').addEventListener('change', () => {
+	updatePlanLimits(true);
+	updateIssueAmount();
+});
+licenseForm?.querySelectorAll('[data-plan-limit]').forEach((input) =>
+	input.addEventListener('input', () => {
+		updatePlanLimits(false);
+		updateIssueAmount();
+	}),
+);
 updatePlanLimits(true);
 licenseForm?.querySelector('[name="product_id"]').addEventListener('change', updateLicenseForm);
-licenseForm
-	?.querySelectorAll('[name="license_type"]')
-	.forEach((input) => input.addEventListener('change', updateLicenseForm));
+licenseForm?.querySelectorAll('[name="license_type"]').forEach((input) =>
+	input.addEventListener('change', () => {
+		updateLicenseForm();
+		updateIssueAmount();
+	}),
+);
+licenseForm?.querySelector('[name="billing_period"]').addEventListener('change', updateIssueAmount);
+licenseForm?.querySelector('#amount').addEventListener('input', (event) => {
+	event.target.dataset.touched = '1';
+	updateIssueAmount();
+});
 updateLicenseForm();
+updateIssueAmount();
 
 document.querySelectorAll('.feature-grid').forEach((group) => {
 	group.addEventListener('change', (event) => {

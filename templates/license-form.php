@@ -4,6 +4,14 @@ use AdelPos\License\Http\View as V;
 
 $availableProducts = array_values(array_filter($products, fn($product) => $product['state'] === 'active'));
 $selectedProduct = $availableProducts[0]['product_id'] ?? '';
+// Precio del catálogo de cada plazo, para que el formulario sugiera el monto de alta.
+$priceAttributes = function (array $plan): string {
+	$attributes = [];
+	foreach (LicenseTerms::PRICES as $term => $column) {
+		$attributes[] = 'data-price-' . $term . '="' . V::escape($plan[$column] ?? '') . '"';
+	}
+	return implode(' ', $attributes);
+};
 ?>
 <div class="page-heading">
 	<div>
@@ -131,6 +139,7 @@ $selectedProduct = $availableProducts[0]['product_id'] ?? '';
 								data-cash_registers="<?= (int) $plan['cash_registers'] ?>"
 								data-order_takers="<?= (int) $plan['order_takers'] ?>"
 								data-kitchen_displays="<?= (int) $plan['kitchen_displays'] ?>"
+								<?= $priceAttributes($plan) ?>
 							>
 								<?= V::escape($plan['display_name']) ?> · <?= (int) $plan['cash_registers'] ?>
 									<?= (int) $plan['cash_registers'] === 1 ? 'caja' : 'cajas' ?> ·
@@ -205,6 +214,42 @@ $selectedProduct = $availableProducts[0]['product_id'] ?? '';
 					<?php endforeach; ?>
 					<div class="section-heading mt-5">
 						<span>05</span>
+						<h2>Pago de alta</h2>
+					</div>
+					<div class="row g-3">
+						<div class="col-md-4">
+							<label for="amount" class="form-label">Monto cobrado (MXN)</label>
+							<input
+								class="form-control"
+								id="amount"
+								name="amount"
+								inputmode="decimal"
+								maxlength="12"
+								pattern="\d{1,8}(\.\d{1,2})?"
+								placeholder="1500.00"
+								required
+							>
+						</div>
+						<div class="col-md-8">
+							<label for="paid_at" class="form-label">
+								Fecha de pago <span class="optional">opcional</span>
+							</label>
+							<input class="form-control" type="datetime-local" id="paid_at" name="paid_at">
+							<div class="form-text">
+								En la zona horaria del cliente. Si la dejas vacía, se usa este momento.
+							</div>
+						</div>
+					</div>
+					<div class="note-box mt-3" id="price-note" role="status"></div>
+					<div class="mt-3">
+						<label for="amount_reason" class="form-label">Motivo del cambio de monto</label>
+						<input class="form-control" id="amount_reason" name="amount_reason" maxlength="500" disabled>
+						<div class="form-text">
+							Solo si cobras un monto distinto del sugerido. No se calcula IVA ni se emiten facturas.
+						</div>
+					</div>
+					<div class="section-heading mt-5">
+						<span>06</span>
 						<h2>Referencia de la emisión</h2>
 					</div>
 					<div class="stack-form">
@@ -249,6 +294,9 @@ $selectedProduct = $availableProducts[0]['product_id'] ?? '';
 						<li>Una computadora principal a la vez por licencia</li>
 						<li>Cupos de cajas, comanderos y KDS según el plan</li>
 						<li>Las fechas empiezan al activar</li>
+					</ul>
+					<ul class="check-list">
+						<li>El pago de alta queda en el historial de la licencia, en MXN</li>
 					</ul>
 					<div class="note-box">
 						La renovación de suscripciones y la compra de mantenimiento estarán disponibles próximamente.

@@ -8,6 +8,8 @@ $app = $fixture->app;
 $keys = $fixture->signingKeys();
 $keys->generate('panel-random-signing-key', 'license');
 $keys->activate('panel-random-signing-key', 'Preparación aislada de prueba del panel');
+// Precios sintéticos para comprobar que el formulario sugiere el monto de alta.
+$fixture->owner->execute("UPDATE plans SET price_perpetual='15000.00',price_monthly='899.00' WHERE plan_id='premium'");
 $adminId = $app->auth->bootstrap('admin@example.test', 'Administración de pruebas', 'Fixture-Password-Only-2026!');
 $actor = new AdelPos\License\Application\Actor($adminId, 'superadmin', 'Administración de pruebas');
 foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index => $name) {

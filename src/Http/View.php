@@ -2,7 +2,8 @@
 declare(strict_types=1);
 namespace AdelPos\License\Http;
 
-use AdelPos\License\Domain\{TimeZones, Uuid};
+use AdelPos\License\Application\Payments;
+use AdelPos\License\Domain\{Money, TimeZones, Uuid};
 
 final class View
 {
@@ -102,6 +103,19 @@ final class View
 		return self::licenseDate($license, 'expires_at');
 	}
 
+	/** Monto guardado (DECIMAL) para leer: «$1,500.50 MXN». Sin monto, una raya. */
+	public static function money(?string $value): string
+	{
+		$cents = Money::fromSql($value);
+		return $cents === null ? '—' : Money::format($cents);
+	}
+
+	/** Concepto de un pago: alta, renovación, conversión, cambio de plan o mantenimiento. */
+	public static function paymentConcept(string $concept): string
+	{
+		return Payments::CONCEPTS[$concept] ?? $concept;
+	}
+
 	public static function role(string $role): string
 	{
 		return ['superadmin' => 'Superadministrador', 'operator' => 'Operador de licencias', 'viewer' => 'Consulta'][
@@ -118,6 +132,7 @@ final class View
 			'document.downloaded' => 'Constancia descargada',
 			'offline.downloaded' => 'Archivo firmado descargado',
 			'license.issued' => 'Licencia emitida',
+			'payment.recorded' => 'Pago registrado',
 			'license.features' => 'Módulos actualizados',
 			'license.renew' => 'Suscripción renovada',
 			'license.maintenance' => 'Mantenimiento registrado',

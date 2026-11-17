@@ -22,6 +22,59 @@ final class LicenseTerms
 	];
 	public const MAX_LIMIT = 999;
 
+	/**
+	 * Precio del catálogo de cada plazo, todos opcionales y en MXN (decisión 3 del propietario para
+	 * la etapa 3): los cuatro periodos de la suscripción, la perpetua y el mantenimiento anual.
+	 */
+	public const PRICES = [
+		'monthly' => 'price_monthly',
+		'quarterly' => 'price_quarterly',
+		'semiannual' => 'price_semiannual',
+		'annual' => 'price_annual',
+		'perpetual' => 'price_perpetual',
+		'maintenance' => 'price_maintenance',
+	];
+
+	/** Nombre de cada plazo para el administrador. */
+	public const TERM_LABELS = [
+		'monthly' => 'Mensual',
+		'quarterly' => 'Trimestral',
+		'semiannual' => 'Semestral',
+		'annual' => 'Anual',
+		'perpetual' => 'Perpetua',
+		'maintenance' => 'Mantenimiento anual',
+		'trial' => 'Prueba',
+	];
+
+	/** Meses de actualizaciones que compra el mantenimiento de una perpetua (decisión 4). */
+	public const MAINTENANCE_MONTHS = 12;
+
+	/** Plazo que se paga con estas condiciones: el periodo de la suscripción, «perpetual» o «trial». */
+	public static function term(array $terms): string
+	{
+		return match ($terms['license_type'] ?? '') {
+			'subscription' => in_array($terms['billing_period'] ?? '', self::BILLING_PERIODS, true)
+				? $terms['billing_period']
+				: throw new \InvalidArgumentException('Unknown billing period.'),
+			'perpetual' => 'perpetual',
+			'trial' => 'trial',
+			default => throw new \InvalidArgumentException('Unknown license type.'),
+		};
+	}
+
+	/**
+	 * Precio del catálogo de un plazo, en centavos, o null si el plan no lo tiene.
+	 * Una prueba no tiene costo.
+	 */
+	public static function catalogPrice(array $plan, string $term): ?int
+	{
+		if ($term === 'trial') {
+			return 0;
+		}
+		$column = self::PRICES[$term] ?? throw new \InvalidArgumentException('Unknown term.');
+		return Money::fromSql($plan[$column] ?? null);
+	}
+
 	/** Tolerancia después del vencimiento: solo las suscripciones la tienen. */
 	public static function graceDays(string $type): int
 	{

@@ -319,7 +319,13 @@ final class OfflineTest extends TestCase
 			$result['revision_id'],
 		);
 		self::assertSame(1, (int) $this->app->read->license($this->license['id'])['row_version']);
-		self::assertSame(0, $this->rowCount('subscription_periods'));
+		// Ningún pago además del de alta: entregar los derechos vigentes no es una renovación.
+		self::assertSame(
+			0,
+			(int) $this->app->db
+				->execute("SELECT COUNT(*) FROM license_payments WHERE concept<>'issue'")
+				->fetchColumn(),
+		);
 	}
 
 	public function testPerpetualRenewUsesCurrentRightsWithoutGrantingMaintenance(): void

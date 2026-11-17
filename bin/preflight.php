@@ -35,8 +35,7 @@ consoleRun(function (): void {
 			[
 				'audit_events',
 				'license_changes',
-				'subscription_periods',
-				'maintenance_purchases',
+				'license_payments',
 				'license_revisions',
 				'offline_requests',
 				'offline_decisions',
@@ -55,6 +54,9 @@ consoleRun(function (): void {
 				}
 				if ($table === 'license_revisions') {
 					$sql = str_replace('SET id=id', 'SET revision_id=revision_id', $sql);
+				}
+				if ($table === 'license_payments') {
+					$sql = str_replace('SET id=id', 'SET payment_id=payment_id', $sql);
 				}
 				try {
 					$app->db->execute($sql);

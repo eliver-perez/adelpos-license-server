@@ -154,11 +154,12 @@ final class ReadRepository
 		) ?? throw new Problem('No se encontró el cliente.', 404);
 	}
 
-	/** Catálogo de planes, del más pequeño al más grande. */
+	/** Catálogo de planes con sus precios opcionales, del más pequeño al más grande. */
 	public function plans(): array
 	{
 		return $this->db->all(
-			'SELECT plan_id,display_name,cash_registers,order_takers,kitchen_displays
+			'SELECT plan_id,display_name,cash_registers,order_takers,kitchen_displays,
+					price_monthly,price_quarterly,price_semiannual,price_annual,price_perpetual,price_maintenance
 				FROM plans
 				ORDER BY cash_registers,order_takers,kitchen_displays,plan_id',
 		);
@@ -280,6 +281,18 @@ final class ReadRepository
 				JOIN admin_users u ON u.id=h.admin_id
 				WHERE h.license_id=?
 				ORDER BY h.version DESC,h.field_name',
+			[Uuid::bytes($id)],
+		);
+		// Historial comercial: cada pago tal como se registró, del más reciente al más antiguo.
+		$license['payments'] = $this->db->all(
+			'SELECT BIN_TO_UUID(p.payment_id) AS id_text,p.concept,p.term,p.plan_id,p.paid_at,p.currency,
+					p.amount,p.catalog_amount,p.credit_amount,p.suggested_amount,p.override_reason,p.reference,
+					p.covers_from,p.covers_until,p.created_at,u.display_name AS actor_name
+				FROM license_payments p
+				JOIN admin_users u ON u.id=p.admin_id
+				WHERE p.license_id=?
+				ORDER BY p.paid_at DESC,p.created_at DESC
+				LIMIT 100',
 			[Uuid::bytes($id)],
 		);
 		$license['documents'] = $this->db->all(

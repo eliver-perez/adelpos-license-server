@@ -206,6 +206,13 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.match(await page.locator('#custom-notice').innerText(), /Licencia personalizada/);
 		await page.locator('#order_takers').fill('10');
 		assert.equal(await page.locator('#custom-notice').isHidden(), true);
+		// El pago de alta sugiere el precio del catálogo del plan y del plazo; el motivo solo se pide si el monto cambia.
+		assert.equal(await page.locator('#amount').inputValue(), '15000.00');
+		assert.match(await page.locator('#price-note').innerText(), /Precio del catálogo: \$15,000\.00 MXN/);
+		assert.equal(await page.locator('#amount_reason').isDisabled(), true);
+		await page.locator('#amount').fill('14000');
+		assert.equal(await page.locator('#amount_reason').isDisabled(), false);
+		await page.locator('#amount_reason').fill('Descuento de lanzamiento');
 		// El formulario no deja pasar cupos fuera de 0 a 999.
 		assert.deepEqual(
 			await page.locator('#cash_registers').evaluate((input) => [input.min, input.max, input.required]),
@@ -285,7 +292,13 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			assert.match(await pending.text(), message);
 		}
 		await page.reload();
-		assert.equal(await page.locator('tbody tr').count(), 1);
+		assert.equal(await page.locator('#commercial-history tbody tr').count(), 1);
+		// El pago de alta queda en el historial, con el precio sugerido y el motivo del cambio de monto.
+		const payments = await page.locator('#payments tbody').innerText();
+		assert.match(payments, /Alta/);
+		assert.match(payments, /\$14,000\.00 MXN/);
+		assert.match(payments, /Catálogo: \$15,000\.00 MXN/);
+		assert.match(payments, /Monto cambiado: Descuento de lanzamiento/);
 		await screenshot('license-detail-desktop');
 		const metadata = page.locator('form[action$="/administrative"]');
 		await metadata.locator('[name="reference"]').fill('Contrato sintético BROWSER-084');
@@ -329,6 +342,9 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.equal(await page.locator('#updates_months').isDisabled(), true);
 		assert.equal(await page.locator('#billing_period').isDisabled(), true);
 		await page.locator('#trial_duration').selectOption('1m');
+		// Una prueba no tiene costo.
+		assert.equal(await page.locator('#amount').inputValue(), '0.00');
+		assert.equal(await page.locator('#amount').getAttribute('readonly'), '');
 		await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
 		await page.getByRole('link', { name: 'Ya la guardé · Ver licencia' }).click();
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
@@ -348,6 +364,11 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await page.locator('#plan_id').selectOption('elemental');
 		await page.locator('#cash_registers').fill('4');
 		assert.equal(await page.locator('#custom-notice').isVisible(), true);
+		// Una licencia personalizada no tiene precio en el catálogo: el monto se escribe a mano.
+		assert.equal(await page.locator('#amount').inputValue(), '');
+		assert.match(await page.locator('#price-note').innerText(), /personalizada no tiene precio/);
+		await page.locator('#amount').fill('1200');
+		assert.equal(await page.locator('#amount_reason').isDisabled(), true);
 		await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
 		await page.getByRole('link', { name: 'Ya la guardé · Ver licencia' }).click();
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
@@ -358,7 +379,8 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.equal(detail['Plan'], 'Plan elemental Personalizada');
 		assert.deepEqual([detail['Cajas'], detail['Comanderos'], detail['Pantallas de cocina (KDS)']], ['4', '3', '3']);
 		assert.match(await page.locator('main').innerText(), /Licencia personalizada/);
-		assert.equal(await page.locator('tbody tr').count(), 1);
+		assert.equal(await page.locator('#commercial-history tbody tr').count(), 1);
+		assert.match(await page.locator('#payments tbody').innerText(), /\$1,200\.00 MXN[\s\S]*Sin precio de catálogo/);
 		const offlineDownload = await require('./offline-panel.cjs')({
 			page,
 			context,

@@ -186,7 +186,7 @@ final class AdministrationTest extends TestCase
 			$issued = $app->licenses->issue(
 				$this->actor,
 				Uuid::create(),
-				['customer_id' => $customer, 'product_id' => 'adel_pos'] + $terms,
+				['customer_id' => $customer, 'product_id' => 'adel_pos', 'amount' => '0'] + $terms,
 			);
 			$row = $this->fixture->owner->one(
 				'SELECT license_type,billing_period,trial_duration,updates_months,grace_days,
@@ -216,7 +216,18 @@ final class AdministrationTest extends TestCase
 			);
 		}
 		self::assertSame(count($cases), (int) $app->db->execute('SELECT COUNT(*) FROM licenses')->fetchColumn());
-		self::assertSame(0, (int) $app->db->execute('SELECT COUNT(*) FROM subscription_periods')->fetchColumn());
+		// Cada licencia tiene su pago de alta, y es el que paga su primer periodo, que empieza al activar.
+		self::assertSame(
+			count($cases),
+			(int) $app->db
+				->execute(
+					"SELECT COUNT(*)
+						FROM licenses l
+						JOIN license_payments p ON p.payment_id=l.period_payment_id AND p.license_id=l.license_id
+						WHERE p.concept='issue' AND p.amount=0 AND p.covers_from IS NULL",
+				)
+				->fetchColumn(),
+		);
 	}
 
 	public function testChangingAnyCountOfThePlanMakesTheLicenseCustom(): void
@@ -478,9 +489,14 @@ final class AdministrationTest extends TestCase
 			self::assertNull($license['expires_at']);
 			self::assertNull($license['updates_until']);
 		}
-		foreach (['subscription_periods', 'maintenance_purchases'] as $table) {
-			self::assertSame(0, (int) $app->db->execute('SELECT COUNT(*) FROM ' . $table)->fetchColumn(), $table);
-		}
+		// Solo los tres pagos de alta: ninguna renovación ni compra de mantenimiento.
+		self::assertSame(
+			[['issue', 3]],
+			array_map(
+				static fn(array $row): array => [$row['concept'], (int) $row['total']],
+				$app->db->all('SELECT concept,COUNT(*) AS total FROM license_payments GROUP BY concept'),
+			),
+		);
 		self::assertSame(
 			0,
 			(int) $app->db

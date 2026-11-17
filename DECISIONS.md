@@ -316,3 +316,20 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 9 | **Al renovar, la licencia conserva sus números.** Un cambio en el catálogo nunca reduce las licencias existentes. Los aumentos se aplican a las existentes si el propietario lo elige al guardar. Sustituye una frase del contrato §11: propuesta V1.1 n.º 21. |
 | 10 | Las decisiones 3 a 8 se registran como propuesta V1.1 n.º 22, para incorporarlas al contrato `_v2`. |
 
+
+## 12. Decisiones técnicas de la etapa 3
+
+### Fase 1 — Precios y registro de pagos
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | Los montos viajan en el código como **centavos enteros** (`Domain\Money`) y se guardan como `DECIMAL(10,2)`: hasta 99,999,999.99 MXN. Se escriben con números y punto decimal, sin comas ni signo de pesos. | Una proporción o una resta en punto flotante puede perder un centavo. La bonificación de la Fase 5 se calcula con enteros. |
+| 2 | Un solo registro, **`license_payments`**, de solo inserción, reemplaza a `subscription_periods` y `maintenance_purchases`, que se eliminan en la migración `005`. Cada pago guarda su concepto, su plazo (`term`) y el periodo que cubre (`covers_from`, `covers_until`). | Especificación, Fase 1, punto 5: que no haya dos fuentes de verdad. Las dos tablas no tenían escrituras ni instalaciones con datos. |
+| 3 | `licenses.period_payment_id` apunta al pago que cubre el periodo vigente, con una llave foránea compuesta que exige que sea de la misma licencia. | La bonificación de un cambio de plan usa «el monto pagado del periodo vigente». Un vínculo explícito no depende de ordenar pagos que pueden compartir la misma marca de tiempo. |
+| 4 | Lo sugerido es el precio del catálogo menos la bonificación, nunca menos de 0. El motivo es **obligatorio** si el monto cobrado es otro, y se **rechaza** si el monto es el sugerido o no hay sugerencia. Lo comprueban `Payments` y la base. | Especificación, Fase 1, punto 2. Un motivo que no corresponde no se descarta en silencio; el formulario deshabilita ese campo cuando no aplica. |
+| 5 | La fecha de pago se captura en la zona del cliente, con minutos o segundos, o como instante UTC exacto cuando la fija una pantalla de revisión. Vacía es ahora. No puede ser futura ni anterior al último pago registrado de la licencia. Una hora local repetida o inexistente sigue la sección 5.1. | Especificación, Fase 1, punto 2. Un pago con fecha anterior a otro ya registrado desordenaría el historial comercial y sus cálculos. |
+| 6 | Al emitir, el monto es obligatorio, salvo en una prueba, que registra un pago de alta de 0. Una licencia personalizada no tiene precio de catálogo: su monto se escribe a mano. | Especificación, Fase 1, punto 3: «se captura el monto de alta» y «las pruebas tienen monto 0». Así toda licencia tiene su pago de alta. |
+| 7 | Cada pago se audita como `payment.recorded`, con sus montos y si se cambió el sugerido, además del evento propio de la operación (por ejemplo, `license.issued`). | Especificación, Fase 1: «la auditoría registra cada pago». |
+| 8 | `license_payments.operation_id` es único y llave foránea a `admin_operations`: un pago pertenece a una operación del panel, y una operación registra a lo sumo un pago. | Idempotencia por identificador de operación, también en la base. |
+| 9 | El formulario de emisión pide el monto, lo sugiere a partir de los precios del plan y del plazo, y el detalle de la licencia muestra sus pagos. | Como en la etapa 2 (Fase 2, decisión 3): el panel recibe ya lo que la emisión nueva hace necesario, para que Playwright siga pasando en cada fase. |
+| 10 | Sin dependencias nuevas. | — |

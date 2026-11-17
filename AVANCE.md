@@ -2114,3 +2114,63 @@ env TEST_FPM_BIN=/opt/homebrew/opt/php@8.3/sbin/php-fpm ... \
     /opt/homebrew/opt/php@8.3/bin/php vendor/bin/phpunit
 /opt/homebrew/opt/php@8.3/bin/php contracts/v1/generate-fixtures.php --check
 ```
+
+---
+
+## Etapa 3 · Fase 1 — Precios y registro de pagos
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-1.1 Qué cambió
+
+- **Migración `005_precios_y_pagos.sql`:**
+  - seis precios opcionales en `plans` (mensual, trimestral, semestral, anual, perpetua y mantenimiento anual), `DECIMAL(10,2)`, vacíos o no negativos;
+  - tabla `license_payments`, de solo inserción, con concepto, plazo, fecha de pago, monto cobrado en MXN, precio sugerido, bonificación, motivo, referencia, periodo que cubre, administrador y fecha de registro;
+  - `licenses.period_payment_id`: el pago que cubre el periodo vigente;
+  - se eliminan `subscription_periods` y `maintenance_purchases`, que nunca tuvieron escrituras.
+- **`Domain\Money`:** montos en centavos enteros; lectura estricta de lo que escribe el administrador y formato `$1,500.50 MXN`.
+- **`Application\Payments`:** registra cada pago en la transacción de su operación, valida el motivo frente al monto sugerido, lee la fecha de pago en la zona del cliente y audita el pago (`payment.recorded`).
+- **Emisión (`LicenseService::issue`):** pide el monto de alta y registra su pago. Sugiere el precio del catálogo del plan y del plazo; una licencia personalizada no tiene precio; una prueba vale 0.
+- **`CalendarPeriod::localInstant()`:** fecha y hora locales a UTC con las reglas de la sección 5.1 (hora repetida y hora inexistente).
+- **Permisos y auditoría:** `license_payments` con `SELECT, INSERT`; `bin/preflight.php` comprueba en producción que no se pueda modificar ni borrar; etiqueta «Pago registrado».
+- **Panel:** el formulario de emisión tiene la sección «Pago de alta», con el monto sugerido, la fecha de pago y el motivo, que solo se habilita si el monto cambia. El detalle de la licencia muestra la tabla «Pagos».
+
+### E3-1.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Unit/MoneyTest.php` (nueva) | 3 | Montos escritos a centavos exactos; negativos, comas, signo de pesos, más de dos decimales y montos mayores que el máximo rechazados; formato y valores guardados |
+| `tests/Integration/PaymentsTest.php` (nueva) | 5 | Precios opcionales y no negativos; monto sugerido y modificable con motivo, personalizada y sin precio, prueba en 0; fecha de pago en la zona del cliente, nunca futura; solo inserción y reglas de la base; idempotencia y auditoría de cada pago |
+| `AdministrationTest` | — (cambian 2 aserciones) | Las que contaban filas de `subscription_periods` y `maintenance_purchases` cuentan ahora los pagos de alta |
+| `OfflineTest` | — (cambia 1 aserción) | Igual: entregar los derechos vigentes no registra ningún pago además del de alta |
+| `InitialSchemaTest` | — | Lista de migraciones con la `005`; 33 tablas con `schema_migrations` |
+| `tests/panel.cjs` | — | Monto sugerido con el precio del catálogo, motivo al cambiarlo, prueba en 0, personalizada sin precio y la tabla de pagos del detalle |
+
+`MySqlFixture::terms()` envía ahora un monto de 0: el catálogo inicial no tiene precios, así que no hay nada sugerido.
+
+### E3-1.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **23 reglas**, una a la vez, con `PaymentsTest`, `MoneyTest` o `AdministrationTest`:
+
+- precios no negativos; monto no negativo y monto máximo al escribirlo;
+- motivo obligatorio si el monto cambia, y rechazado si no cambia;
+- prueba con monto 0; fecha de pago no futura y leída en la zona del cliente;
+- monto obligatorio al emitir; licencia personalizada sin precio de catálogo;
+- el pago de alta paga el periodo; auditoría del pago; permisos de solo inserción;
+- en la base: lo sugerido igual al catálogo menos la bonificación, el motivo en los dos sentidos, la prueba sin costo, MXN, montos no negativos, concepto cerrado, plazo de mantenimiento, periodo completo y el pago del periodo de la misma licencia.
+
+**22 se detectaron a la primera.** La de montos no negativos en la base no: el `-1.00` de la prueba lo rechazaba también otra restricción. Se agregaron tres casos negativos que cumplen las demás reglas, y ahora se detecta.
+
+### E3-1.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 385 pruebas, 27 603 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 385 pruebas, 27 603 aserciones, todas OK |
+| Playwright | Panel y dispositivos de confianza OK |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
+### E3-1.5 Pendientes que deja la fase
+
+- Los precios todavía no se editan en el panel: el editor de planes es de la Fase 2.
+- La regla «la fecha de pago no es anterior al último pago de la licencia» se ejercita en la Fase 3, cuando una licencia ya tiene un pago anterior.
