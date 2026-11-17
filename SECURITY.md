@@ -96,6 +96,7 @@ Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, 
   - `superadmin`: tiene todos los permisos.
   - `operator`: necesita permisos explícitos para revelar códigos de activación, generar constancias de entrega y descargar archivos `.lic`.
   - `viewer`: solo consulta.
+- **Ciclo comercial** (etapa 3). Renovar, convertir, cambiar de plan, comprar mantenimiento, editar el periodo inicial y cancelar un cambio programado: superadministrador u operador. **Crear, editar y archivar planes y precios: solo el superadministrador.** El servicio vuelve a comprobar el rol dentro de la transacción, igual que en el resto de las operaciones. Cada operación exige la versión vigente de la licencia y es idempotente por su identificador.
 - **Confirmación de identidad** (contraseña más código TOTP nuevo). Se exige para:
   - revelar un código;
   - las constancias de entrega y la descarga de `.lic`;
@@ -184,7 +185,8 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 ## 10. Auditoría
 
 - **Cadena.** Cada evento se encadena con el anterior mediante HMAC (`AUDIT_KEY`), bajo el bloqueo de `audit_heads`, y se confirma junto con el cambio. Los intentos fallidos de acceso se registran aparte, sin secretos.
-- **Permisos.** La cuenta de la aplicación solo puede leer e insertar en la auditoría y en las tablas de historia. En producción, `bin/preflight.php` comprueba que no pueda modificarlas ni borrarlas.
+- **Permisos.** La cuenta de la aplicación solo puede leer e insertar en la auditoría y en las tablas de historia, incluido el registro de pagos (`license_payments`). En producción, `bin/preflight.php` comprueba que no pueda modificarlas ni borrarlas. Tampoco puede borrar planes.
+- **Ciclo comercial.** Cada pago queda auditado (`payment.recorded`) con sus montos y si se cambió el sugerido; cada cambio de plan del catálogo, con sus valores anteriores y nuevos. Los cambios que aplica la tarea programada quedan atribuidos al sistema.
 - **Comprobación externa.** `bin/audit-verify.php` recorre la cadena y produce un anclaje (número de eventos y último hash) para guardarlo fuera del servidor. Solo ese anclaje externo detecta que alguien con todos los secretos restauró la base a un pasado válido.
 
 ## 11. Respaldos y restauración

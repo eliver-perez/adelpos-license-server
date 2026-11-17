@@ -1,8 +1,8 @@
 # Modelo de datos
 
-Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`, y [`006_editor_de_planes.sql`](database/migrations/006_editor_de_planes.sql), con el estado y la versión de cada plan. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
+Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`, [`006_editor_de_planes.sql`](database/migrations/006_editor_de_planes.sql), con el estado y la versión de cada plan, y [`007_cambios_programados.sql`](database/migrations/007_cambios_programados.sql), con los cambios de plan que entran en vigor al vencer lo pagado. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
-Al cerrar la etapa 2, el esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0 y ya no tiene nada del contenido firmado anterior. La sección 9 enumera lo que cambia en las etapas siguientes.
+Al cerrar la etapa 3, el esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0 y el ciclo comercial: precios, pagos y cambios programados. La sección 9 enumera lo que cambia en las etapas siguientes.
 
 ## 1. Convenciones
 
@@ -14,7 +14,7 @@ Al cerrar la etapa 2, el esquema guarda el modelo del [contrato de licencias](do
 
 ## 2. Tablas
 
-El esquema tiene **32 tablas**, más `schema_migrations`, que crea el migrador.
+El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 
 ### Administración y acceso
 
@@ -57,6 +57,7 @@ El esquema tiene **32 tablas**, más `schema_migrations`, que crea el migrador.
 | `license_changes` | Historial comercial con instantánea JSON | Versión única por licencia; solo inserción | `LicenseService` |
 | `license_administrative_changes` | Cambios de referencia y nota administrativa | Único por licencia, versión y campo; solo inserción | `LicenseService` |
 | `license_payments` | Historial comercial: cada pago de una licencia (alta, renovación, conversión, cambio de plan o mantenimiento), con fecha de pago, monto cobrado en MXN, precio de catálogo sugerido, bonificación, motivo si el monto se cambió, referencia, plazo y periodo que cubre, administrador y fecha de registro. Ver «Pagos» | Solo inserción. Una operación del panel registra a lo sumo un pago (`operation_id` único y llave foránea a `admin_operations`). `chk_payment_concept`, `chk_payment_term`, `chk_payment_trial`, `chk_payment_currency`, `chk_payment_amounts`, `chk_payment_suggestion`, `chk_payment_override`, `chk_payment_covers` | `Payments`, desde las operaciones comerciales |
+| `license_scheduled_changes` | Cambios de plan programados: instante en que entran en vigor, plan y cupos de destino, quién los programó y cómo terminaron (`applied`, `cancelled` o `replaced`) | Un solo pendiente por licencia (columna generada `pending_license_id` con índice único). `chk_scheduled_resolution`: un pendiente no tiene resolución; uno cancelado o sustituido dice quién lo resolvió. Cupos de 0 a 999. La aplicación solo actualiza el estado, la resolución y los cupos (que suben si el catálogo propaga un aumento del plan de destino) | `ScheduledChanges`, `CommercialService`, `PlanService`, `bin/apply-scheduled-changes.php` |
 | `license_documents` | Constancias PDF: folio, digest de verificación, datos públicos, instantánea y PDF cifrados, SHA-256 del PDF | Folio y digest únicos; `document_type` en `licensing`, `delivery`; solo inserción | `DocumentService` |
 
 #### Condiciones de una licencia
@@ -146,6 +147,7 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 | `SELECT, INSERT, DELETE` | `capability_dependencies`, `admin_permission_grants` |
 | `SELECT, INSERT, UPDATE, DELETE` | `admin_sessions`, `rate_limit_buckets`, `activation_challenges` |
 | `SELECT, INSERT` y `UPDATE` solo de `state`, `ended_at`, `current_revision_id`, `app_version` | `activations` |
+| `SELECT, INSERT` y `UPDATE` solo de `state`, `resolved_at`, `resolved_by` y los tres cupos | `license_scheduled_changes` |
 
 - En producción, `bin/preflight.php` comprueba que la cuenta **no** pueda modificar ni borrar las tablas de historia.
 - `tests/Integration/InitialSchemaTest.php` comprueba que los permisos cubren exactamente las tablas del esquema.
@@ -187,7 +189,7 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 
 ## 9. Pendiente para las etapas siguientes
 
-| Elemento del esquema | Estado al cerrar la etapa 2 | Etapa |
+| Elemento del esquema | Estado al cerrar la etapa 3 | Etapa |
 | --- | --- | --- |
 | `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | 4: transferencia por autoservicio |
 | `license_transfers` | Registra las transferencias y retiros que hace el propietario desde el panel | 4: transferencias por autoservicio, su confirmación y las alertas |

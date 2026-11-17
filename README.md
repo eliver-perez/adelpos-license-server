@@ -2,11 +2,12 @@
 
 Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es un proyecto independiente del punto de venta: emite, firma, revoca y audita licencias, y ofrece un panel privado para el propietario.
 
-- **Panel administrativo:** clientes, productos, licencias, solicitudes sin internet, constancias PDF, administradores y auditoría.
+- **Panel administrativo:** clientes, productos, catálogo de planes con precios, licencias, solicitudes sin internet, constancias PDF, administradores y auditoría.
+- **Ciclo comercial:** monto de alta, renovación, conversión de una prueba, cambio de plan con bonificación, cambios programados, mantenimiento de una perpetua y edición del periodo inicial, cada uno con su pago registrado en MXN.
 - **API `/v1`:** activación en línea con desafío y prueba de posesión, consulta de actualización y desactivación.
 - **Flujo sin internet:** el panel importa una solicitud `.licreq`, el propietario la aprueba y entrega un archivo `.lic` firmado.
 
-> **Estado: etapa 2 cerrada.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea y archivos sin internet. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para las etapas 3 a 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
+> **Estado: etapa 3 cerrada.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea y archivos sin internet. Desde la etapa 3 administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado**: precios y pagos, editor de planes, renovación, conversión, cambio de plan, mantenimiento y una tarea diaria que aplica las reducciones programadas. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para las etapas 4 y 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
 
 ## Requisitos
 
@@ -153,13 +154,13 @@ php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
 
 ## Pendiente para las etapas siguientes
 
-La etapa 2 no dejó nada del protocolo anterior. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:` y el servidor lo rechaza con un mensaje claro.
+La etapa 3 no dejó ninguna marca `PENDIENTE etapa 3`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:` y el servidor lo rechaza con un mensaje claro.
 
 | Qué falta | Etapa |
 | --- | --- |
-| Renovación de suscripciones con fecha de pago y regla de tolerancia, conversión de prueba a pago y compra de mantenimiento: **deshabilitadas**, el servidor las rechaza. Editor de planes y su propagación. Editar el periodo inicial de una suscripción sin activar | 3 |
 | Transferencia por autoservicio (`transfer`, `TRANSFER_LIMIT` y `transfer_available`), confirmación por la computadora anterior y alertas. Hoy las transferencias las hace solo el propietario desde el panel | 4 |
-| Pantallas definitivas del panel, diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
+| Pantallas definitivas del panel (las del ciclo comercial son mínimas), diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
+| Avisos a los clientes por cambios del catálogo (decisión 9 del propietario); pasarela de pagos, facturación e impuestos | Sin etapa asignada |
 
 ## Contrato
 

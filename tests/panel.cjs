@@ -411,6 +411,10 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		);
 		await screenshot('license-detail-activated-desktop');
 
+		// Ciclo comercial: renovar, subir de plan, programar y cancelar una reducción, convertir una prueba,
+		// comprar mantenimiento y propagar un aumento del catálogo.
+		await require('./commercial-panel.cjs')({ page, screenshot });
+
 		for (const route of [
 			'/admin/customers',
 			'/admin/products',
@@ -504,7 +508,8 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.deepEqual(errors, [], 'No JavaScript or console errors');
 		console.log(
 			'Panel OK: login, MFA, roles, CSRF/origin, issuance of the three license types, ' +
-				'renewal and maintenance refused, offline upload/review/approval/rejection/download, ' +
+				'commercial cycle (renewal, plan change with credit, scheduled reduction, trial conversion, ' +
+				'maintenance and catalog propagation), offline upload/review/approval/rejection/download, ' +
 				'forced transfer with reauthentication, signed deactivation and responsive navigation.',
 		);
 		console.log('Screenshots: var/screenshots (synthetic data, no credentials).');

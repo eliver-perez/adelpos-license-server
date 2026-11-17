@@ -2471,3 +2471,160 @@ Se quitaron **10 reglas** con `ContractFilesTest`: límite exclusivo de la toler
 | `generate-fixtures.php --check` | 17 licencias, 17 casos negativos, 7 de revisión, 40 de fechas, 8 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
 | Verificador de referencia en Go | OK en todos los casos |
 | Playwright | Sin cambios en el panel en esta fase; la última corrida (Fase 7) pasó |
+
+---
+
+## Etapa 3 · Fase 9 — Panel y cierre
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-9.1 Cifras por fase
+
+| Fase | Commit | Pruebas | Aserciones | Reglas comprobadas quitándolas una a la vez |
+| --- | --- | --- | --- | --- |
+| Partida (etapa 2) | `72b9098` | 377 | 27 440 | — |
+| 0 — Verificación y PHP 8.3 | `589b68c` | 377 | 27 440 | 1 (estilo de la `001`) |
+| 1 — Precios y pagos | `92e1c7f` | 385 | 27 603 | 23 |
+| 2 — Editor de planes | `520adb5` | 393 | 27 697 | 24 |
+| 3 — Renovación | `f2774b1` | 405 | 27 823 | 26 |
+| 4 — Conversión de prueba | `f8d19a6` | 409 | 27 865 | 16 |
+| 5 — Cambio de plan | `b2ab2e9` | 419 | 27 951 | 30 (28 y 2 etiquetas) |
+| 6 — Mantenimiento y periodo inicial | `8f3e3ae` | 424 | 27 997 | 18 |
+| 7 — Tarea programada | `fa76f62` | 430 | 28 041 | 12 |
+| 8 — Archivos del contrato | `3f3fae3` | 432 | 28 135 | 10 |
+| 9 — Panel y cierre | este commit | **432** | **28 135** | — (Playwright) |
+
+La etapa cierra con **55 pruebas más** que la etapa 2, en **PHP 8.5.7 y PHP 8.3.36**. Se quitaron **160 reglas**, una a la vez. **Seis no tenían ninguna prueba que las vigilara** (una en cada una de las fases 1, 2 y 3, dos en la 4 y una etiqueta en la 5); las seis tienen ahora la suya, y una llevó a unificar un cálculo duplicado. Otra (la perpetua de 0 meses en los archivos del contrato) ya la vigilaba `CalendarPeriodTest`.
+
+### E3-9.2 Pruebas nuevas y sustituidas
+
+Ninguna prueba se eliminó sin sustituto.
+
+| Fase | Nuevas | Sustituidas o con aserciones cambiadas | Motivo |
+| --- | --- | --- | --- |
+| 1 | `MoneyTest` (3), `PaymentsTest` (5) | 2 aserciones de `AdministrationTest` y 1 de `OfflineTest` | Contaban filas de `subscription_periods` y `maintenance_purchases`, que se reemplazaron por `license_payments` |
+| 2 | `PlanCatalogTest` (8) | 1 aserción de `ContractDataModelTest` | La cuenta de la aplicación ya inserta y actualiza planes |
+| 3 | `RenewalDatesTest` (5), `RenewalTest` (7) | 3 pruebas (`OfflineTest`, `ActivationsTest`, `AdministrationTest`) | Comprobaban que la renovación estaba deshabilitada |
+| 4 | `ConversionTest` (4) | — | — |
+| 5 | `CreditTest` (2), `PlanChangeTest` (8) | `AuditLabelsTest` revisa también el historial | Las operaciones nuevas se registran con `LicenseHistory` |
+| 6 | `MaintenanceTest` (5) | 1 prueba (`AdministrationTest`) | Comprobaba que el mantenimiento estaba deshabilitado |
+| 7 | `ScheduledChangesTest` (6) | — | — |
+| 8 | 2 en `ContractFilesTest` | Lista de licencias y cifras de los archivos | 6 licencias, 1 caso de revisión, 16 de fechas y 8 de bonificación nuevos |
+| 9 | `tests/commercial-panel.cjs` (Playwright) | `prepare-panel.php` activa también una suscripción y una prueba | Recorrido del ciclo comercial |
+
+### E3-9.3 Qué se hizo en esta fase
+
+- **Playwright:** `tests/commercial-panel.cjs` recorre renovar (con la vista previa y el monto sugerido), subir de plan con la bonificación visible, programar y cancelar una reducción, convertir una prueba, comprar mantenimiento y editar el catálogo propagando un aumento («Licencias actualizadas: 2. Revisiones firmadas: 2.»).
+- **Marcas:** cero `PENDIENTE etapa 3` (se resolvieron entre las fases 3 y 6). Quedan 4 de la etapa 4 y 1 de la etapa 5.
+- **Documentos:** `README.md`, `ARCHITECTURE.md` (sección 11 nueva, «Ciclo comercial»), `SCHEMA.md`, `SECURITY.md`, `OPERATIONS.md`, `TEST_PLAN.md` y `contracts/v1/README.md` describen la etapa 3 cerrada.
+- **`DECISIONS.md`:** sección 11 (decisiones del propietario), sección 9 con las propuestas V1.1 n.º 21 a 32, y sección 12 con las decisiones técnicas de cada fase.
+- **Paquete de despliegue:** generado y revisado: 153 archivos más `RELEASE.json` (eran 133). Incluye `bin/apply-scheduled-changes.php` y las migraciones `005` a `007`; no incluye pruebas, archivos de prueba del contrato, llaves, configuración local ni `var/`.
+- **Datos sintéticos:** después de todas las corridas no queda ninguna base ni usuario `adelpos_license_test_*`.
+
+### E3-9.4 Consultas al propietario
+
+Se trabajaron las fases 0 a 9 sin detenerse, como se pidió. Nada obligó a modificar el contrato, ninguna prueba se hizo pasar debilitando una regla y no hizo falta ninguna acción fuera del repositorio, salvo instalar PHP 8.3.
+
+**Propuestas V1.1 nuevas** (ambigüedades del contrato o de la especificación). Se aplicó el criterio más conservador y coherente con el contrato; todas se pueden revertir sin tocarlo.
+
+| N.º | Sección | Qué no queda definido | Criterio aplicado | Alternativa |
+| --- | --- | --- | --- | --- |
+| 23 | §4, §5.3 | `period_starts_at` de una suscripción renovada | La base de la renovación: el vencimiento anterior si pagó a tiempo, o la fecha de pago. En una renovación anticipada queda en el futuro hasta que termina el periodo anterior | Conservar el inicio del periodo en curso y cambiar solo el vencimiento |
+| 24 | §5.3 | Límites de la fecha de pago | No puede ser futura ni anterior al último pago de la licencia | Aceptar cualquier fecha pasada |
+| 25 | §5.3, §9.1 | Renovar al aprobar el `renew` de una computadora que ya liberó la licencia | Se rechaza; la computadora recibe su cierre y la renovación se registra desde el detalle | Registrar la renovación y entregar el cierre |
+| 26 | §4, §5.4 | `period_starts_at` de una prueba convertida en perpetua | La fecha de pago de la conversión (§5.4), desde la que cuentan las actualizaciones | La activación original de la prueba (§4: «en perpetua, la activación») |
+| 27 | Decisión 6 | Bonificación con un pago anterior al inicio del periodo vigente (renovación anticipada) | Nunca más de lo pagado por ese periodo; lo que faltaba del periodo anterior no se bonifica | Sumar la parte proporcional del periodo anterior |
+| 28 | Decisión 6 | «Monto pagado» de un periodo que ya se pagó con bonificación | El monto cobrado, sin la bonificación anterior | El monto cobrado más la bonificación aplicada (valor completo del periodo) |
+| 29 | Decisiones 6 y 7 | Cambio que no sube ningún cupo pero cambia el plan | Suscripción: se programa al vencimiento. Perpetua: se rechaza | Aplicarlo de inmediato y sin cobro |
+| 30 | §4, decisión 8 | Qué firma una licencia que espera la reducción de un cambio mixto | El plan nuevo con `custom: false` y el número mayor de los cupos que bajan | Firmar `custom: true` hasta que se aplique la reducción |
+| 31 | Decisión 6, §5.3 | Pagos registrados después del vencimiento | Decide la fecha de pago. Una reducción pura pedida ya vencida es una renovación con plan nuevo y su cobro | Decidir por el momento del registro |
+| 32 | §5.2 | Si editar el periodo inicial registra un pago | No registra ninguno | Capturar un pago de ajuste |
+
+**Decisiones que van más allá de la especificación:**
+
+| # | Decisión | Por qué | Cómo revertirla |
+| --- | --- | --- | --- |
+| E | Un plan nunca se borra, aunque nadie lo use: solo se archiva. La cuenta de la aplicación no tiene `DELETE` sobre `plans` | Los pagos y el historial lo nombran | Agregar el permiso y una acción de borrar planes sin licencias ni pagos |
+| F | El motivo del cambio de monto se rechaza si el monto es el sugerido o no hay sugerencia (el formulario lo deshabilita) | Un dato que no corresponde no se ignora en silencio | Aceptarlo y guardarlo como nota |
+| G | Una prueba registra un pago de alta de 0 | Toda licencia tiene su pago de alta | No registrar pago en las pruebas |
+| H | En el editor de planes, la opción preseleccionada es «solo licencias nuevas» | Que una propagación nunca ocurra sin elegirla | Preseleccionar la otra o no preseleccionar ninguna |
+| I | Montos de hasta 99,999,999.99 MXN, escritos sin comas ni signo de pesos | Cabe en `DECIMAL(10,2)` y en el cálculo entero de la bonificación | Ampliar la columna y aceptar separadores |
+
+**Observaciones:**
+
+- **PHP 8.3.** Para instalarlo, Homebrew actualizó 27 bibliotecas compartidas del equipo (E3-0.2). PHP 8.5, Nginx, OpenSSL y pdftotext siguen funcionando.
+- **Falla intermitente.** `TrustedDevicesHttpTest` (etapa 1, con Nginx, PHP-FPM y TLS reales) falló una vez en cada versión de PHP durante la Fase 6, y nunca más en las corridas siguientes. Esas corridas coincidieron con una carga muy alta del equipo: dos emuladores de Android activos llevaron la carga promedio hasta 250 en la Fase 7. No se cambió la prueba.
+
+### E3-9.5 Criterios de aceptación
+
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| La suite pasa también en PHP 8.3, con resultado registrado | Cumplido | E3-0.2 y cada fase; final: 432 pruebas en 8.3.36 |
+| Precios opcionales y registro de pagos de solo inserción, con cada operación comercial registrada | Cumplido | `PaymentsTest` y las pruebas de cada operación |
+| El editor propaga solo aumentos y solo cuando se elige; las reducciones del catálogo nunca alcanzan licencias existentes | Cumplido | `PlanCatalogTest` |
+| La renovación cumple §5.3, con día ancla, cambio de duración y la vía sin internet | Cumplido | `RenewalDatesTest`, `RenewalTest`, `OfflineTest` |
+| La conversión de prueba funciona a cualquier tipo y plan, desde la fecha de pago | Cumplido | `ConversionTest` |
+| Bonificación sugerida exacta, aumentos inmediatos, reducciones al vencimiento pagado; la perpetua solo sube pagando la diferencia | Cumplido | `CreditTest`, `PlanChangeTest` |
+| Mantenimiento anual y encadenable; periodo inicial editable antes de activar | Cumplido | `MaintenanceTest` |
+| Tarea programada idempotente y segura ante concurrencia | Cumplido | `ScheduledChangesTest` |
+| Los archivos de prueba nuevos pasan el verificador Go | Cumplido | 17 licencias y 7 casos de revisión |
+| El contenido firmado no cambia de formato y el contrato no se modificó | Cumplido | `license.schema.json` sin cambios; `StageClosureTest` (SHA-256 del contrato) |
+| Cero `PENDIENTE etapa 3`; pasan la suite, Playwright, secretos, formato y paquete | Cumplido | E3-9.7 |
+
+### E3-9.6 Pendientes para las etapas 4 y 5
+
+**Etapa 4 — Transferencia por autoservicio y alertas**
+
+- Ruta `POST /v1/activations/transfer`, acción `transfer` del desafío, `TRANSFER_LIMIT`, `transfer_available` calculado y confirmación por la computadora anterior.
+- Alertas del panel: transferencia pendiente y más de una transferencia en 12 meses, incluidas las del propietario.
+- `transfer` en `openapi.yaml`.
+- **Contrato `_v2`** al cerrar la etapa, con las propuestas V1.1 n.º 1 a 32 que el propietario apruebe (las n.º 23 a 32 están pendientes de su respuesta).
+
+**Etapa 5 — Panel definitivo y despliegue**
+
+- Pantallas definitivas, también del ciclo comercial (las de esta etapa son mínimas), y diseño final de las constancias, que podrían incluir los pagos.
+- `limit_req` de Nginx para la API.
+- Despliegue en `licensing.sicrat.com` con `APP_ENV=production` y `LICENSE_ENVIRONMENT=test`, con la tarea diaria que ya incluye `bin/apply-scheduled-changes.php`.
+
+**Sin etapa asignada:** avisos a los clientes por cambios del catálogo (decisión 9 del propietario); pasarela de pagos, facturación e impuestos.
+
+### E3-9.7 Comandos para reproducir la verificación
+
+```sh
+# Suite completa contra MySQL 8.0.46 aislado (432 pruebas, 28 135 aserciones), con las variables TEST_* de E2-9.7
+php vendor/bin/phpunit
+
+# La misma suite en PHP 8.3
+env TEST_FPM_BIN=/opt/homebrew/opt/php@8.3/sbin/php-fpm … /opt/homebrew/opt/php@8.3/bin/php vendor/bin/phpunit
+
+# Archivos del contrato
+php contracts/v1/generate-fixtures.php --check
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go run -C contracts/v1/verify . ../fixtures/vectors.json
+
+# Panel y dispositivos de confianza con Playwright (mismas variables TEST_*)
+php tests/run-panel-tests.php all
+
+# Formato, secretos y paquete
+npm run format:check
+php bin/check-secrets.php
+php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
+
+# Marcas: sin pendientes de la etapa 3
+git grep -n "PENDIENTE etapa" -- src bin templates
+```
+
+**Resultado de la verificación final (2026-11-17):**
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 432 pruebas, 28 135 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 432 pruebas, 28 135 aserciones, todas OK |
+| `generate-fixtures.php --check` | 17 licencias, 17 casos negativos, 7 de revisión, 40 de fechas, 8 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go | OK en todos los casos |
+| Playwright | Panel (con el ciclo comercial), sin internet y dispositivos de confianza OK; datos sintéticos eliminados |
+| `npm run format:check` | Sin diferencias |
+| `bin/check-secrets.php` | Sin hallazgos |
+| `bin/build-release.php` | 153 archivos más `RELEASE.json` |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+| Marcas `PENDIENTE etapa 3` | 0 |
+| Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |

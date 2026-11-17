@@ -2,11 +2,10 @@
 
 Cómo configurar, operar, respaldar y verificar el servidor. La instalación paso a paso en Ubuntu 24.04 está en [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md); las decisiones, en [DECISIONS.md](DECISIONS.md); el contrato con AD-EL POS, en [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
 
-> **Estado: etapa 2 cerrada.** El servidor firma, recibe y devuelve lo que define el contrato V1.0. Lo que todavía no existe, y en qué etapa llega:
+> **Estado: etapa 3 cerrada.** El servidor firma, recibe y devuelve lo que define el contrato V1.0, y administra el ciclo comercial de cada licencia: pagos, planes, renovación, conversión, cambio de plan, mantenimiento y cambios programados. Lo que todavía no existe, y en qué etapa llega:
 >
 > | Etapa | Qué cambia en la operación |
 > | --- | --- |
-> | 3 | Renovación con fecha de pago, conversión de prueba a pago, compra de mantenimiento, editor de planes y su propagación |
 > | 4 | Transferencia por autoservicio y alertas |
 > | 5 | Pantallas definitivas del panel, diseño final de las constancias y despliegue en el VPS |
 
@@ -111,7 +110,15 @@ Todo se hace en el panel:
   - **Las fechas empiezan al activar.** Una licencia emitida no tiene vencimiento asignado; el panel muestra «Empieza al activar». El primer periodo empieza cuando el servidor confirma la primera activación en línea, o cuando se aprueba la primera solicitud sin internet. Si después se activa en otra computadora, conserva sus fechas.
   - **El detalle de la licencia** muestra tipo, plan, cupos, inicio, vencimiento y fin de actualizaciones, en la zona horaria del cliente, y el motivo de cierre de cada revisión firmada: licencia liberada, transferida a otra computadora o revocada por el propietario.
   - **Una computadora principal a la vez.** Para pasarla a otra computadora, la primera libera la licencia, o el propietario la transfiere desde el panel.
-  - **Renovar y registrar mantenimiento: disponibles próximamente.** El panel no los ofrece y el servidor los rechaza aunque se pidan directamente (etapa 3).
+  - **Al emitir se registra el pago de alta,** en MXN y tal como se cobró. El panel sugiere el precio del catálogo del plan y del plazo; si el monto es otro, pide el motivo. Una licencia personalizada, o un plan sin precio, pide el monto a mano. Una prueba vale 0.
+- **Ciclo comercial** (etapa 3), desde el detalle de la licencia. Cada operación muestra primero una revisión con las fechas nuevas y el monto sugerido, y después se confirma con el monto cobrado:
+  - **Renovar** una suscripción activada: si paga antes de que termine la tolerancia, el periodo nuevo empieza en el vencimiento; si no, en la fecha de pago. Conserva sus cupos y puede cambiar la duración.
+  - **Convertir** una prueba en suscripción o perpetua, con cualquier plan: desde la fecha de pago, sin bonificación.
+  - **Cambiar de plan o de cupos:** subir aplica de inmediato con un periodo nuevo desde la fecha de pago y una bonificación por lo que faltaba; bajar queda programado para el vencimiento y se puede cancelar en «Cambio programado». Una perpetua solo sube, pagando la diferencia de los precios perpetuos. En una prueba es libre.
+  - **Comprar mantenimiento** de una perpetua activada: 12 meses desde la fecha posterior entre el pago y el fin de las actualizaciones.
+  - **Editar el periodo inicial** de una licencia sin activar: tipo, condición, plan y cupos. No registra un pago.
+  - Cada pago queda en la tabla **Pagos** del detalle, que no se puede editar ni borrar.
+- **Planes** (solo el superadministrador): crear, editar nombre, cupos y precios en MXN, y archivar. Al guardar cupos nuevos se elige si aplican solo a licencias nuevas o también a las existentes que siguen el plan; en las existentes solo suben, y el panel muestra cuántas licencias se actualizaron y cuántas revisiones se firmaron. Un plan archivado ya no se ofrece al emitir.
 - **Clientes:** cada cliente tiene una zona horaria, que se elige de una lista en su ficha (por omisión `America/Monterrey`). Con ella se calculan y se muestran las fechas de sus licencias. Cambiarla no modifica fechas ya firmadas.
 - **Solicitudes sin internet:**
   - importar un `.licreq` (máximo 64 KiB);
@@ -121,7 +128,7 @@ Todo se hace en el panel:
 
   Importar no concede nada: solo la aprobación entrega un archivo.
   - **Activar:** el propietario elige la licencia. Si esa misma computadora ya la tiene activa, recibe su archivo vigente.
-  - **Renovar (`renew`):** entrega el archivo vigente de la licencia, tal como está firmado. Sirve después de un cambio de módulos. Registrar una renovación llega en la etapa 3.
+  - **Renovar (`renew`):** entrega el archivo vigente de la licencia, tal como está firmado (sirve después de cualquier cambio), o registra ahí mismo la renovación con su pago y entrega la revisión nueva, si la computadora sigue activa.
   - **Desactivar:** libera la licencia y entrega la revisión de cierre.
   - Una computadora cuya activación ya terminó, o cuya licencia fue revocada, recibe su revisión de cierre: así se entera sin internet.
 - **Recuperación de equipo averiado:** retira la licencia de esa computadora con autorización excepcional; queda firmada como transferida. La firma no demuestra que se hayan borrado copias del equipo anterior.

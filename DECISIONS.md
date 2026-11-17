@@ -163,6 +163,21 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 21 | §11 | **Sustituye** la frase «aplica a licencias nuevas o en su siguiente renovación». Al renovar, la licencia conserva sus números: un cambio en el catálogo **nunca reduce** las licencias existentes, ni siquiera al renovar. Los aumentos del catálogo se aplican a las existentes solo si el propietario lo elige al guardar. Cómo avisar al cliente de los cambios de catálogo se decide después. | Decisión del propietario (sección 11, decisión 9) |
 | 22 | §5.3, §5.4, §5.5, §11 | Reglas comerciales: precios opcionales en MXN y registro del monto cobrado, sin IVA ni facturas; mantenimiento de una perpetua solo por 12 meses; una prueba se convierte en cualquier tipo y plan; subir de plan con bonificación (suscripción) o pagando la diferencia (perpetua); bajar de plan al vencer lo pagado, y una perpetua no baja; cambios mixtos cupo por cupo. | Decisión del propietario (sección 11, decisiones 3 a 8) |
 
+**Propuestas encontradas al implementar la etapa 3.** Se aplicaron con el criterio más conservador y coherente con el contrato para no detener el trabajo, y **están pendientes de la aprobación del propietario**. Ninguna modifica el contrato y todas se pueden revertir. El detalle, con su alternativa, está en AVANCE.md, sección E3-9.4. La propuesta n.º 6 (casos de renovación en `contracts/v1/fixtures/` en la etapa 3) quedó cumplida en la Fase 8.
+
+| N.º | Sección | Qué no queda definido | Criterio aplicado |
+| --- | --- | --- | --- |
+| 23 | §4, §5.3 | `period_starts_at` de una suscripción renovada. | La base de la renovación: el vencimiento anterior si pagó a tiempo, o la fecha de pago. En una renovación anticipada queda en el futuro hasta que termina el periodo anterior. |
+| 24 | §5.3 | Límites de la fecha de pago. | No puede ser futura ni anterior al último pago registrado de la licencia. |
+| 25 | §5.3, §9.1 | Registrar una renovación al aprobar un `renew` de una computadora que ya liberó la licencia. | Se rechaza: esa computadora recibe su cierre, y la renovación se registra desde el detalle de la licencia. |
+| 26 | §4, §5.4 | `period_starts_at` de una prueba convertida en perpetua (§4 dice «la activación»; §5.4, «el nuevo periodo empieza en la fecha de pago»). | La fecha de pago de la conversión, desde la que se cuentan las actualizaciones. |
+| 27 | Decisión 6 | Bonificación cuando el pago es anterior al inicio del periodo vigente (por ejemplo, después de una renovación anticipada). | Se acota al periodo: nunca más de lo pagado por él. Lo que faltaba del periodo anterior no se bonifica. |
+| 28 | Decisión 6 | «Monto pagado del periodo» cuando ese pago ya llevaba una bonificación. | El monto cobrado, sin sumar la bonificación anterior. |
+| 29 | Decisiones 6 y 7 | Un cambio que no sube ningún cupo pero cambia el plan (mismos números u otra marca de personalizada). | En una suscripción se programa para el vencimiento; en una perpetua se rechaza. |
+| 30 | §4, decisión 8 | Qué firma una licencia que espera la reducción de un cambio mixto. | El plan nuevo con `custom: false` y el número mayor de los cupos que bajan, hasta que la reducción se aplica. |
+| 31 | Decisión 6, §5.3 | Pagos registrados después del vencimiento. | Decide la fecha de pago: pagado antes del vencimiento es cambio de plan con bonificación; después, renovación con plan nuevo. Una reducción pura que se pide ya vencida es una renovación con plan nuevo y su cobro. |
+| 32 | §5.2 | Si editar el periodo inicial registra un pago. | No registra ninguno: es una corrección antes de activar. |
+
 ## 10. Decisiones técnicas de la etapa 2
 
 ### Fase 1 — Entornos de firma
@@ -423,3 +438,13 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 2 | Las fechas del ciclo comercial (`dates.renewal`, `dates.conversion`, `dates.maintenance`) y las bonificaciones (`credits`) llevan entradas y resultados escritos a mano. `ContractFilesTest` los reproduce con `CalendarPeriod::renewal()`, `firstPeriod()`, `maintenance()` y `Domain\Credit`. | Igual que en la etapa 2 (Fase 7, decisión 6): si el generador usara el servidor, un error del servidor se copiaría a los archivos. |
 | 3 | El verificador en Go no calcula fechas ni bonificaciones: acepta las licencias nuevas y el caso de revisión de la renovación. | Las fechas las calcula únicamente el servidor (contrato §5, y etapa 2, Fase 7, decisión 7). La bonificación tampoco es una regla del cliente. |
 | 4 | `openapi.yaml` y `license.schema.json` no cambian. | Especificación, Fase 8, punto 4: esta etapa no agrega rutas ni campos. Con esto queda resuelta la propuesta V1.1 n.º 6 (casos de renovación en la etapa 3). |
+
+### Fase 9 — Panel y cierre
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | Pantallas mínimas: «Planes» con su lista y su formulario; en el detalle de la licencia, las tarjetas de renovar, convertir, cambiar de plan, cambio programado (con cancelar), mantenimiento y periodo inicial, cada una con su pantalla de revisión; y la tabla «Pagos». Las fechas de una licencia, en la zona de su cliente. | Especificación, Fase 9, punto 1. Las pantallas definitivas son de la etapa 5. |
+| 2 | Las licencias sintéticas de Playwright (`tests/prepare-panel.php`) son ahora una perpetua, una suscripción y una prueba, las tres activadas, y `tests/commercial-panel.cjs` recorre con ellas el ciclo comercial. La activación usa el mismo ayudante que la suite (`tests/Installation.php`). | Especificación, Fase 9, punto 2. |
+| 3 | El paquete de despliegue incluye `bin/apply-scheduled-changes.php` (todo lo versionado en `bin/` entra) y la tarea diaria lo ejecuta. | La tarea programada debe correr en el VPS. |
+| 4 | Sin dependencias nuevas en toda la etapa: ni de Composer ni de npm. | — |
+
