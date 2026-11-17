@@ -43,6 +43,7 @@
         {
             "name": "perpetual-0-months",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -82,6 +83,7 @@
         {
             "name": "perpetual-6-months",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -121,6 +123,7 @@
         {
             "name": "perpetual-12-months",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -160,6 +163,7 @@
         {
             "name": "subscription-monthly",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -199,6 +203,7 @@
         {
             "name": "subscription-annual",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -238,6 +243,7 @@
         {
             "name": "trial-15-days",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -277,6 +283,7 @@
         {
             "name": "custom",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -318,6 +325,7 @@
         {
             "name": "closing-deactivated",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -357,6 +365,7 @@
         {
             "name": "closing-transferred",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -396,6 +405,7 @@
         {
             "name": "closing-revoked",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -435,6 +445,7 @@
         {
             "name": "renewed-subscription",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -474,6 +485,7 @@
         {
             "name": "trial-converted-to-subscription",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -513,6 +525,7 @@
         {
             "name": "trial-converted-to-perpetual",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -552,6 +565,7 @@
         {
             "name": "perpetual-with-maintenance",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -591,6 +605,7 @@
         {
             "name": "plan-upgrade",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -630,6 +645,7 @@
         {
             "name": "scheduled-reduction-applied",
             "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -667,8 +683,129 @@
             "sha256": "e0d6167a4177e3c8080112efce6a807d077938f869fa6cdc71d6a2b775ebb5fe"
         },
         {
+            "name": "self-service-transfer-before",
+            "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000012",
+                "activation_id": "30000000-0000-4000-8000-000000000012",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "monthly",
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 1,
+                "issued_at": "2026-11-16T06:30:00.000000Z",
+                "period_starts_at": "2026-11-16T06:30:00.000000Z",
+                "expires_at": "2026-12-16T06:30:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2026-12-16T06:30:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000012\",\"activation_id\":\"30000000-0000-4000-8000-000000000012\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"monthly\",\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":1,\"issued_at\":\"2026-11-16T06:30:00.000000Z\",\"period_starts_at\":\"2026-11-16T06:30:00.000000Z\",\"expires_at\":\"2026-12-16T06:30:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2026-12-16T06:30:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEyIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MSwiaXNzdWVkX2F0IjoiMjAyNi0xMS0xNlQwNjozMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.KhXtHR5Pw7nvXOwpMSL7UpQcZA7_Hrnpb_0FJz8xHPB494UFYNt3OVUu7xLnrdc0aSeN7N8jE58Phae99DXDDw",
+            "sha256": "706da9b00ba9b8299cc4c3e89ef31867e5e2ee454ee4bc53163daf68bab45986"
+        },
+        {
+            "name": "self-service-transfer-closing",
+            "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000012",
+                "activation_id": "30000000-0000-4000-8000-000000000012",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "monthly",
+                "license_status": "revoked",
+                "status_reason": "transferred",
+                "license_revision": 2,
+                "issued_at": "2026-11-20T18:00:00.000000Z",
+                "period_starts_at": "2026-11-16T06:30:00.000000Z",
+                "expires_at": "2026-12-16T06:30:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2026-12-16T06:30:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000012\",\"activation_id\":\"30000000-0000-4000-8000-000000000012\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"monthly\",\"license_status\":\"revoked\",\"status_reason\":\"transferred\",\"license_revision\":2,\"issued_at\":\"2026-11-20T18:00:00.000000Z\",\"period_starts_at\":\"2026-11-16T06:30:00.000000Z\",\"expires_at\":\"2026-12-16T06:30:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2026-12-16T06:30:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEyIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoicmV2b2tlZCIsInN0YXR1c19yZWFzb24iOiJ0cmFuc2ZlcnJlZCIsImxpY2Vuc2VfcmV2aXNpb24iOjIsImlzc3VlZF9hdCI6IjIwMjYtMTEtMjBUMTg6MDA6MDAuMDAwMDAwWiIsInBlcmlvZF9zdGFydHNfYXQiOiIyMDI2LTExLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwiZ3JhY2VfZGF5cyI6NSwidXBkYXRlc191bnRpbCI6IjIwMjYtMTItMTZUMDY6MzA6MDAuMDAwMDAwWiIsInBsYW4iOnsicGxhbl9pZCI6ImVsZW1lbnRhbCIsIm5hbWUiOiJQbGFuIGVsZW1lbnRhbCIsImN1c3RvbSI6ZmFsc2V9LCJsaW1pdHMiOnsiY2FzaF9yZWdpc3RlcnMiOjMsIm9yZGVyX3Rha2VycyI6Mywia2l0Y2hlbl9kaXNwbGF5cyI6M30sImZlYXR1cmVzIjp7fX0.YWbHCS8lBgoEtiBHulXoORamZJlHLYbb9L431_DX9yP2YP95nJbIN1wcOVB9xojzEGePU9_2FSEn8zdQ37yWAQ",
+            "sha256": "8ccc48c8ecee4a16eac357c1db15ace5859f671d2612e8ae99d3cf8b6483dad2"
+        },
+        {
+            "name": "self-service-transfer-new",
+            "kid": "adelpos-test-fixture-a",
+            "installation": "installation-fixture-b",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000012",
+                "activation_id": "30000000-0000-4000-8000-000000000013",
+                "server_id": "66666666-6666-4666-8666-666666666666",
+                "installation_public_key": "88DSX21qf4AdkKhRCjebQQ1lLOgE9Zq0onmMuJWf8d8",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "monthly",
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 3,
+                "issued_at": "2026-11-20T18:00:00.000000Z",
+                "period_starts_at": "2026-11-16T06:30:00.000000Z",
+                "expires_at": "2026-12-16T06:30:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2026-12-16T06:30:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000012\",\"activation_id\":\"30000000-0000-4000-8000-000000000013\",\"server_id\":\"66666666-6666-4666-8666-666666666666\",\"installation_public_key\":\"88DSX21qf4AdkKhRCjebQQ1lLOgE9Zq0onmMuJWf8d8\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"monthly\",\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":3,\"issued_at\":\"2026-11-20T18:00:00.000000Z\",\"period_starts_at\":\"2026-11-16T06:30:00.000000Z\",\"expires_at\":\"2026-12-16T06:30:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2026-12-16T06:30:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEzIiwic2VydmVyX2lkIjoiNjY2NjY2NjYtNjY2Ni00NjY2LTg2NjYtNjY2NjY2NjY2NjY2IiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiI4OERTWDIxcWY0QWRrS2hSQ2plYlFRMWxMT2dFOVpxMG9ubU11SldmOGQ4IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MywiaXNzdWVkX2F0IjoiMjAyNi0xMS0yMFQxODowMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.BJUTQO0-6ZLaaPR8Cr7g4mCKhInRIGOMkTt-Zkh2hqKPb9vPTEM3RhWYDqt3eCuoA9yOaGB0G05OCOpJnTkaDw",
+            "sha256": "44ea093442f323ca6a31fca6137e8c45cca8c8a76ad7eeb6f42a52c7b7a29448"
+        },
+        {
             "name": "rotated-key",
             "kid": "adelpos-test-fixture-b",
+            "installation": "installation-fixture-a",
             "content": {
                 "schema_version": "1.0",
                 "product_id": "adel_pos",
@@ -899,6 +1036,7 @@
         {
             "name": "first-license",
             "description": "No había ninguna licencia aceptada.",
+            "installation": "installation-fixture-a",
             "accepted": null,
             "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJhY3RpdmF0aW9uX2lkIjoiMzMzMzMzMzMtMzMzMy00MzMzLTgzMzMtMzMzMzMzMzMzMzMzIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MSwiaXNzdWVkX2F0IjoiMjAyNi0xMS0xNlQwNjozMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.Z7Zmf6KQOl31qnyVLCQNuO1YpStFFJ8UzDxwglWAHgqBTz47rEWouxllALEAWWAxCCgIpnibAKxr5zV-97L6Cg",
             "expected": "accepted"
@@ -906,6 +1044,7 @@
         {
             "name": "higher-revision",
             "description": "Llega la revisión 2 después de aceptar la 1.",
+            "installation": "installation-fixture-a",
             "accepted": {
                 "license_id": "11111111-1111-4111-8111-111111111111",
                 "license_revision": 1,
@@ -917,6 +1056,7 @@
         {
             "name": "same-revision-identical-bytes",
             "description": "La misma revisión, idéntica byte por byte, se vuelve a aceptar.",
+            "installation": "installation-fixture-a",
             "accepted": {
                 "license_id": "11111111-1111-4111-8111-111111111111",
                 "license_revision": 1,
@@ -928,6 +1068,7 @@
         {
             "name": "same-revision-other-bytes",
             "description": "La misma revisión con otro contenido se rechaza.",
+            "installation": "installation-fixture-a",
             "accepted": {
                 "license_id": "11111111-1111-4111-8111-111111111111",
                 "license_revision": 1,
@@ -939,6 +1080,7 @@
         {
             "name": "lower-revision",
             "description": "Llega la revisión 1 después de aceptar la 2: no se retrocede.",
+            "installation": "installation-fixture-a",
             "accepted": {
                 "license_id": "11111111-1111-4111-8111-111111111111",
                 "license_revision": 2,
@@ -950,6 +1092,7 @@
         {
             "name": "renewal-same-activation",
             "description": "Llega la renovación (revisión 2, misma activación) después de aceptar la revisión 1.",
+            "installation": "installation-fixture-a",
             "accepted": {
                 "license_id": "10000000-0000-4000-8000-000000000005",
                 "license_revision": 1,
@@ -961,6 +1104,7 @@
         {
             "name": "other-license-is-independent",
             "description": "La revisión aceptada de otra licencia no cuenta.",
+            "installation": "installation-fixture-a",
             "accepted": {
                 "license_id": "10000000-0000-4000-8000-000000000002",
                 "license_revision": 2,
@@ -968,6 +1112,38 @@
             },
             "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEiLCJhY3RpdmF0aW9uX2lkIjoiMzMzMzMzMzMtMzMzMy00MzMzLTgzMzMtMzMzMzMzMzMzMzMzIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MSwiaXNzdWVkX2F0IjoiMjAyNi0xMS0xNlQwNjozMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.Z7Zmf6KQOl31qnyVLCQNuO1YpStFFJ8UzDxwglWAHgqBTz47rEWouxllALEAWWAxCCgIpnibAKxr5zV-97L6Cg",
             "expected": "accepted"
+        },
+        {
+            "name": "transfer-new-installation-first-revision",
+            "description": "La computadora nueva acepta su primera revisión (3) de una licencia que ya tenía revisiones.",
+            "installation": "installation-fixture-b",
+            "accepted": null,
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEzIiwic2VydmVyX2lkIjoiNjY2NjY2NjYtNjY2Ni00NjY2LTg2NjYtNjY2NjY2NjY2NjY2IiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiI4OERTWDIxcWY0QWRrS2hSQ2plYlFRMWxMT2dFOVpxMG9ubU11SldmOGQ4IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MywiaXNzdWVkX2F0IjoiMjAyNi0xMS0yMFQxODowMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.BJUTQO0-6ZLaaPR8Cr7g4mCKhInRIGOMkTt-Zkh2hqKPb9vPTEM3RhWYDqt3eCuoA9yOaGB0G05OCOpJnTkaDw",
+            "expected": "accepted"
+        },
+        {
+            "name": "transfer-old-installation-closing",
+            "description": "La computadora anterior acepta su cierre «transferred» (revisión 2), mayor que su revisión 1.",
+            "installation": "installation-fixture-a",
+            "accepted": {
+                "license_id": "10000000-0000-4000-8000-000000000012",
+                "license_revision": 1,
+                "sha256": "706da9b00ba9b8299cc4c3e89ef31867e5e2ee454ee4bc53163daf68bab45986"
+            },
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEyIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoicmV2b2tlZCIsInN0YXR1c19yZWFzb24iOiJ0cmFuc2ZlcnJlZCIsImxpY2Vuc2VfcmV2aXNpb24iOjIsImlzc3VlZF9hdCI6IjIwMjYtMTEtMjBUMTg6MDA6MDAuMDAwMDAwWiIsInBlcmlvZF9zdGFydHNfYXQiOiIyMDI2LTExLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJleHBpcmVzX2F0IjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwiZ3JhY2VfZGF5cyI6NSwidXBkYXRlc191bnRpbCI6IjIwMjYtMTItMTZUMDY6MzA6MDAuMDAwMDAwWiIsInBsYW4iOnsicGxhbl9pZCI6ImVsZW1lbnRhbCIsIm5hbWUiOiJQbGFuIGVsZW1lbnRhbCIsImN1c3RvbSI6ZmFsc2V9LCJsaW1pdHMiOnsiY2FzaF9yZWdpc3RlcnMiOjMsIm9yZGVyX3Rha2VycyI6Mywia2l0Y2hlbl9kaXNwbGF5cyI6M30sImZlYXR1cmVzIjp7fX0.YWbHCS8lBgoEtiBHulXoORamZJlHLYbb9L431_DX9yP2YP95nJbIN1wcOVB9xojzEGePU9_2FSEn8zdQ37yWAQ",
+            "expected": "accepted"
+        },
+        {
+            "name": "transfer-new-revision-is-not-for-the-old-installation",
+            "description": "La revisión de la computadora nueva no sirve en la anterior: es de otra instalación.",
+            "installation": "installation-fixture-a",
+            "accepted": {
+                "license_id": "10000000-0000-4000-8000-000000000012",
+                "license_revision": 1,
+                "sha256": "706da9b00ba9b8299cc4c3e89ef31867e5e2ee454ee4bc53163daf68bab45986"
+            },
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTIiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEzIiwic2VydmVyX2lkIjoiNjY2NjY2NjYtNjY2Ni00NjY2LTg2NjYtNjY2NjY2NjY2NjY2IiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiI4OERTWDIxcWY0QWRrS2hSQ2plYlFRMWxMT2dFOVpxMG9ubU11SldmOGQ4IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MywiaXNzdWVkX2F0IjoiMjAyNi0xMS0yMFQxODowMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.BJUTQO0-6ZLaaPR8Cr7g4mCKhInRIGOMkTt-Zkh2hqKPb9vPTEM3RhWYDqt3eCuoA9yOaGB0G05OCOpJnTkaDw",
+            "expected": "other_installation"
         }
     ],
     "dates": {

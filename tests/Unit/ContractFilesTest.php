@@ -75,7 +75,7 @@ final class ContractFilesTest extends TestCase
 	{
 		[$status, $output] = self::command([PHP_BINARY, 'contracts/v1/generate-fixtures.php', '--check']);
 		self::assertSame(0, $status, $output);
-		self::assertStringStartsWith('Comprobado: 17 licencias, 17 casos negativos', $output);
+		self::assertStringStartsWith('Comprobado: 20 licencias, 17 casos negativos, 10 casos de revisión', $output);
 		// La carpeta del contrato solo tiene lo que la especificación enumera.
 		$files = array_map('basename', glob(ContractSchemas::directory() . '/*'));
 		sort($files);
@@ -125,12 +125,18 @@ final class ContractFilesTest extends TestCase
 				'perpetual-with-maintenance',
 				'plan-upgrade',
 				'scheduled-reduction-applied',
+				'self-service-transfer-before',
+				'self-service-transfer-closing',
+				'self-service-transfer-new',
 				'rotated-key',
 			],
 			array_column($vectors['licenses'], 'name'),
 		);
+		$installations = array_column($vectors['installations'], 'server_id', 'name');
 		foreach ($vectors['licenses'] as $license) {
 			$name = $license['name'];
+			// 0. Va a la instalación que la verifica.
+			self::assertSame($installations[$license['installation']], $license['content']['server_id'], $name);
 			// 1. Cumple el esquema publicado.
 			self::assertNull(ContractSchemas::licenseErrors($license['content_json']), $name);
 			// 2. El validador del servidor también lo acepta, con sus campos en el orden del contrato.
@@ -158,10 +164,77 @@ final class ContractFilesTest extends TestCase
 				$name,
 			);
 		}
-		// Los tres motivos de cierre están representados.
+		// Los tres motivos de cierre están representados; «transferred», por el propietario y por autoservicio.
 		$reasons = array_filter(array_map(fn(array $l) => $l['content']['status_reason'], $vectors['licenses']));
 		sort($reasons);
-		self::assertSame(['deactivated', 'revoked', 'transferred'], array_values($reasons));
+		self::assertSame(['deactivated', 'revoked', 'transferred', 'transferred'], array_values($reasons));
+	}
+
+	public function testTheSelfServiceTransferKeepsTheDatesAndTheRightsOfTheLicense(): void
+	{
+		$vectors = ContractSchemas::vectors();
+		$licenses = array_column($vectors['licenses'], null, 'name');
+		$before = $licenses['self-service-transfer-before']['content'];
+		$closing = $licenses['self-service-transfer-closing']['content'];
+		$new = $licenses['self-service-transfer-new']['content'];
+		// Las fechas, el plan, los cupos, los módulos y el titular no cambian al transferir (decisión 5 del propietario).
+		$kept = array_flip([
+			'license_id',
+			'licensee_name',
+			'license_type',
+			'billing_period',
+			'period_starts_at',
+			'expires_at',
+			'grace_days',
+			'updates_until',
+			'plan',
+			'limits',
+			'features',
+		]);
+		self::assertSame(array_intersect_key($before, $kept), array_intersect_key($closing, $kept));
+		self::assertSame(array_intersect_key($before, $kept), array_intersect_key($new, $kept));
+		// La anterior conserva su activación y recibe su cierre; la nueva es otra activación en otra instalación.
+		self::assertSame(
+			[$before['activation_id'], $before['server_id'], 'revoked', 'transferred', 2],
+			[
+				$closing['activation_id'],
+				$closing['server_id'],
+				$closing['license_status'],
+				$closing['status_reason'],
+				$closing['license_revision'],
+			],
+		);
+		self::assertNotSame($before['activation_id'], $new['activation_id']);
+		self::assertNotSame($before['server_id'], $new['server_id']);
+		self::assertSame(
+			['active', null, 3],
+			[$new['license_status'], $new['status_reason'], $new['license_revision']],
+		);
+		// Las dos revisiones son de la misma transacción.
+		self::assertSame($closing['issued_at'], $new['issued_at']);
+		$cases = array_column($vectors['revision_cases'], null, 'name');
+		self::assertSame(
+			[
+				['installation-fixture-b', 'accepted'],
+				['installation-fixture-a', 'accepted'],
+				['installation-fixture-a', 'other_installation'],
+			],
+			[
+				[
+					$cases['transfer-new-installation-first-revision']['installation'],
+					$cases['transfer-new-installation-first-revision']['expected'],
+				],
+				[
+					$cases['transfer-old-installation-closing']['installation'],
+					$cases['transfer-old-installation-closing']['expected'],
+				],
+				[
+					$cases['transfer-new-revision-is-not-for-the-old-installation']['installation'],
+					$cases['transfer-new-revision-is-not-for-the-old-installation']['expected'],
+				],
+			],
+		);
+		self::assertCount(10, $vectors['revision_cases']);
 	}
 
 	public function testNegativeLicensesFailTheSchemaAndTheValidatorExactlyWhenExpected(): void
@@ -391,7 +464,7 @@ final class ContractFilesTest extends TestCase
 	{
 		$vectors = ContractSchemas::vectors();
 		$installations = array_column($vectors['installations'], null, 'name');
-		// Las cuatro acciones. «transfer» es solo un vector criptográfico hasta la etapa 4.
+		// Las cuatro acciones del desafío, «transfer» incluida (etapa 4).
 		self::assertSame(['activate', 'transfer', 'refresh', 'deactivate'], array_column($vectors['proofs'], 'action'));
 		foreach ($vectors['proofs'] as $proof) {
 			self::assertSame(
@@ -536,7 +609,7 @@ final class ContractFilesTest extends TestCase
 		);
 		self::assertSame(0, $status, $output);
 		self::assertStringContainsString(
-			'OK: 17 licencias, 17 casos negativos, 7 casos de revisión, 13 estados temporales, ' .
+			'OK: 20 licencias, 17 casos negativos, 10 casos de revisión, 13 estados temporales, ' .
 				'4 pruebas de posesión y 3 solicitudes .licreq',
 			$output,
 		);

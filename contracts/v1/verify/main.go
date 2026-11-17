@@ -34,13 +34,14 @@ type installationKey struct {
 }
 
 type licenseCase struct {
-	Name        string          `json:"name"`
-	Kid         string          `json:"kid"`
-	Content     json.RawMessage `json:"content"`
-	HeaderJSON  string          `json:"header_json"`
-	ContentJSON string          `json:"content_json"`
-	JWS         string          `json:"jws"`
-	SHA256      string          `json:"sha256"`
+	Name         string          `json:"name"`
+	Kid          string          `json:"kid"`
+	Installation string          `json:"installation"`
+	Content      json.RawMessage `json:"content"`
+	HeaderJSON   string          `json:"header_json"`
+	ContentJSON  string          `json:"content_json"`
+	JWS          string          `json:"jws"`
+	SHA256       string          `json:"sha256"`
 }
 
 type verifierCase struct {
@@ -62,10 +63,11 @@ type acceptedCase struct {
 }
 
 type revisionCase struct {
-	Name     string        `json:"name"`
-	Accepted *acceptedCase `json:"accepted"`
-	JWS      string        `json:"jws"`
-	Expected string        `json:"expected"`
+	Name         string        `json:"name"`
+	Installation string        `json:"installation"`
+	Accepted     *acceptedCase `json:"accepted"`
+	JWS          string        `json:"jws"`
+	Expected     string        `json:"expected"`
 }
 
 type stateCase struct {
@@ -152,7 +154,8 @@ func main() {
 	// Licencias válidas: se aceptan y su contenido es el publicado.
 	accepted := map[string]*License{}
 	for _, item := range fixtures.Licenses {
-		license, err := verifier("test", "installation-fixture-a").Verify(item.JWS, nil)
+		// Cada licencia la verifica la instalación a la que va: después de una transferencia, la nueva.
+		license, err := verifier("test", item.Installation).Verify(item.JWS, nil)
 		if err != nil {
 			failed.add("licencia %s: se rechazó (%v)", item.Name, err)
 			continue
@@ -196,7 +199,7 @@ func main() {
 				SHA256:    item.Accepted.SHA256,
 			}
 		}
-		_, err := verifier("test", "installation-fixture-a").Verify(item.JWS, previous)
+		_, err := verifier("test", item.Installation).Verify(item.JWS, previous)
 		if code := codeOf(err); code != item.Expected {
 			failed.add("caso de revisión %s: se esperaba %s y resultó %s", item.Name, item.Expected, code)
 		}

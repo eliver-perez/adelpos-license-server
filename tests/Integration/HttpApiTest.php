@@ -157,7 +157,7 @@ final class HttpApiTest extends TestCase
 			'challenge_id' => $challenge['json']['challenge_id'],
 			'app_version' => 'HTTP-test',
 		];
-		if ($action === 'activate') {
+		if (in_array($action, Protocol::CLAIMS, true)) {
 			$input += [
 				'license_key' => $key,
 				'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($device['pair'])),
@@ -301,6 +301,73 @@ final class HttpApiTest extends TestCase
 		self::assertSame(0, (int) $app->db->execute('SELECT COUNT(*) FROM admin_sessions')->fetchColumn());
 		self::assertStringNotContainsString($license['secret'], file_get_contents($this->directory . '/server.log'));
 	}
+	public function testSelfServiceTransferThroughRealHttpFollowsTheContract(): void
+	{
+		// Cada respuesta se valida contra openapi.yaml en http(): la ruta, sus códigos y sus esquemas.
+		$app = $this->fixture->app;
+		$keys = $this->fixture->signingKeys();
+		$keys->generate('http-transfer-key', 'license');
+		$keys->activate('http-transfer-key', 'HTTP fixture');
+		$actor = new Actor(
+			$app->auth->bootstrap('admin@example.test', 'HTTP test', 'Fixture-Password-Only-2026!'),
+			'superadmin',
+		);
+		$customer = $app->catalog->saveCustomer($actor, Uuid::create(), null, [
+			'name' => 'HTTP client',
+			'contact_name' => 'Test',
+			'email' => '',
+			'state' => 'active',
+		]);
+		$license = $app->licenses->issue($actor, Uuid::create(), [
+			'customer_id' => $customer['id'],
+			'product_id' => 'adel_pos',
+			...MySqlFixture::terms('subscription'),
+		]);
+		$device = fn(): array => ['id' => Uuid::create(), 'pair' => sodium_crypto_sign_keypair()];
+		$old = $device();
+		$first = $this->payload(
+			$this->http('/v1/activations', Protocol::json($this->signed('activate', $old, $license['secret']))),
+		);
+		$new = $device();
+		$moved = $this->payload(
+			$this->http(
+				'/v1/activations/transfer',
+				Protocol::json($this->signed('transfer', $new, $license['secret'])),
+			),
+		);
+		self::assertSame(
+			[$first['period_starts_at'], $first['expires_at'], 3],
+			[$moved['period_starts_at'], $moved['expires_at'], $moved['license_revision']],
+		);
+		// Con la transferencia pendiente: ACTIVATION_LIMIT sin transferencia disponible y TRANSFER_LIMIT.
+		$third = $device();
+		$limit = $this->http('/v1/activations', Protocol::json($this->signed('activate', $third, $license['secret'])));
+		self::assertSame(
+			[409, ['transfer_available' => false]],
+			[$limit['status'], $limit['json']['error']['details']],
+		);
+		$blocked = $this->http(
+			'/v1/activations/transfer',
+			Protocol::json($this->signed('transfer', $third, $license['secret'])),
+		);
+		self::assertSame([409, 'TRANSFER_LIMIT'], [$blocked['status'], $blocked['json']['error']['code']]);
+		// La anterior consulta, recibe su cierre y confirma: la transferencia vuelve a estar disponible.
+		$closing = $this->payload(
+			$this->http(
+				'/v1/activations/refresh',
+				Protocol::json($this->signed('refresh', $old, '', $first['activation_id'])),
+			),
+		);
+		self::assertSame([2, 'transferred'], [$closing['license_revision'], $closing['status_reason']]);
+		self::assertSame(
+			200,
+			$this->http(
+				'/v1/activations/transfer',
+				Protocol::json($this->signed('transfer', $third, $license['secret'])),
+			)['status'],
+		);
+	}
+
 	public function testServerAnswersUnavailableWhenItsActiveKeyBelongsToAnotherLicenseEnvironment(): void
 	{
 		$keys = $this->fixture->signingKeys();

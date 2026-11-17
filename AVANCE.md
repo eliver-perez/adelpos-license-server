@@ -2917,3 +2917,40 @@ La primera corrida completa encontró una prueba de la Fase 3 que esperaba cero 
 | PHPUnit, PHP 8.5.7 | No se corrió (se corre en el cierre, Fase 6) |
 | Playwright | Panel, sin internet y dispositivos de confianza OK, con la barra superior nueva en todas las pantallas. Los recorridos de las alertas se agregan en la Fase 6 |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
+---
+
+## Etapa 4 · Fase 5 — Archivos del contrato y verificador
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E4-5.1 Qué cambió
+
+| Archivo | Cambio |
+| --- | --- |
+| `openapi.yaml` | Ruta `POST /v1/activations/transfer` con sus respuestas y errores (`TRANSFER_LIMIT` incluido), acción `transfer` en el desafío, `transfer_available` en los dos valores y ejemplos (desde la Fase 2). En esta fase: `refresh` y `deactivate` confirman la transferencia pendiente |
+| `fixtures/` | `licenses`: de 17 a **20** (la revisión previa, el cierre `transferred` y la revisión nueva de una transferencia por autoservicio). `revision_cases`: de 7 a **10**. `credits`: los 11 de la Fase 0. Cada licencia y cada caso de revisión nombran la instalación que los verifica |
+| `verify/main.go` | Verifica cada licencia y cada caso de revisión con su instalación |
+| `contracts/v1/README.md` | Flujo de la transferencia desde AD-EL POS y las cifras nuevas |
+
+### E4-5.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `ContractFilesTest` | +1 | Las tres licencias de la transferencia: mismas fechas, plan, cupos, módulos y titular; la anterior con su activación y su cierre `transferred` (revisión 2); la nueva en otra activación y otra instalación (revisión 3), en el mismo instante; y sus tres casos de revisión. Cada licencia va a la instalación que la verifica. El verificador en Go acepta 20 licencias y 10 casos de revisión |
+| `HttpApiTest` | +1 | La transferencia por HTTP real, con cada respuesta validada contra el OpenAPI |
+
+### E4-5.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **10 reglas**, todas detectadas: en el generador (cambiándolo y regenerando los archivos antes de correr las pruebas), el cierre `transferred`, las fechas de la nueva, la otra instalación, el número de revisión mayor y la instalación de cada caso; en el verificador en Go, la instalación de cada licencia y de cada caso de revisión; y en el OpenAPI, `TRANSFER_LIMIT` en la ruta, la acción `transfer` del desafío y la petición de transferir igual a la de activar.
+
+### E4-5.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, **PHP 8.3.36** | 466 pruebas, 28 983 aserciones, todas OK |
+| PHPUnit, PHP 8.5.7 | No se corrió (se corre en el cierre, Fase 6) |
+| Playwright | No se corrió: la fase no cambia el panel |
+| `generate-fixtures.php --check` | 20 licencias, 17 casos negativos, 10 de revisión, 40 de fechas, 11 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go | OK en todos los casos |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |

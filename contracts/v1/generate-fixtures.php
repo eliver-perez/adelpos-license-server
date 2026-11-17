@@ -281,20 +281,58 @@ $contents += [
 		'limits' => ['cash_registers' => 1, 'order_takers' => 0, 'kitchen_displays' => 0],
 	]),
 ];
+// Transferencia por autoservicio (etapa 4; contrato §8.4). Una suscripción mensual activa en la
+// instalación a (revisión 1) se transfiere el 20 de noviembre a las 12:00 a la instalación b. En la misma
+// transacción, la anterior recibe su cierre revoked/transferred (revisión 2) y la nueva su revisión
+// active (revisión 3), con una activación nueva y las mismas fechas, cupos, plan y módulos.
+$transferBefore = array_replace($subscription, [
+	'license_id' => '10000000-0000-4000-8000-000000000012',
+	'activation_id' => '30000000-0000-4000-8000-000000000012',
+]);
+$contents += [
+	'self-service-transfer-before' => $transferBefore,
+	'self-service-transfer-closing' => array_replace($transferBefore, [
+		'license_status' => 'revoked',
+		'status_reason' => 'transferred',
+		'license_revision' => 2,
+		'issued_at' => '2026-11-20T18:00:00.000000Z',
+	]),
+	'self-service-transfer-new' => array_replace($transferBefore, [
+		'activation_id' => '30000000-0000-4000-8000-000000000013',
+		'server_id' => $installations['b']['server_id'],
+		'installation_public_key' => $installations['b']['public_key'],
+		'license_revision' => 3,
+		'issued_at' => '2026-11-20T18:00:00.000000Z',
+	]),
+];
 // La misma licencia perpetua, firmada después con otra llave de confianza (rotación de llaves).
 $rotated = array_replace($contents['perpetual-12-months'], [
 	'license_revision' => 2,
 	'issued_at' => '2026-12-01T00:00:00.000000Z',
 ]);
 
+// «installation» es la instalación a la que va la licencia: la que la verifica.
+$installationOf = [
+	$installations['a']['server_id'] => 'installation-fixture-a',
+	$installations['b']['server_id'] => 'installation-fixture-b',
+];
 $licenses = [];
 foreach ($contents as $name => $content) {
 	$licenses[$name] =
-		['name' => $name, 'kid' => $kid, 'content' => $content] + jws($kid, $signingKeys[$kid], $content);
+		[
+			'name' => $name,
+			'kid' => $kid,
+			'installation' => $installationOf[$content['server_id']],
+			'content' => $content,
+		] + jws($kid, $signingKeys[$kid], $content);
 }
 $licenses['rotated-key'] =
-	['name' => 'rotated-key', 'kid' => 'adelpos-test-fixture-b', 'content' => $rotated] +
-	jws('adelpos-test-fixture-b', $signingKeys['adelpos-test-fixture-b'], $rotated);
+	[
+		'name' => 'rotated-key',
+		'kid' => 'adelpos-test-fixture-b',
+		'installation' => $installationOf[$rotated['server_id']],
+		'content' => $rotated,
+	] + jws('adelpos-test-fixture-b', $signingKeys['adelpos-test-fixture-b'], $rotated);
 
 // ---------------------------------------------------------------------------------------------
 // Casos negativos (contrato, sección 13): lo que el cliente debe rechazar, y por qué
@@ -543,7 +581,40 @@ $revisionCases = [
 		'jws' => $valid['jws'],
 		'expected' => 'accepted',
 	],
+	// Transferencia por autoservicio (etapa 4): cada computadora acepta lo suyo.
+	[
+		'name' => 'transfer-new-installation-first-revision',
+		'description' => 'La computadora nueva acepta su primera revisión (3) de una licencia que ya tenía revisiones.',
+		'installation' => 'installation-fixture-b',
+		'accepted' => null,
+		'jws' => $licenses['self-service-transfer-new']['jws'],
+		'expected' => 'accepted',
+	],
+	[
+		'name' => 'transfer-old-installation-closing',
+		'description' =>
+			'La computadora anterior acepta su cierre «transferred» (revisión 2), mayor que su revisión 1.',
+		'installation' => 'installation-fixture-a',
+		'accepted' => $accepted($licenses['self-service-transfer-before']),
+		'jws' => $licenses['self-service-transfer-closing']['jws'],
+		'expected' => 'accepted',
+	],
+	[
+		'name' => 'transfer-new-revision-is-not-for-the-old-installation',
+		'description' => 'La revisión de la computadora nueva no sirve en la anterior: es de otra instalación.',
+		'installation' => 'installation-fixture-a',
+		'accepted' => $accepted($licenses['self-service-transfer-before']),
+		'jws' => $licenses['self-service-transfer-new']['jws'],
+		'expected' => 'other_installation',
+	],
 ];
+// Las demás las verifica la instalación a.
+foreach ($revisionCases as $index => $case) {
+	$revisionCases[$index] = array_merge(
+		['name' => $case['name'], 'description' => $case['description'], 'installation' => 'installation-fixture-a'],
+		$case,
+	);
+}
 
 // ---------------------------------------------------------------------------------------------
 // Fechas (contrato, secciones 5.1, 5.2, 5.4 y 5.5). Las calcula solo el servidor.

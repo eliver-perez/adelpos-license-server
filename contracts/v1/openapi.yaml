@@ -322,6 +322,10 @@ paths:
         Devuelve la revisión vigente de la activación, que puede ser más nueva por un cambio de
         derechos o por una revocación. Si la activación ya terminó, devuelve su revisión de cierre.
 
+        Si terminó por una transferencia por autoservicio pendiente, esta consulta la confirma: la
+        computadora anterior demostró con su llave que es ella y recibió su cierre, y el contador
+        de transferencias pendientes vuelve a 0. Una segunda consulta no cambia nada.
+
         Esta consulta no es obligatoria para operar: AD-EL POS la hace en segundo plano cuando
         tiene internet.
       requestBody:
@@ -368,7 +372,8 @@ paths:
         la licencia.
 
         Si la activación ya había terminado, por el motivo que sea, responde `200` con la revisión
-        de cierre que ya existe. El motivo está en `status_reason` de la licencia firmada.
+        de cierre que ya existe. El motivo está en `status_reason` de la licencia firmada. Si
+        terminó por una transferencia por autoservicio pendiente, la confirma, igual que `refresh`.
       requestBody:
         required: true
         content:
