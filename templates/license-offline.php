@@ -12,6 +12,13 @@ if ($actor->role === 'superadmin' && $canChange) {
 		}
 	}
 }
+// Las transferencias que hizo el propietario desde el panel. Las de autoservicio no son sin internet.
+$ownerTransfers = [];
+foreach ($license['transfers'] as $transfer) {
+	if ($transfer['via'] === 'owner') {
+		$ownerTransfers[] = $transfer;
+	}
+}
 ?>
 <section class="panel form-panel mt-4">
 	<h2>Solicitudes y recuperaciones sin internet</h2>
@@ -23,7 +30,7 @@ if ($actor->role === 'superadmin' && $canChange) {
 			<small class="cell-sub"><?= V::escape(V::date($request['imported_at'])) ?></small>
 		</div>
 	<?php endforeach; ?>
-	<?php foreach ($license['transfers'] as $transfer): ?>
+	<?php foreach ($ownerTransfers as $transfer): ?>
 		<div class="note-box mt-3">
 			<strong>Recuperación autorizada</strong>
 			<p class="mt-2 mb-1"><?= V::escape($transfer['reason']) ?></p>
@@ -36,7 +43,7 @@ if ($actor->role === 'superadmin' && $canChange) {
 			</div>
 		</div>
 	<?php endforeach; ?>
-	<?php if (!$license['offline'] && !$license['transfers']): ?>
+	<?php if (!$license['offline'] && !$ownerTransfers): ?>
 		<p class="text-secondary small">No hay operaciones sin internet registradas.</p>
 	<?php endif; ?>
 	<?php foreach ($releasable as $activation): ?>

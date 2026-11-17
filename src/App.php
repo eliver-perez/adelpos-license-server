@@ -21,6 +21,7 @@ use AdelPos\License\Application\{
 	PlanService,
 	RevisionPublisher,
 	ScheduledChanges,
+	Transfers,
 	TrustedDevices,
 };
 use AdelPos\License\Infrastructure\{
@@ -60,6 +61,7 @@ final class App
 	public readonly PlanService $plans;
 	public readonly CommercialService $commercial;
 	public readonly ScheduledChanges $scheduledChanges;
+	public readonly Transfers $transfers;
 
 	public function __construct(public readonly Config $config, public readonly Database $db, ?Clock $clock = null)
 	{
@@ -119,6 +121,7 @@ final class App
 			$this->scheduledChanges,
 			new PaidPeriods($db),
 		);
+		$this->transfers = new Transfers($db, $this->clock);
 		$this->offline = new OfflineService(
 			$db,
 			$operations,
@@ -128,6 +131,7 @@ final class App
 			$this->publisher,
 			$activator,
 			$this->commercial,
+			$this->transfers,
 		);
 		$this->admins = new AdminService(
 			$db,

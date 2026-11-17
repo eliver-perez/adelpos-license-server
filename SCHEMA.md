@@ -1,8 +1,8 @@
 # Modelo de datos
 
-Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`, [`006_editor_de_planes.sql`](database/migrations/006_editor_de_planes.sql), con el estado y la versión de cada plan, y [`007_cambios_programados.sql`](database/migrations/007_cambios_programados.sql), con los cambios de plan que entran en vigor al vencer lo pagado. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
+Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`, [`006_editor_de_planes.sql`](database/migrations/006_editor_de_planes.sql), con el estado y la versión de cada plan, [`007_cambios_programados.sql`](database/migrations/007_cambios_programados.sql), con los cambios de plan que entran en vigor al vencer lo pagado, y [`008_transferencias_y_alertas.sql`](database/migrations/008_transferencias_y_alertas.sql), con la vía, el estado y la confirmación de cada transferencia, las alertas del panel y la acción `transfer` del desafío. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
-Al cerrar la etapa 3, el esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0 y el ciclo comercial: precios, pagos y cambios programados. La sección 9 enumera lo que cambia en las etapas siguientes.
+El esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0, el ciclo comercial (precios, pagos y cambios programados, etapa 3) y, desde la etapa 4, las transferencias por autoservicio y las alertas del panel. La sección 9 enumera lo que cambia en las etapas siguientes.
 
 ## 1. Convenciones
 
@@ -14,7 +14,7 @@ Al cerrar la etapa 3, el esquema guarda el modelo del [contrato de licencias](do
 
 ## 2. Tablas
 
-El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
+El esquema tiene **34 tablas**, más `schema_migrations`, que crea el migrador.
 
 ### Administración y acceso
 
@@ -58,6 +58,7 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 | `license_administrative_changes` | Cambios de referencia y nota administrativa | Único por licencia, versión y campo; solo inserción | `LicenseService` |
 | `license_payments` | Historial comercial: cada pago de una licencia (alta, renovación, conversión, cambio de plan o mantenimiento), con fecha de pago, monto cobrado en MXN, precio de catálogo sugerido, bonificación, motivo si el monto se cambió, referencia, plazo y periodo que cubre, administrador y fecha de registro. Ver «Pagos» | Solo inserción. Una operación del panel registra a lo sumo un pago (`operation_id` único y llave foránea a `admin_operations`). `chk_payment_concept`, `chk_payment_term`, `chk_payment_trial`, `chk_payment_currency`, `chk_payment_amounts`, `chk_payment_suggestion`, `chk_payment_override`, `chk_payment_covers` | `Payments`, desde las operaciones comerciales |
 | `license_scheduled_changes` | Cambios de plan programados: instante en que entran en vigor, plan y cupos de destino, quién los programó y cómo terminaron (`applied`, `cancelled` o `replaced`) | Un solo pendiente por licencia (columna generada `pending_license_id` con índice único). `chk_scheduled_resolution`: un pendiente no tiene resolución; uno cancelado o sustituido dice quién lo resolvió. Cupos de 0 a 999. La aplicación solo actualiza el estado, la resolución y los cupos (que suben si el catálogo propaga un aumento del plan de destino) | `ScheduledChanges`, `CommercialService`, `PlanService`, `bin/apply-scheduled-changes.php` |
+| `license_alerts` | Alertas del panel: `transfer_blocked` (un intento bloqueado por `TRANSFER_LIMIT`) o `frequent_transfers` (dos o más transferencias en 12 meses). Licencia, instante de creación y del último caso, número de veces (`attempts`), detalle en JSON y revisión (quién y cuándo) | **Una abierta por tipo y licencia** (columna generada `open_license_id` con índice único junto con el tipo). `chk_alert_type`, `chk_alert_attempts` (al menos 1), `chk_alert_detail` (JSON válido), `chk_alert_seen`, `chk_alert_review` (quién y cuándo, o ninguno). La aplicación solo actualiza el contador, el detalle, el último caso y la revisión | `Alerts` |
 | `license_documents` | Constancias PDF: folio, digest de verificación, datos públicos, instantánea y PDF cifrados, SHA-256 del PDF | Folio y digest únicos; `document_type` en `licensing`, `delivery`; solo inserción | `DocumentService` |
 
 #### Condiciones de una licencia
@@ -101,7 +102,7 @@ Las tres restricciones de condiciones comparan primero con `IS NULL` o `IS NOT N
 | --- | --- | --- | --- |
 | `activations` | Vínculo de una licencia con una instalación: identidad `server_id`, llave pública, estado, revisión vigente y `app_version` de su última operación. | `state` en `active`, `deactivated`, `revoked`, `transferred`. Una activación activa por licencia (columna generada `active_license_id` con índice único); `chk_activation_end`; `fk_current_revision` apunta a una revisión de la misma activación | `ActivationService`, `OfflineService`, `RevisionPublisher` |
 | `license_revisions` | Revisiones firmadas: contador global por licencia, `kid`, entorno de la llave que firmó (`environment`), contenido y JWS exactos, y `status_reason` en las revisiones de cierre | `(license_id, license_revision)` único; revisión mayor que cero; solo inserción. `(kid, environment)` es llave foránea a la llave de firma. `chk_revision_reason`: `status_reason` es obligatorio en las revisiones `revoked` (`transferred`, `deactivated` o `revoked`) y queda vacío en las `active` | `RevisionPublisher` |
-| `activation_challenges` | Desafíos de un solo uso con vencimiento | La identidad de la acción es coherente; consumo atómico. Sin llave foránea a activaciones, para no revelar si existen. | `ActivationService`, `bin/cleanup.php` |
+| `activation_challenges` | Desafíos de un solo uso con vencimiento | `action` en `activate`, `transfer`, `refresh`, `deactivate`; `activate` y `transfer` sin activación, `refresh` y `deactivate` con ella; consumo atómico. Sin llave foránea a activaciones, para no revelar si existen. | `ActivationService`, `bin/cleanup.php` |
 | `license_requests` | Idempotencia de la API y de las solicitudes sin internet: digest HMAC, identidad, respuesta exacta | PK `(product_id, request_id)`; la respuesta queda completa o vacía | `ActivationService`, `OfflineService` |
 
 ### Sin internet
@@ -110,7 +111,17 @@ Las tres restricciones de condiciones comparan primero con `IS NULL` o `IS NOT N
 | --- | --- | --- | --- |
 | `offline_requests` | Archivo `.licreq` original, cifrado, y su proyección consultable | Único por `(product_id, request_id)` y ligado a `license_requests`; `encryption_version=1`; solo inserción | `OfflineService` |
 | `offline_decisions` | Decisión única por solicitud | Aprobada exige licencia y revisión; rechazada no las admite; solo inserción | `OfflineService` |
-| `license_transfers` | Transferencias autorizadas por el panel | Origen único; origen y destino de la misma licencia y distintos; aceptación obligatoria del límite sin internet; solo inserción | `OfflineService` |
+| `license_transfers` | Toda transferencia de una licencia. Ver «Transferencias» | Origen único; origen y destino de la misma licencia y distintos. **Una sola pendiente por licencia** (columna generada `pending_license_id` con índice único). `chk_transfer_via`, `chk_transfer_state`, `chk_transfer_origin`, `chk_transfer_confirmation`. La aplicación solo actualiza la confirmación | `Transfers`, desde `ActivationService` y `OfflineService` |
+
+#### Transferencias
+
+| Columna | Contenido | Regla en la base |
+| --- | --- | --- |
+| `via` | `self_service` (la pide AD-EL POS por la API) u `owner` (la hace el propietario desde el panel, con destino o para recuperar la plaza) | Valores cerrados |
+| `admin_id`, `reason`, `offline_limit_accepted` | Quién la hizo, su motivo y la aceptación del límite sin internet | Obligatorios en las del propietario; vacíos en las de autoservicio, que siempre tienen destino |
+| `state` | `pending` o `confirmed` | Las del propietario nacen confirmadas (`confirmation='owner'`) |
+| `confirmed_at`, `confirmation` | Instante y forma de la confirmación: `refresh`, `deactivate`, `offline_renew`, `offline_deactivate`, `manual` u `owner` | Vacíos mientras está pendiente; obligatorios al confirmarse, nunca antes de crearse |
+| `released_by`, `release_reason` | Quién liberó a mano el contador y por qué | Solo con `confirmation='manual'`, y entonces obligatorios |
 
 ## 3. Datos iniciales
 
@@ -141,13 +152,15 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 | Permiso | Tablas |
 | --- | --- |
 | Solo `SELECT` | `schema_migrations`, `signing_keys`, `signing_scopes` |
-| `SELECT, INSERT` | `audit_events`, `license_changes`, `license_payments`, `license_revisions`, `offline_requests`, `offline_decisions`, `license_transfers`, `license_administrative_changes`, `license_documents` |
+| `SELECT, INSERT` | `audit_events`, `license_changes`, `license_payments`, `license_revisions`, `offline_requests`, `offline_decisions`, `license_administrative_changes`, `license_documents` |
 | `SELECT, UPDATE` | `security_state`, `audit_heads` |
 | `SELECT, INSERT, UPDATE` | `admin_users`, `admin_recovery_codes`, `admin_trusted_devices`, `admin_operations`, `customers`, `customer_contacts`, `products`, `plans`, `product_capabilities`, `licenses`, `license_features`, `license_credentials`, `license_requests` |
 | `SELECT, INSERT, DELETE` | `capability_dependencies`, `admin_permission_grants` |
 | `SELECT, INSERT, UPDATE, DELETE` | `admin_sessions`, `rate_limit_buckets`, `activation_challenges` |
 | `SELECT, INSERT` y `UPDATE` solo de `state`, `ended_at`, `current_revision_id`, `app_version` | `activations` |
 | `SELECT, INSERT` y `UPDATE` solo de `state`, `resolved_at`, `resolved_by` y los tres cupos | `license_scheduled_changes` |
+| `SELECT, INSERT` y `UPDATE` solo de `state`, `confirmed_at`, `confirmation`, `released_by`, `release_reason` | `license_transfers` |
+| `SELECT, INSERT` y `UPDATE` solo de `attempts`, `detail_json`, `last_seen_at`, `reviewed_at`, `reviewed_by` | `license_alerts` |
 
 - En producción, `bin/preflight.php` comprueba que la cuenta **no** pueda modificar ni borrar las tablas de historia.
 - `tests/Integration/InitialSchemaTest.php` comprueba que los permisos cubren exactamente las tablas del esquema.
@@ -155,7 +168,7 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 ## 6. Transacciones e idempotencia
 
 - **Mutex:** la fila de la licencia (`SELECT … FOR UPDATE`). Las activaciones, cambios comerciales, aprobaciones sin internet y transferencias de una licencia se serializan sobre ella.
-- **Defensa final:** el índice único de `activations.active_license_id`, que impide una segunda activación activa incluso ante un error de código.
+- **Defensa final:** el índice único de `activations.active_license_id`, que impide una segunda activación activa incluso ante un error de código; el de `license_transfers.pending_license_id`, que impide una segunda transferencia por autoservicio pendiente, y el de `license_alerts(open_license_id, alert_type)`, que impide dos alertas abiertas del mismo tipo.
 - **Reintentos:** en la API, `license_requests` reserva cada `request_id`. Un reintento idéntico devuelve la respuesta archivada; otro contenido con el mismo identificador se rechaza. En el panel, `admin_operations` hace lo mismo con `operation_id`.
 - **Auditoría:** la cabeza se bloquea al final. El evento se confirma con el cambio, o se revierte con él.
 - **Intentos de acceso:** los contadores se confirman fuera de la transacción de negocio, para que un rollback no los borre.
@@ -189,9 +202,7 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 
 ## 9. Pendiente para las etapas siguientes
 
-| Elemento del esquema | Estado al cerrar la etapa 3 | Etapa |
+| Elemento del esquema | Estado actual | Etapa |
 | --- | --- | --- |
-| `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | 4: transferencia por autoservicio |
-| `license_transfers` | Registra las transferencias y retiros que hace el propietario desde el panel | 4: transferencias por autoservicio, su confirmación y las alertas |
 | `product_capabilities`, `capability_dependencies`, `license_features` | Módulos del producto. Se firman como `features` del contrato, que en V1 va vacío para `adel_pos` | Su uso comercial se define más adelante |
 | `signing_keys.purpose = 'manifest'` | Propósito recibido, sin uso | Fuera de V1 (contrato, sección 15) |

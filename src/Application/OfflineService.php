@@ -16,6 +16,7 @@ final class OfflineService
 		private RevisionPublisher $publisher,
 		private LicenseActivator $activator,
 		private CommercialService $commercial,
+		private Transfers $transfers,
 	) {}
 
 	public function import(Actor $actor, string $operationId, string $envelope): array
@@ -267,7 +268,7 @@ final class OfflineService
 					}
 				}
 				if ($outgoing !== '') {
-					$this->transferRecord(
+					$this->transfers->recordOwner(
 						$actor,
 						$license['license_id'],
 						Uuid::bytes($outgoing),
@@ -309,7 +310,7 @@ final class OfflineService
 	 * el rol y el estado vigente.
 	 */
 	// PENDIENTE etapa 4: las transferencias del propietario cuentan para la alerta de más de una
-	// transferencia en 12 meses, y no consumen el cupo del autoservicio (contrato, sección 8.4).
+	// transferencia en 12 meses (contrato, sección 8.4). Ya se registran con la vía «owner».
 	public function release(Actor $actor, string $operationId, string $licenseId, array $input): array
 	{
 		$reason = Input::text($input, 'reason', 500);
@@ -341,7 +342,13 @@ final class OfflineService
 					throw new Problem('La instalación ya no está activa.', 409);
 				}
 				$revision = $this->retire($license['license_id'], Uuid::bytes($activationId), true);
-				$this->transferRecord($actor, $license['license_id'], Uuid::bytes($activationId), null, $reason);
+				$this->transfers->recordOwner(
+					$actor,
+					$license['license_id'],
+					Uuid::bytes($activationId),
+					null,
+					$reason,
+				);
 				$this->audit->append(
 					$actor->id,
 					'license.force_release',
@@ -442,29 +449,6 @@ final class OfflineService
 			$activationId,
 		]);
 		return $this->publisher->publish($licenseId, $activationId);
-	}
-
-	private function transferRecord(
-		Actor $actor,
-		string $licenseId,
-		string $outgoing,
-		?string $incoming,
-		string $reason,
-	): void {
-		$this->db->execute(
-			'INSERT INTO license_transfers(id,license_id,outgoing_activation_id,incoming_activation_id,
-					admin_id,reason,offline_limit_accepted,created_at)
-				VALUES (?,?,?,?,?,?,1,?)',
-			[
-				Uuid::bytes(Uuid::create()),
-				$licenseId,
-				$outgoing,
-				$incoming,
-				Uuid::bytes($actor->id),
-				$reason,
-				$this->clock->sql(),
-			],
-		);
 	}
 
 	private function complete(

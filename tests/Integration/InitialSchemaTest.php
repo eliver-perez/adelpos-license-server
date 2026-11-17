@@ -27,6 +27,7 @@ final class InitialSchemaTest extends TestCase
 		'005_precios_y_pagos.sql',
 		'006_editor_de_planes.sql',
 		'007_cambios_programados.sql',
+		'008_transferencias_y_alertas.sql',
 	];
 	private \PDO $server;
 	private string $dsn;
@@ -118,9 +119,10 @@ final class InitialSchemaTest extends TestCase
 				),
 			),
 		);
-		// 33 tablas del esquema inicial, más «plans», «license_payments», «license_scheduled_changes» y
-		// «schema_migrations», menos «license_limits», «subscription_periods» y «maintenance_purchases».
-		self::assertCount(34, $schema['tables']);
+		// 33 tablas del esquema inicial, más «plans», «license_payments», «license_scheduled_changes»,
+		// «license_alerts» y «schema_migrations», menos «license_limits», «subscription_periods» y
+		// «maintenance_purchases».
+		self::assertCount(35, $schema['tables']);
 		self::assertSame(1, (int) $db->execute('SELECT COUNT(*) FROM security_state')->fetchColumn());
 		self::assertSame(
 			['admin', 0],
@@ -219,6 +221,74 @@ final class InitialSchemaTest extends TestCase
 		file_put_contents($directory . '/002_prueba_sintetica.sql', $pending);
 		$db->execute("UPDATE schema_migrations SET state='pending' WHERE name='002_prueba_sintetica.sql'");
 		self::assertMigrationRejected($db, $directory, 'incompleta');
+	}
+
+	public function testTransfersRecordedBeforeMigration008BecomeConfirmedOwnerTransfers(): void
+	{
+		// Hasta la etapa 3 solo el propietario transfería, desde el panel. Esas filas quedan con la vía «owner» y
+		// confirmadas desde su creación.
+		[, $db] = $this->database();
+		$files = [];
+		foreach (self::MIGRATIONS as $name) {
+			$files[$name] = (string) file_get_contents(self::migrations() . '/' . $name);
+		}
+		$latest = array_pop($files);
+		$directory = $this->directory($files);
+		(new Migrator($db, $directory))->migrate();
+		$admin = random_bytes(16);
+		$customer = random_bytes(16);
+		$license = random_bytes(16);
+		[$outgoing, $incoming] = [random_bytes(16), random_bytes(16)];
+		$db->execute(
+			"INSERT INTO admin_users(id,login,display_name,password_hash,role,created_at,updated_at)
+				VALUES (?,'admin@example.test','Admin','-','superadmin',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+			[$admin],
+		);
+		$db->execute(
+			"INSERT INTO customers(id,display_name,created_at,updated_at)
+				VALUES (?,'Restaurante sintético',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+			[$customer],
+		);
+		$db->execute(
+			"INSERT INTO licenses(license_id,customer_id,product_id,license_type,updates_months,grace_days,plan_id,
+					plan_name,plan_custom,cash_registers,order_takers,kitchen_displays,created_at,updated_at)
+				VALUES (?,?,'adel_pos','perpetual',6,0,'elemental','Plan elemental',0,3,3,3,UTC_TIMESTAMP(6),
+					UTC_TIMESTAMP(6))",
+			[$license, $customer],
+		);
+		foreach ([[$outgoing, 'transferred'], [$incoming, 'active']] as [$activation, $state]) {
+			$db->execute(
+				"INSERT INTO activations(activation_id,license_id,product_id,server_id,installation_public_key,state,
+						activated_at,ended_at)
+					VALUES (?,?,'adel_pos',?,?,?,'2026-11-01 10:00:00.000000',?)",
+				[
+					$activation,
+					$license,
+					random_bytes(16),
+					random_bytes(32),
+					$state,
+					$state === 'active' ? null : '2026-11-02 10:00:00.000000',
+				],
+			);
+		}
+		$db->execute(
+			"INSERT INTO license_transfers(id,license_id,outgoing_activation_id,incoming_activation_id,admin_id,reason,
+					offline_limit_accepted,created_at)
+				VALUES (?,?,?,?,?,'Equipo averiado',1,'2026-11-02 10:00:00.000000')",
+			[random_bytes(16), $license, $outgoing, $incoming, $admin],
+		);
+		file_put_contents($directory . '/' . self::MIGRATIONS[count(self::MIGRATIONS) - 1], $latest);
+		(new Migrator($db, $directory))->migrate();
+		self::assertSame(
+			[
+				'via' => 'owner',
+				'state' => 'confirmed',
+				'confirmation' => 'owner',
+				'confirmed_at' => '2026-11-02 10:00:00.000000',
+				'pending_license_id' => null,
+			],
+			$db->one('SELECT via,state,confirmation,confirmed_at,pending_license_id FROM license_transfers'),
+		);
 	}
 
 	public function testRuntimeGrantsCoverExactlyTheSchemaTables(): void

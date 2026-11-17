@@ -699,6 +699,17 @@ final class OfflineTest extends TestCase
 		$transfer = $this->app->db->one('SELECT * FROM license_transfers');
 		self::assertSame(Uuid::bytes($old['activation_id']), $transfer['outgoing_activation_id']);
 		self::assertSame(Uuid::bytes($new['activation_id']), $transfer['incoming_activation_id']);
+		// La transferencia sin internet que autoriza el propietario no queda pendiente (etapa 4, Fase 1).
+		self::assertSame(
+			['owner', 'confirmed', 'owner', $transfer['created_at'], null],
+			[
+				$transfer['via'],
+				$transfer['state'],
+				$transfer['confirmation'],
+				$transfer['confirmed_at'],
+				$transfer['pending_license_id'],
+			],
+		);
 		self::assertSame('issued', $this->app->read->license($this->license['id'])['commercial_status']);
 	}
 
@@ -885,6 +896,15 @@ final class OfflineTest extends TestCase
 		self::assertSame(2, $payload['license_revision']);
 		self::assertNull(
 			$this->app->db->one('SELECT incoming_activation_id FROM license_transfers')['incoming_activation_id'],
+		);
+		// Recuperar la plaza es una transferencia del propietario: nace confirmada (etapa 4, Fase 1).
+		self::assertSame(
+			['owner', 'confirmed', 'owner', Uuid::bytes($this->actor->id), 'Unrecoverable equipment', 1],
+			array_values(
+				$this->app->db->one(
+					'SELECT via,state,confirmation,admin_id,reason,offline_limit_accepted FROM license_transfers',
+				),
+			),
 		);
 		self::assertSame('issued', $this->app->read->license($this->license['id'])['commercial_status']);
 	}

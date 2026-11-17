@@ -278,10 +278,12 @@ final class ReadRepository
 			[Uuid::bytes($id), strtolower($id)],
 		);
 		$license['transfers'] = $this->db->all(
-			'SELECT BIN_TO_UUID(t.outgoing_activation_id) AS outgoing_text,BIN_TO_UUID(t.incoming_activation_id) AS incoming_text,
-					t.reason,t.created_at,u.display_name AS actor_name
+			'SELECT BIN_TO_UUID(t.id) AS id_text,BIN_TO_UUID(t.outgoing_activation_id) AS outgoing_text,
+					BIN_TO_UUID(t.incoming_activation_id) AS incoming_text,t.via,t.state,t.confirmation,t.confirmed_at,
+					t.reason,t.release_reason,t.created_at,u.display_name AS actor_name,r.display_name AS releaser_name
 				FROM license_transfers t
-				JOIN admin_users u ON u.id=t.admin_id
+				LEFT JOIN admin_users u ON u.id=t.admin_id
+				LEFT JOIN admin_users r ON r.id=t.released_by
 				WHERE t.license_id=?
 				ORDER BY t.created_at DESC
 				LIMIT 50',

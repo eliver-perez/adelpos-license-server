@@ -2751,3 +2751,47 @@ Una corrida detenida a mano dejó una base sintética `adelpos_license_test_*` s
 | 4 | — | Alertas en la barra superior y en el resumen; transferencias en el detalle |
 | 5 | — | `openapi.yaml`, archivos de prueba, verificador Go y `contracts/v1/README.md` |
 | 6 | — | Playwright, documentación, tabla consolidada de propuestas V1.1 y paquete |
+
+---
+
+## Etapa 4 · Fase 1 — Modelo de datos
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E4-1.1 Qué cambió
+
+- **Migración `008_transferencias_y_alertas.sql`:**
+  - `license_transfers` gana la vía (`self_service` u `owner`), el estado (`pending` o `confirmed`), el instante y la forma de la confirmación, y el administrador y el motivo de una liberación manual. Una sola de autoservicio pendiente por licencia, garantizada por un índice único. Las filas existentes quedan como del propietario, confirmadas al crearse.
+  - `license_alerts`, nueva: tipo (`transfer_blocked` o `frequent_transfers`), licencia, creación, último caso, número de veces, detalle y revisión. Una abierta por tipo y licencia, garantizada por un índice único.
+  - El desafío admite la acción `transfer`, sin activación.
+- **`Application\Transfers` (nueva):** `recordOwner()` registra las transferencias del propietario con la vía `owner`, ya confirmadas. La usa `OfflineService` en la transferencia sin internet con destino y en «recuperar plaza».
+- **`bin/grants.php`:** permisos por columna para las dos tablas; sin `DELETE`.
+- **Etiquetas de auditoría** de la etapa: transferencia por autoservicio, bloqueada, confirmada y liberada a mano; alerta revisada; transferencia en línea.
+- **`SCHEMA.md`:** 34 tablas, la tabla de transferencias y sus columnas, `license_alerts`, permisos y defensas finales.
+
+### E4-1.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/TransferModelTest.php` (nueva) | 5 | **Una sola pendiente por licencia** en la base, independiente por licencia, sin chocar con las del propietario y libre otra vez al confirmarse; una activación sale una sola vez. **Vías y estados:** 8 combinaciones válidas y 27 rechazadas por las restricciones, más el destino de otra licencia, que rechaza la llave foránea (vía, estado y forma desconocidos; del propietario sin administrador, motivo o aceptación, pendiente o confirmada de otra forma; de autoservicio con administrador, motivo o aceptación, sin destino o como del propietario; pendiente con datos de confirmación; confirmada sin instante, sin forma o antes de crearse; liberación sin quién o sin motivo; origen igual al destino; destino de otra licencia). **Una alerta abierta por tipo y licencia**, otra después de revisar, y 7 alertas inválidas. **Permisos** de la cuenta de la aplicación. **Desafío** `transfer` sin activación |
+| `InitialSchemaTest` | +1 | Una transferencia registrada antes de la `008` queda con la vía `owner`, confirmada en su creación y sin ocupar el lugar de la pendiente. La lista de migraciones y el número de tablas incluyen la `008` |
+| `OfflineTest` | — | La transferencia sin internet con destino y «recuperar plaza» quedan con la vía `owner`, confirmadas, con su administrador, motivo y aceptación |
+
+### E4-1.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **36 reglas** de la migración, de los permisos y de `Transfers`. **Tres no se detectaban** en la primera pasada:
+
+- **Las listas cerradas de vías, de estados y de acciones del desafío.** Las condiciones por rama nombraban cada valor (`via='self_service'`, `state='confirmed'`, `action IN ('refresh','deactivate')`), así que ya rechazaban cualquier otro: la restricción de la lista sobraba. Se reescribieron las ramas comparando con `<>` contra el otro caso, como en la `001` (decisión 4 de la fase). Así las listas se detectan.
+- **El estado desconocido** seguía sin detectarse: la prueba solo lo intentaba sin datos de confirmación, y otra regla lo rechazaba. Se agregó el caso con todos los datos.
+
+Las 36 se detectan ahora: la pendiente única, las 2 listas de la transferencia, las 5 condiciones de una del propietario, las 5 de una de autoservicio, las 8 de la confirmación y la liberación manual, la conversión de las filas existentes, la alerta abierta única y sus 6 restricciones, las 3 del desafío, los 2 permisos por columna y que las del propietario nacen confirmadas.
+
+### E4-1.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 443 pruebas, 28 282 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 443 pruebas, 28 282 aserciones, todas OK |
+| Playwright | Panel, sin internet y dispositivos de confianza OK |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
