@@ -2,7 +2,17 @@
 declare(strict_types=1);
 namespace AdelPos\License\Tests\Unit;
 
-use AdelPos\License\Domain\{ApiProblem, CalendarPeriod, Jws, LicenseContent, OfflineRequest, Protocol};
+use AdelPos\License\Domain\{
+	ApiProblem,
+	CalendarPeriod,
+	Credit,
+	Jws,
+	LicenseContent,
+	LicenseTerms,
+	Money,
+	OfflineRequest,
+	Protocol,
+};
 use AdelPos\License\Http\ApiKernel;
 use AdelPos\License\Infrastructure\SigningKeys;
 use AdelPos\License\Tests\ContractSchemas;
@@ -65,7 +75,7 @@ final class ContractFilesTest extends TestCase
 	{
 		[$status, $output] = self::command([PHP_BINARY, 'contracts/v1/generate-fixtures.php', '--check']);
 		self::assertSame(0, $status, $output);
-		self::assertStringStartsWith('Comprobado: 11 licencias, 17 casos negativos', $output);
+		self::assertStringStartsWith('Comprobado: 17 licencias, 17 casos negativos', $output);
 		// La carpeta del contrato solo tiene lo que la especificación enumera.
 		$files = array_map('basename', glob(ContractSchemas::directory() . '/*'));
 		sort($files);
@@ -109,6 +119,12 @@ final class ContractFilesTest extends TestCase
 				'closing-deactivated',
 				'closing-transferred',
 				'closing-revoked',
+				'renewed-subscription',
+				'trial-converted-to-subscription',
+				'trial-converted-to-perpetual',
+				'perpetual-with-maintenance',
+				'plan-upgrade',
+				'scheduled-reduction-applied',
 				'rotated-key',
 			],
 			array_column($vectors['licenses'], 'name'),
@@ -263,6 +279,99 @@ final class ContractFilesTest extends TestCase
 		}
 	}
 
+	/** Casos del ciclo comercial (etapa 3): renovación, conversión de una prueba y mantenimiento. */
+	public function testCommercialDateCasesAreReproducedByTheDateEngine(): void
+	{
+		$dates = ContractSchemas::vectors()['dates'];
+		$utc = fn(?\DateTimeImmutable $instant): ?string => $instant === null ? null : CalendarPeriod::utc($instant);
+		self::assertCount(9, $dates['renewal']);
+		foreach ($dates['renewal'] as $case) {
+			$renewal = CalendarPeriod::renewal(
+				new \DateTimeImmutable($case['expires_at']),
+				$case['grace_days'],
+				new \DateTimeImmutable($case['paid_at']),
+				LicenseTerms::BILLING_MONTHS[$case['billing_period']],
+				$case['time_zone'],
+				$case['anchor_day'],
+				$case['anchor_local_time'],
+			);
+			self::assertSame(
+				$case['expected'],
+				[
+					'period_starts_at' => $utc($renewal['period_starts_at']),
+					'expires_at' => $utc($renewal['expires_at']),
+					'anchor_day' => $renewal['anchor_day'],
+					'anchor_local_time' => $renewal['anchor_local_time'],
+				],
+				$case['name'],
+			);
+		}
+		self::assertCount(4, $dates['conversion']);
+		foreach ($dates['conversion'] as $case) {
+			$period = CalendarPeriod::firstPeriod(
+				$case['terms'],
+				new \DateTimeImmutable($case['paid_at']),
+				$case['time_zone'],
+			);
+			self::assertSame(
+				$case['expected'],
+				[
+					'period_starts_at' => $utc($period['period_starts_at']),
+					'expires_at' => $utc($period['expires_at']),
+					'updates_until' => $utc($period['updates_until']),
+					'anchor_day' => $period['anchor_day'],
+					'anchor_local_time' => $period['anchor_local_time'],
+				],
+				$case['name'],
+			);
+		}
+		self::assertCount(3, $dates['maintenance']);
+		foreach ($dates['maintenance'] as $case) {
+			$maintenance = CalendarPeriod::maintenance(
+				new \DateTimeImmutable($case['updates_until']),
+				new \DateTimeImmutable($case['paid_at']),
+				$case['time_zone'],
+				$case['anchor_day'],
+				$case['anchor_local_time'],
+			);
+			self::assertSame(
+				$case['expected'],
+				[
+					'updates_from' => $utc($maintenance['updates_from']),
+					'updates_until' => $utc($maintenance['updates_until']),
+					'anchor_day' => $maintenance['anchor_day'],
+					'anchor_local_time' => $maintenance['anchor_local_time'],
+				],
+				$case['name'],
+			);
+		}
+	}
+
+	public function testCreditCasesAreReproducedToTheCent(): void
+	{
+		$credits = ContractSchemas::vectors()['credits'];
+		self::assertCount(8, $credits);
+		foreach ($credits as $case) {
+			$result = Credit::remaining(
+				$case['paid_cents'],
+				new \DateTimeImmutable($case['period_starts_at']),
+				new \DateTimeImmutable($case['expires_at']),
+				new \DateTimeImmutable($case['paid_at']),
+			);
+			self::assertSame(Money::toSql($case['paid_cents']), $case['paid_mxn'], $case['name']);
+			self::assertSame(
+				$case['expected'],
+				[
+					'remaining_seconds' => $result['remaining_seconds'],
+					'period_seconds' => $result['period_seconds'],
+					'credit_cents' => $result['credit'],
+					'credit_mxn' => Money::toSql($result['credit']),
+				],
+				$case['name'],
+			);
+		}
+	}
+
 	public function testProofsAndOfflineRequestsAreReproducedByTheProtocol(): void
 	{
 		$vectors = ContractSchemas::vectors();
@@ -411,7 +520,7 @@ final class ContractFilesTest extends TestCase
 		);
 		self::assertSame(0, $status, $output);
 		self::assertStringContainsString(
-			'OK: 11 licencias, 17 casos negativos, 6 casos de revisión, 13 estados temporales, ' .
+			'OK: 17 licencias, 17 casos negativos, 7 casos de revisión, 13 estados temporales, ' .
 				'4 pruebas de posesión y 3 solicitudes .licreq',
 			$output,
 		);

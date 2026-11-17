@@ -414,3 +414,12 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 5 | La auditoría del cambio aplicado por la tarea es del sistema (`actor_id` nulo); el historial de la licencia lo atribuye a quien lo programó. Cada ejecución deja un evento `maintenance.scheduled_changes` con lo aplicado, lo firmado y lo omitido. | Quién decidió y quién ejecutó quedan separados. |
 | 6 | La limitación sin internet se documenta en `SECURITY.md`, sección 8. | Especificación, Fase 7, punto 5. |
 | 7 | Sin dependencias nuevas. | — |
+
+### Fase 8 — Archivos del contrato
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | Seis licencias nuevas del ciclo comercial, cada una como revisión mayor de una licencia con su misma activación. Para no reutilizar un número de revisión, la renovada parte de la suscripción anual (que solo tenía la revisión 1) y las demás usan identificadores nuevos (`…0008` a `…0011`). | El contrato prohíbe reutilizar un número de revisión de una licencia; las licencias de la etapa 2 ya tenían su revisión 2 de cierre. |
+| 2 | Las fechas del ciclo comercial (`dates.renewal`, `dates.conversion`, `dates.maintenance`) y las bonificaciones (`credits`) llevan entradas y resultados escritos a mano. `ContractFilesTest` los reproduce con `CalendarPeriod::renewal()`, `firstPeriod()`, `maintenance()` y `Domain\Credit`. | Igual que en la etapa 2 (Fase 7, decisión 6): si el generador usara el servidor, un error del servidor se copiaría a los archivos. |
+| 3 | El verificador en Go no calcula fechas ni bonificaciones: acepta las licencias nuevas y el caso de revisión de la renovación. | Las fechas las calcula únicamente el servidor (contrato §5, y etapa 2, Fase 7, decisión 7). La bonificación tampoco es una regla del cliente. |
+| 4 | `openapi.yaml` y `license.schema.json` no cambian. | Especificación, Fase 8, punto 4: esta etapa no agrega rutas ni campos. Con esto queda resuelta la propuesta V1.1 n.º 6 (casos de renovación en la etapa 3). |

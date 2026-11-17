@@ -214,6 +214,73 @@ $contents = [
 		['status_reason' => 'revoked'],
 	),
 ];
+// Ciclo comercial (etapa 3). Cada caso es la revisión nueva de una licencia, con la misma activación.
+// Las fechas están calculadas a mano: Monterrey va en UTC-6 todo el año.
+$contents += [
+	// La suscripción anual (revisión 1) se renueva el 10 de noviembre de 2027, antes de vencer: el
+	// periodo nuevo empieza en el vencimiento anterior y conserva su día y su hora (contrato §5.3).
+	'renewed-subscription' => array_replace($contents['subscription-annual'], [
+		'license_revision' => 2,
+		'issued_at' => '2027-11-10T18:00:00.000000Z',
+		'period_starts_at' => '2027-11-16T06:30:00.000000Z',
+		'expires_at' => '2028-11-16T06:30:00.000000Z',
+		'updates_until' => '2028-11-16T06:30:00.000000Z',
+	]),
+	// Una prueba activada se paga el 25 de noviembre a las 12:00 y pasa a suscripción mensual del plan
+	// elemental: el periodo nuevo empieza en la fecha de pago y los días de prueba no se acumulan (§5.4).
+	'trial-converted-to-subscription' => array_replace($subscription, [
+		'license_id' => '10000000-0000-4000-8000-000000000008',
+		'activation_id' => '30000000-0000-4000-8000-000000000008',
+		'license_revision' => 2,
+		'issued_at' => '2026-11-25T18:00:00.000000Z',
+		'period_starts_at' => '2026-11-25T18:00:00.000000Z',
+		'expires_at' => '2026-12-25T18:00:00.000000Z',
+		'updates_until' => '2026-12-25T18:00:00.000000Z',
+	]),
+	// La misma conversión, a perpetua con 6 meses de actualizaciones contados desde la fecha de pago.
+	'trial-converted-to-perpetual' => array_replace($perpetual, [
+		'license_id' => '10000000-0000-4000-8000-000000000009',
+		'activation_id' => '30000000-0000-4000-8000-000000000009',
+		'license_revision' => 2,
+		'issued_at' => '2026-11-25T18:00:00.000000Z',
+		'period_starts_at' => '2026-11-25T18:00:00.000000Z',
+		'updates_until' => '2027-05-25T18:00:00.000000Z',
+	]),
+	// La perpetua sin actualizaciones compra 12 meses de mantenimiento el 20 de enero de 2027 a las
+	// 12:00: como ya habían terminado, se cuentan desde la fecha de pago (§5.5).
+	'perpetual-with-maintenance' => array_replace($contents['perpetual-0-months'], [
+		'license_revision' => 2,
+		'issued_at' => '2027-01-20T18:00:00.000000Z',
+		'updates_until' => '2028-01-20T18:00:00.000000Z',
+	]),
+	// Suscripción mensual del plan elemental que sube a premium el 1 de diciembre a las 12:00: periodo
+	// nuevo desde la fecha de pago, con los cupos del plan nuevo.
+	'plan-upgrade' => array_replace($subscription, [
+		'license_id' => '10000000-0000-4000-8000-000000000010',
+		'activation_id' => '30000000-0000-4000-8000-000000000010',
+		'license_revision' => 2,
+		'issued_at' => '2026-12-01T18:00:00.000000Z',
+		'period_starts_at' => '2026-12-01T18:00:00.000000Z',
+		'expires_at' => '2027-01-01T18:00:00.000000Z',
+		'updates_until' => '2027-01-01T18:00:00.000000Z',
+		'plan' => ['plan_id' => 'premium', 'name' => 'Plan premium', 'custom' => false],
+		'limits' => ['cash_registers' => 5, 'order_takers' => 10, 'kitchen_displays' => 5],
+	]),
+	// Suscripción premium que programó bajar a básico al vencer lo pagado (16 de diciembre) y se renovó
+	// antes. La tarea diaria del 17 de diciembre firma la revisión 3 con los cupos del básico; el periodo
+	// renovado no cambia.
+	'scheduled-reduction-applied' => array_replace($subscription, [
+		'license_id' => '10000000-0000-4000-8000-000000000011',
+		'activation_id' => '30000000-0000-4000-8000-000000000011',
+		'license_revision' => 3,
+		'issued_at' => '2026-12-17T03:15:00.000000Z',
+		'period_starts_at' => '2026-12-16T06:30:00.000000Z',
+		'expires_at' => '2027-01-16T06:30:00.000000Z',
+		'updates_until' => '2027-01-16T06:30:00.000000Z',
+		'plan' => ['plan_id' => 'basico', 'name' => 'Plan básico', 'custom' => false],
+		'limits' => ['cash_registers' => 1, 'order_takers' => 0, 'kitchen_displays' => 0],
+	]),
+];
 // La misma licencia perpetua, firmada después con otra llave de confianza (rotación de llaves).
 $rotated = array_replace($contents['perpetual-12-months'], [
 	'license_revision' => 2,
@@ -463,6 +530,13 @@ $revisionCases = [
 		'expected' => 'stale_revision',
 	],
 	[
+		'name' => 'renewal-same-activation',
+		'description' => 'Llega la renovación (revisión 2, misma activación) después de aceptar la revisión 1.',
+		'accepted' => $accepted($licenses['subscription-annual']),
+		'jws' => $licenses['renewed-subscription']['jws'],
+		'expected' => 'accepted',
+	],
+	[
 		'name' => 'other-license-is-independent',
 		'description' => 'La revisión aceptada de otra licencia no cuenta.',
 		'accepted' => $accepted($licenses['closing-transferred']),
@@ -659,6 +733,304 @@ foreach ($firstPeriods as [$name, $terms, $expires, $updates]) {
 	];
 }
 
+// Renovación de una suscripción (§5.3): límite = vencimiento + grace_days × 24 h, exclusivo. Antes del
+// límite, la base es el vencimiento y se conserva el ancla; desde el límite, la base es la fecha de pago.
+// Vence el 2 de marzo de 2027 a las 10:00 de Monterrey (16:00 UTC), con día ancla 2.
+$renewal = fn(
+	string $name,
+	string $zone,
+	string $expires,
+	string $paid,
+	string $period,
+	int $day,
+	string $time,
+	array $expected,
+): array => [
+	'name' => $name,
+	'time_zone' => $zone,
+	'expires_at' => $expires,
+	'grace_days' => 5,
+	'paid_at' => $paid,
+	'billing_period' => $period,
+	'anchor_day' => $day,
+	'anchor_local_time' => $time,
+	'expected' => [
+		'period_starts_at' => $expected[0],
+		'expires_at' => $expected[1],
+		'anchor_day' => $expected[2],
+		'anchor_local_time' => $expected[3],
+	],
+];
+$march2 = '2027-03-02T16:00:00.000000Z';
+$ten = '10:00:00.000000';
+$dates['renewal'] = [
+	$renewal(
+		'paga el 1 de marzo, antes de vencer',
+		$monterrey,
+		$march2,
+		'2027-03-01T16:00:00.000000Z',
+		'monthly',
+		2,
+		$ten,
+		[$march2, '2027-04-02T16:00:00.000000Z', 2, $ten],
+	),
+	$renewal(
+		'paga el 5 de marzo, dentro de la tolerancia',
+		$monterrey,
+		$march2,
+		'2027-03-05T16:00:00.000000Z',
+		'monthly',
+		2,
+		$ten,
+		[$march2, '2027-04-02T16:00:00.000000Z', 2, $ten],
+	),
+	$renewal(
+		'un microsegundo antes del límite de la tolerancia',
+		$monterrey,
+		$march2,
+		'2027-03-07T15:59:59.999999Z',
+		'monthly',
+		2,
+		$ten,
+		[$march2, '2027-04-02T16:00:00.000000Z', 2, $ten],
+	),
+	$renewal(
+		'paga el 7 de marzo a las 10:00, justo en el límite',
+		$monterrey,
+		$march2,
+		'2027-03-07T16:00:00.000000Z',
+		'monthly',
+		2,
+		$ten,
+		['2027-03-07T16:00:00.000000Z', '2027-04-07T16:00:00.000000Z', 7, $ten],
+	),
+	$renewal('paga el 20 de marzo', $monterrey, $march2, '2027-03-20T16:00:00.000000Z', 'monthly', 2, $ten, [
+		'2027-03-20T16:00:00.000000Z',
+		'2027-04-20T16:00:00.000000Z',
+		20,
+		$ten,
+	]),
+	// Día ancla 31: el 28 de febrero vuelve al 31 de marzo, y el 31 de marzo pasa al 30 de abril.
+	$renewal(
+		'encadenada con día ancla 31, desde febrero',
+		$monterrey,
+		'2027-02-28T16:00:00.000000Z',
+		'2027-02-20T16:00:00.000000Z',
+		'monthly',
+		31,
+		$ten,
+		['2027-02-28T16:00:00.000000Z', '2027-03-31T16:00:00.000000Z', 31, $ten],
+	),
+	$renewal(
+		'encadenada con día ancla 31, desde marzo',
+		$monterrey,
+		'2027-03-31T16:00:00.000000Z',
+		'2027-03-20T16:00:00.000000Z',
+		'monthly',
+		31,
+		$ten,
+		['2027-03-31T16:00:00.000000Z', '2027-04-30T16:00:00.000000Z', 31, $ten],
+	),
+	$renewal(
+		'cambio de mensual a anual al renovar',
+		$monterrey,
+		$march2,
+		'2027-03-01T16:00:00.000000Z',
+		'annual',
+		2,
+		$ten,
+		[$march2, '2028-03-02T16:00:00.000000Z', 2, $ten],
+	),
+	// En Tijuana vence a las 10:00 del horario estándar (18:00 UTC); el periodo nuevo vence a las 10:00
+	// del horario de verano (17:00 UTC).
+	$renewal(
+		'zona del cliente con cambio de horario',
+		$tijuana,
+		'2027-03-02T18:00:00.000000Z',
+		'2027-03-01T18:00:00.000000Z',
+		'monthly',
+		2,
+		$ten,
+		['2027-03-02T18:00:00.000000Z', '2027-04-02T17:00:00.000000Z', 2, $ten],
+	),
+];
+// Conversión de una prueba activada en licencia de pago (§5.4): el periodo nuevo empieza en la fecha de
+// pago, el 25 de noviembre de 2026 a las 12:00 de Monterrey, con ese día y esa hora como ancla.
+$conversion = fn(string $name, array $terms, ?string $expires, string $updates): array => [
+	'name' => $name,
+	'time_zone' => $monterrey,
+	'terms' => $terms,
+	'paid_at' => '2026-11-25T18:00:00.000000Z',
+	'expected' => [
+		'period_starts_at' => '2026-11-25T18:00:00.000000Z',
+		'expires_at' => $expires,
+		'updates_until' => $updates,
+		'anchor_day' => 25,
+		'anchor_local_time' => '12:00:00.000000',
+	],
+];
+$dates['conversion'] = [
+	$conversion(
+		'prueba a suscripción mensual',
+		['license_type' => 'subscription', 'billing_period' => 'monthly'],
+		'2026-12-25T18:00:00.000000Z',
+		'2026-12-25T18:00:00.000000Z',
+	),
+	$conversion(
+		'prueba a suscripción anual',
+		['license_type' => 'subscription', 'billing_period' => 'annual'],
+		'2027-11-25T18:00:00.000000Z',
+		'2027-11-25T18:00:00.000000Z',
+	),
+	$conversion(
+		'prueba a perpetua con 6 meses',
+		['license_type' => 'perpetual', 'updates_months' => 6],
+		null,
+		'2027-05-25T18:00:00.000000Z',
+	),
+	$conversion(
+		'prueba a perpetua sin actualizaciones',
+		['license_type' => 'perpetual', 'updates_months' => 0],
+		null,
+		'2026-11-25T18:00:00.000000Z',
+	),
+];
+// Mantenimiento de una perpetua (§5.5 y decisión 4 del propietario): 12 meses desde la fecha posterior
+// entre el pago y el fin vigente de las actualizaciones.
+$maintenance = fn(string $name, string $until, int $day, string $time, string $paid, array $expected): array => [
+	'name' => $name,
+	'time_zone' => $monterrey,
+	'updates_until' => $until,
+	'anchor_day' => $day,
+	'anchor_local_time' => $time,
+	'paid_at' => $paid,
+	'expected' => [
+		'updates_from' => $expected[0],
+		'updates_until' => $expected[1],
+		'anchor_day' => $expected[2],
+		'anchor_local_time' => $expected[3],
+	],
+];
+$dates['maintenance'] = [
+	$maintenance(
+		'antes de que terminen las actualizaciones',
+		'2027-05-16T06:30:00.000000Z',
+		16,
+		'00:30:00.000000',
+		'2027-04-01T18:00:00.000000Z',
+		['2027-05-16T06:30:00.000000Z', '2028-05-16T06:30:00.000000Z', 16, '00:30:00.000000'],
+	),
+	$maintenance(
+		'encadenado: la segunda compra se suma al fin nuevo',
+		'2028-05-16T06:30:00.000000Z',
+		16,
+		'00:30:00.000000',
+		'2027-06-01T18:00:00.000000Z',
+		['2028-05-16T06:30:00.000000Z', '2029-05-16T06:30:00.000000Z', 16, '00:30:00.000000'],
+	),
+	$maintenance(
+		'después de que terminaron: desde la fecha de pago',
+		'2026-11-16T06:30:00.000000Z',
+		16,
+		'00:30:00.000000',
+		'2027-01-20T18:00:00.000000Z',
+		['2027-01-20T18:00:00.000000Z', '2028-01-20T18:00:00.000000Z', 20, '12:00:00.000000'],
+	),
+];
+
+// ---------------------------------------------------------------------------------------------
+// Bonificación de un cambio de plan (decisión 6 del propietario): monto pagado × segundos restantes ÷
+// segundos del periodo, con segundos completos y al centavo, la mitad hacia arriba. Los montos van en
+// centavos y en texto MXN. Útiles si algún día AD-EL POS muestra montos.
+// ---------------------------------------------------------------------------------------------
+
+$credit = fn(
+	string $name,
+	int $paid,
+	string $start,
+	string $end,
+	string $paidAt,
+	int $remaining,
+	int $period,
+	int $expected,
+): array => [
+	'name' => $name,
+	'paid_cents' => $paid,
+	'paid_mxn' => sprintf('%d.%02d', intdiv($paid, 100), $paid % 100),
+	'period_starts_at' => $start,
+	'expires_at' => $end,
+	'paid_at' => $paidAt,
+	'expected' => [
+		'remaining_seconds' => $remaining,
+		'period_seconds' => $period,
+		'credit_cents' => $expected,
+		'credit_mxn' => sprintf('%d.%02d', intdiv($expected, 100), $expected % 100),
+	],
+];
+$march = ['2027-03-01T16:00:00.000000Z', '2027-04-01T16:00:00.000000Z'];
+$credits = [
+	// 900.00 × 1 382 400 ÷ 2 678 400 = 464.516… → 464.52
+	$credit(
+		'mensual de 900.00, faltan 16 de 31 días',
+		90000,
+		...$march,
+		...['2027-03-16T16:00:00.000000Z', 1382400, 2678400, 46452],
+	),
+	// 850.00 × 16 ÷ 31 = 438.709… → 438.71
+	$credit(
+		'mensual de 850.00, faltan 16 de 31 días',
+		85000,
+		...$march,
+		...['2027-03-16T16:00:00.000000Z', 1382400, 2678400, 43871],
+	),
+	// Anual de 9,000.00 del 1 de marzo de 2027 al 1 de marzo de 2028 (366 días); faltan 351 días.
+	$credit(
+		'anual de 9,000.00, mayor que el precio nuevo de un plan mensual',
+		900000,
+		'2027-03-01T16:00:00.000000Z',
+		'2028-03-01T16:00:00.000000Z',
+		'2027-03-16T16:00:00.000000Z',
+		30326400,
+		31622400,
+		863115,
+	),
+	$credit(
+		'al empezar el periodo, todo lo pagado',
+		90000,
+		...$march,
+		...['2027-03-01T16:00:00.000000Z', 2678400, 2678400, 90000],
+	),
+	$credit('al vencer, nada', 90000, ...$march, ...['2027-04-01T16:00:00.000000Z', 0, 2678400, 0]),
+	$credit(
+		'pagado antes del periodo, nunca más de lo pagado',
+		90000,
+		...$march,
+		...['2027-02-20T16:00:00.000000Z', 2678400, 2678400, 90000],
+	),
+	// 1 centavo × 1 s ÷ 2 s = 0.5 → 1 centavo.
+	$credit(
+		'la mitad de un centavo sube',
+		1,
+		'2027-01-01T00:00:00.000000Z',
+		'2027-01-01T00:00:02.000000Z',
+		'2027-01-01T00:00:01.000000Z',
+		1,
+		2,
+		1,
+	),
+	// Faltan 1.999999 s: cuentan como 1. 3.00 × 1 ÷ 3 = 1.00.
+	$credit(
+		'segundos completos',
+		300,
+		'2027-01-01T00:00:00.000000Z',
+		'2027-01-01T00:00:03.000000Z',
+		'2027-01-01T00:00:01.000001Z',
+		1,
+		3,
+		100,
+	),
+];
+
 // ---------------------------------------------------------------------------------------------
 // Estado temporal, calculado por el cliente (contrato, sección 5.6)
 //   ahora_efectivo = máximo(reloj local, última hora confiable)
@@ -843,6 +1215,7 @@ $vectors = [
 	'negative_licenses' => $negative,
 	'revision_cases' => $revisionCases,
 	'dates' => $dates,
+	'credits' => $credits,
 	'temporal_states' => $temporalStates,
 	'proofs' => $proofs,
 	'offline_requests' => $requests,
@@ -884,13 +1257,14 @@ if ($found !== $expected) {
 }
 
 printf(
-	'%s: %d licencias, %d casos negativos, %d casos de revisión, %d casos de fechas, %d estados temporales, ' .
-		"%d pruebas de posesión y %d solicitudes .licreq.\n",
+	'%s: %d licencias, %d casos negativos, %d casos de revisión, %d casos de fechas, %d casos de bonificación, ' .
+		"%d estados temporales, %d pruebas de posesión y %d solicitudes .licreq.\n",
 	in_array('--check', $argv, true) ? 'Comprobado' : 'Generado',
 	count($licenses),
 	count($negative),
 	count($revisionCases),
-	count($dates['add_months']) + count($dates['add_days']) + count($dates['first_period']),
+	array_sum(array_map('count', $dates)),
+	count($credits),
 	count($temporalStates),
 	count($proofs),
 	count($requests),

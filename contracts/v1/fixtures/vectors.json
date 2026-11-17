@@ -433,6 +433,240 @@
             "sha256": "134045617ac0ea1c69341778ea7e95b05f9d83baad3bbd9082452fac03fa49c0"
         },
         {
+            "name": "renewed-subscription",
+            "kid": "adelpos-test-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000005",
+                "activation_id": "30000000-0000-4000-8000-000000000005",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "annual",
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 2,
+                "issued_at": "2027-11-10T18:00:00.000000Z",
+                "period_starts_at": "2027-11-16T06:30:00.000000Z",
+                "expires_at": "2028-11-16T06:30:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2028-11-16T06:30:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000005\",\"activation_id\":\"30000000-0000-4000-8000-000000000005\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"annual\",\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":2,\"issued_at\":\"2027-11-10T18:00:00.000000Z\",\"period_starts_at\":\"2027-11-16T06:30:00.000000Z\",\"expires_at\":\"2028-11-16T06:30:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2028-11-16T06:30:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDUiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDA1Iiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoiYW5udWFsIiwibGljZW5zZV9zdGF0dXMiOiJhY3RpdmUiLCJzdGF0dXNfcmVhc29uIjpudWxsLCJsaWNlbnNlX3JldmlzaW9uIjoyLCJpc3N1ZWRfYXQiOiIyMDI3LTExLTEwVDE4OjAwOjAwLjAwMDAwMFoiLCJwZXJpb2Rfc3RhcnRzX2F0IjoiMjAyNy0xMS0xNlQwNjozMDowMC4wMDAwMDBaIiwiZXhwaXJlc19hdCI6IjIwMjgtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImdyYWNlX2RheXMiOjUsInVwZGF0ZXNfdW50aWwiOiIyMDI4LTExLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJwbGFuIjp7InBsYW5faWQiOiJlbGVtZW50YWwiLCJuYW1lIjoiUGxhbiBlbGVtZW50YWwiLCJjdXN0b20iOmZhbHNlfSwibGltaXRzIjp7ImNhc2hfcmVnaXN0ZXJzIjozLCJvcmRlcl90YWtlcnMiOjMsImtpdGNoZW5fZGlzcGxheXMiOjN9LCJmZWF0dXJlcyI6e319.Sfvmsdj6dI657yufhyQRAC63r4Ppg5skBv-DplqshqAVZGZOwmse6gsO4fI8Cp2ICERi34doPiIUKGNwCA4UAA",
+            "sha256": "a3ae362b9df3d615f9f8e47bb6b6d0c40aa05df18a819b3a53cbe83fc3fed65e"
+        },
+        {
+            "name": "trial-converted-to-subscription",
+            "kid": "adelpos-test-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000008",
+                "activation_id": "30000000-0000-4000-8000-000000000008",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "monthly",
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 2,
+                "issued_at": "2026-11-25T18:00:00.000000Z",
+                "period_starts_at": "2026-11-25T18:00:00.000000Z",
+                "expires_at": "2026-12-25T18:00:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2026-12-25T18:00:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000008\",\"activation_id\":\"30000000-0000-4000-8000-000000000008\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"monthly\",\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":2,\"issued_at\":\"2026-11-25T18:00:00.000000Z\",\"period_starts_at\":\"2026-11-25T18:00:00.000000Z\",\"expires_at\":\"2026-12-25T18:00:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2026-12-25T18:00:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDgiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDA4Iiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MiwiaXNzdWVkX2F0IjoiMjAyNi0xMS0yNVQxODowMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTEtMjVUMTg6MDA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI2LTEyLTI1VDE4OjAwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNi0xMi0yNVQxODowMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.CIEinAQvaKJCHGvB_md1F-D45S7zrsPgHer8d8c4By5dnPv8HJ4e9fUNIH14IVI84AN7jQmMA9wWMR-1-UY5AQ",
+            "sha256": "9a689c7782578191b53e90d0d675653b7dac35dfc4b4f29f9b48463040d01cbf"
+        },
+        {
+            "name": "trial-converted-to-perpetual",
+            "kid": "adelpos-test-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000009",
+                "activation_id": "30000000-0000-4000-8000-000000000009",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "perpetual",
+                "billing_period": null,
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 2,
+                "issued_at": "2026-11-25T18:00:00.000000Z",
+                "period_starts_at": "2026-11-25T18:00:00.000000Z",
+                "expires_at": null,
+                "grace_days": 0,
+                "updates_until": "2027-05-25T18:00:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000009\",\"activation_id\":\"30000000-0000-4000-8000-000000000009\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"perpetual\",\"billing_period\":null,\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":2,\"issued_at\":\"2026-11-25T18:00:00.000000Z\",\"period_starts_at\":\"2026-11-25T18:00:00.000000Z\",\"expires_at\":null,\"grace_days\":0,\"updates_until\":\"2027-05-25T18:00:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDkiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDA5Iiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InBlcnBldHVhbCIsImJpbGxpbmdfcGVyaW9kIjpudWxsLCJsaWNlbnNlX3N0YXR1cyI6ImFjdGl2ZSIsInN0YXR1c19yZWFzb24iOm51bGwsImxpY2Vuc2VfcmV2aXNpb24iOjIsImlzc3VlZF9hdCI6IjIwMjYtMTEtMjVUMTg6MDA6MDAuMDAwMDAwWiIsInBlcmlvZF9zdGFydHNfYXQiOiIyMDI2LTExLTI1VDE4OjAwOjAwLjAwMDAwMFoiLCJleHBpcmVzX2F0IjpudWxsLCJncmFjZV9kYXlzIjowLCJ1cGRhdGVzX3VudGlsIjoiMjAyNy0wNS0yNVQxODowMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.oirTe7VYgVxGpMxhXVxk9k-YTQ5OkuNSqWaxLJDf79K4veGm_L900Lap8eF2ZrgoTghSK77PW7YMYo0nY7F2AA",
+            "sha256": "ad35d847e7dad6f1a236c436bbd5e066cad239ff88f6bd4eafd4930b03466cbb"
+        },
+        {
+            "name": "perpetual-with-maintenance",
+            "kid": "adelpos-test-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000001",
+                "activation_id": "30000000-0000-4000-8000-000000000001",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "perpetual",
+                "billing_period": null,
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 2,
+                "issued_at": "2027-01-20T18:00:00.000000Z",
+                "period_starts_at": "2026-11-16T06:30:00.000000Z",
+                "expires_at": null,
+                "grace_days": 0,
+                "updates_until": "2028-01-20T18:00:00.000000Z",
+                "plan": {
+                    "plan_id": "elemental",
+                    "name": "Plan elemental",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 3,
+                    "order_takers": 3,
+                    "kitchen_displays": 3
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000001\",\"activation_id\":\"30000000-0000-4000-8000-000000000001\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"perpetual\",\"billing_period\":null,\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":2,\"issued_at\":\"2027-01-20T18:00:00.000000Z\",\"period_starts_at\":\"2026-11-16T06:30:00.000000Z\",\"expires_at\":null,\"grace_days\":0,\"updates_until\":\"2028-01-20T18:00:00.000000Z\",\"plan\":{\"plan_id\":\"elemental\",\"name\":\"Plan elemental\",\"custom\":false},\"limits\":{\"cash_registers\":3,\"order_takers\":3,\"kitchen_displays\":3},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InBlcnBldHVhbCIsImJpbGxpbmdfcGVyaW9kIjpudWxsLCJsaWNlbnNlX3N0YXR1cyI6ImFjdGl2ZSIsInN0YXR1c19yZWFzb24iOm51bGwsImxpY2Vuc2VfcmV2aXNpb24iOjIsImlzc3VlZF9hdCI6IjIwMjctMDEtMjBUMTg6MDA6MDAuMDAwMDAwWiIsInBlcmlvZF9zdGFydHNfYXQiOiIyMDI2LTExLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJleHBpcmVzX2F0IjpudWxsLCJncmFjZV9kYXlzIjowLCJ1cGRhdGVzX3VudGlsIjoiMjAyOC0wMS0yMFQxODowMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiZWxlbWVudGFsIiwibmFtZSI6IlBsYW4gZWxlbWVudGFsIiwiY3VzdG9tIjpmYWxzZX0sImxpbWl0cyI6eyJjYXNoX3JlZ2lzdGVycyI6Mywib3JkZXJfdGFrZXJzIjozLCJraXRjaGVuX2Rpc3BsYXlzIjozfSwiZmVhdHVyZXMiOnt9fQ.pAmswK2hTF6HxWRWNYfNKVv5DYmQZ_JBQbGk6kfSihoOaUw91DQ_7Uegmmgku3j1x3Zb3rwuajm5oEr26o0dDQ",
+            "sha256": "c303a860aa16d66e22bc06f988c42f92c77fe111f68ad188571dacabaef29e7b"
+        },
+        {
+            "name": "plan-upgrade",
+            "kid": "adelpos-test-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000010",
+                "activation_id": "30000000-0000-4000-8000-000000000010",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "monthly",
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 2,
+                "issued_at": "2026-12-01T18:00:00.000000Z",
+                "period_starts_at": "2026-12-01T18:00:00.000000Z",
+                "expires_at": "2027-01-01T18:00:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2027-01-01T18:00:00.000000Z",
+                "plan": {
+                    "plan_id": "premium",
+                    "name": "Plan premium",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 5,
+                    "order_takers": 10,
+                    "kitchen_displays": 5
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000010\",\"activation_id\":\"30000000-0000-4000-8000-000000000010\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"monthly\",\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":2,\"issued_at\":\"2026-12-01T18:00:00.000000Z\",\"period_starts_at\":\"2026-12-01T18:00:00.000000Z\",\"expires_at\":\"2027-01-01T18:00:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2027-01-01T18:00:00.000000Z\",\"plan\":{\"plan_id\":\"premium\",\"name\":\"Plan premium\",\"custom\":false},\"limits\":{\"cash_registers\":5,\"order_takers\":10,\"kitchen_displays\":5},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTAiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDEwIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MiwiaXNzdWVkX2F0IjoiMjAyNi0xMi0wMVQxODowMDowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTItMDFUMTg6MDA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI3LTAxLTAxVDE4OjAwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNy0wMS0wMVQxODowMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoicHJlbWl1bSIsIm5hbWUiOiJQbGFuIHByZW1pdW0iLCJjdXN0b20iOmZhbHNlfSwibGltaXRzIjp7ImNhc2hfcmVnaXN0ZXJzIjo1LCJvcmRlcl90YWtlcnMiOjEwLCJraXRjaGVuX2Rpc3BsYXlzIjo1fSwiZmVhdHVyZXMiOnt9fQ.NDPUdm1nXVtJFQycG0-7rivWNugM0iyyCCIX27OIMDLP6JY4su7m54XqIQ-uxY4hEMRluriYyBma6q9qkoFNAA",
+            "sha256": "634f2d9ae8c2508e43b409153adece5c302a20e32456dee470333b5e37a667eb"
+        },
+        {
+            "name": "scheduled-reduction-applied",
+            "kid": "adelpos-test-fixture-a",
+            "content": {
+                "schema_version": "1.0",
+                "product_id": "adel_pos",
+                "environment": "test",
+                "license_id": "10000000-0000-4000-8000-000000000011",
+                "activation_id": "30000000-0000-4000-8000-000000000011",
+                "server_id": "22222222-2222-4222-8222-222222222222",
+                "installation_public_key": "QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw",
+                "licensee_name": "Restaurante de Pruebas, S.A. de C.V.",
+                "license_type": "subscription",
+                "billing_period": "monthly",
+                "license_status": "active",
+                "status_reason": null,
+                "license_revision": 3,
+                "issued_at": "2026-12-17T03:15:00.000000Z",
+                "period_starts_at": "2026-12-16T06:30:00.000000Z",
+                "expires_at": "2027-01-16T06:30:00.000000Z",
+                "grace_days": 5,
+                "updates_until": "2027-01-16T06:30:00.000000Z",
+                "plan": {
+                    "plan_id": "basico",
+                    "name": "Plan básico",
+                    "custom": false
+                },
+                "limits": {
+                    "cash_registers": 1,
+                    "order_takers": 0,
+                    "kitchen_displays": 0
+                },
+                "features": {}
+            },
+            "header_json": "{\"alg\":\"EdDSA\",\"kid\":\"adelpos-test-fixture-a\",\"typ\":\"adelpos-lic+jws\"}",
+            "content_json": "{\"schema_version\":\"1.0\",\"product_id\":\"adel_pos\",\"environment\":\"test\",\"license_id\":\"10000000-0000-4000-8000-000000000011\",\"activation_id\":\"30000000-0000-4000-8000-000000000011\",\"server_id\":\"22222222-2222-4222-8222-222222222222\",\"installation_public_key\":\"QBDclj1ZjqhgQl7bGqAcZppsXkiD6Da4oeGCVepMWYw\",\"licensee_name\":\"Restaurante de Pruebas, S.A. de C.V.\",\"license_type\":\"subscription\",\"billing_period\":\"monthly\",\"license_status\":\"active\",\"status_reason\":null,\"license_revision\":3,\"issued_at\":\"2026-12-17T03:15:00.000000Z\",\"period_starts_at\":\"2026-12-16T06:30:00.000000Z\",\"expires_at\":\"2027-01-16T06:30:00.000000Z\",\"grace_days\":5,\"updates_until\":\"2027-01-16T06:30:00.000000Z\",\"plan\":{\"plan_id\":\"basico\",\"name\":\"Plan básico\",\"custom\":false},\"limits\":{\"cash_registers\":1,\"order_takers\":0,\"kitchen_displays\":0},\"features\":{}}",
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMTEiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDExIiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoibW9udGhseSIsImxpY2Vuc2Vfc3RhdHVzIjoiYWN0aXZlIiwic3RhdHVzX3JlYXNvbiI6bnVsbCwibGljZW5zZV9yZXZpc2lvbiI6MywiaXNzdWVkX2F0IjoiMjAyNi0xMi0xN1QwMzoxNTowMC4wMDAwMDBaIiwicGVyaW9kX3N0YXJ0c19hdCI6IjIwMjYtMTItMTZUMDY6MzA6MDAuMDAwMDAwWiIsImV4cGlyZXNfYXQiOiIyMDI3LTAxLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJncmFjZV9kYXlzIjo1LCJ1cGRhdGVzX3VudGlsIjoiMjAyNy0wMS0xNlQwNjozMDowMC4wMDAwMDBaIiwicGxhbiI6eyJwbGFuX2lkIjoiYmFzaWNvIiwibmFtZSI6IlBsYW4gYsOhc2ljbyIsImN1c3RvbSI6ZmFsc2V9LCJsaW1pdHMiOnsiY2FzaF9yZWdpc3RlcnMiOjEsIm9yZGVyX3Rha2VycyI6MCwia2l0Y2hlbl9kaXNwbGF5cyI6MH0sImZlYXR1cmVzIjp7fX0.hom9c4G5h6Qf52MZqcfh0vJyLTH9Pyojg7qzGYQiE1DwrLmYrgRmHGa2qtbxK5foNB1ULRkmhDlhopYuWqIlAQ",
+            "sha256": "e0d6167a4177e3c8080112efce6a807d077938f869fa6cdc71d6a2b775ebb5fe"
+        },
+        {
             "name": "rotated-key",
             "kid": "adelpos-test-fixture-b",
             "content": {
@@ -714,6 +948,17 @@
             "expected": "stale_revision"
         },
         {
+            "name": "renewal-same-activation",
+            "description": "Llega la renovación (revisión 2, misma activación) después de aceptar la revisión 1.",
+            "accepted": {
+                "license_id": "10000000-0000-4000-8000-000000000005",
+                "license_revision": 1,
+                "sha256": "6ced9d535bd5b828ef3a28f8e63e6387bcc673b28b347dfbb30c27f4a4d4ba34"
+            },
+            "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImFkZWxwb3MtdGVzdC1maXh0dXJlLWEiLCJ0eXAiOiJhZGVscG9zLWxpYytqd3MifQ.eyJzY2hlbWFfdmVyc2lvbiI6IjEuMCIsInByb2R1Y3RfaWQiOiJhZGVsX3BvcyIsImVudmlyb25tZW50IjoidGVzdCIsImxpY2Vuc2VfaWQiOiIxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDUiLCJhY3RpdmF0aW9uX2lkIjoiMzAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDA1Iiwic2VydmVyX2lkIjoiMjIyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyIiwiaW5zdGFsbGF0aW9uX3B1YmxpY19rZXkiOiJRQkRjbGoxWmpxaGdRbDdiR3FBY1pwcHNYa2lENkRhNG9lR0NWZXBNV1l3IiwibGljZW5zZWVfbmFtZSI6IlJlc3RhdXJhbnRlIGRlIFBydWViYXMsIFMuQS4gZGUgQy5WLiIsImxpY2Vuc2VfdHlwZSI6InN1YnNjcmlwdGlvbiIsImJpbGxpbmdfcGVyaW9kIjoiYW5udWFsIiwibGljZW5zZV9zdGF0dXMiOiJhY3RpdmUiLCJzdGF0dXNfcmVhc29uIjpudWxsLCJsaWNlbnNlX3JldmlzaW9uIjoyLCJpc3N1ZWRfYXQiOiIyMDI3LTExLTEwVDE4OjAwOjAwLjAwMDAwMFoiLCJwZXJpb2Rfc3RhcnRzX2F0IjoiMjAyNy0xMS0xNlQwNjozMDowMC4wMDAwMDBaIiwiZXhwaXJlc19hdCI6IjIwMjgtMTEtMTZUMDY6MzA6MDAuMDAwMDAwWiIsImdyYWNlX2RheXMiOjUsInVwZGF0ZXNfdW50aWwiOiIyMDI4LTExLTE2VDA2OjMwOjAwLjAwMDAwMFoiLCJwbGFuIjp7InBsYW5faWQiOiJlbGVtZW50YWwiLCJuYW1lIjoiUGxhbiBlbGVtZW50YWwiLCJjdXN0b20iOmZhbHNlfSwibGltaXRzIjp7ImNhc2hfcmVnaXN0ZXJzIjozLCJvcmRlcl90YWtlcnMiOjMsImtpdGNoZW5fZGlzcGxheXMiOjN9LCJmZWF0dXJlcyI6e319.Sfvmsdj6dI657yufhyQRAC63r4Ppg5skBv-DplqshqAVZGZOwmse6gsO4fI8Cp2ICERi34doPiIUKGNwCA4UAA",
+            "expected": "accepted"
+        },
+        {
             "name": "other-license-is-independent",
             "description": "La revisión aceptada de otra licencia no cuenta.",
             "accepted": {
@@ -989,8 +1234,378 @@
                     "anchor_local_time": "00:30:00.000000"
                 }
             }
+        ],
+        "renewal": [
+            {
+                "name": "paga el 1 de marzo, antes de vencer",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-02T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-01T16:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-02T16:00:00.000000Z",
+                    "expires_at": "2027-04-02T16:00:00.000000Z",
+                    "anchor_day": 2,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "paga el 5 de marzo, dentro de la tolerancia",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-02T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-05T16:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-02T16:00:00.000000Z",
+                    "expires_at": "2027-04-02T16:00:00.000000Z",
+                    "anchor_day": 2,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "un microsegundo antes del límite de la tolerancia",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-02T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-07T15:59:59.999999Z",
+                "billing_period": "monthly",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-02T16:00:00.000000Z",
+                    "expires_at": "2027-04-02T16:00:00.000000Z",
+                    "anchor_day": 2,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "paga el 7 de marzo a las 10:00, justo en el límite",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-02T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-07T16:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-07T16:00:00.000000Z",
+                    "expires_at": "2027-04-07T16:00:00.000000Z",
+                    "anchor_day": 7,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "paga el 20 de marzo",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-02T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-20T16:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-20T16:00:00.000000Z",
+                    "expires_at": "2027-04-20T16:00:00.000000Z",
+                    "anchor_day": 20,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "encadenada con día ancla 31, desde febrero",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-02-28T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-02-20T16:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 31,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-02-28T16:00:00.000000Z",
+                    "expires_at": "2027-03-31T16:00:00.000000Z",
+                    "anchor_day": 31,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "encadenada con día ancla 31, desde marzo",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-31T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-20T16:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 31,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-31T16:00:00.000000Z",
+                    "expires_at": "2027-04-30T16:00:00.000000Z",
+                    "anchor_day": 31,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "cambio de mensual a anual al renovar",
+                "time_zone": "America/Monterrey",
+                "expires_at": "2027-03-02T16:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-01T16:00:00.000000Z",
+                "billing_period": "annual",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-02T16:00:00.000000Z",
+                    "expires_at": "2028-03-02T16:00:00.000000Z",
+                    "anchor_day": 2,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            },
+            {
+                "name": "zona del cliente con cambio de horario",
+                "time_zone": "America/Tijuana",
+                "expires_at": "2027-03-02T18:00:00.000000Z",
+                "grace_days": 5,
+                "paid_at": "2027-03-01T18:00:00.000000Z",
+                "billing_period": "monthly",
+                "anchor_day": 2,
+                "anchor_local_time": "10:00:00.000000",
+                "expected": {
+                    "period_starts_at": "2027-03-02T18:00:00.000000Z",
+                    "expires_at": "2027-04-02T17:00:00.000000Z",
+                    "anchor_day": 2,
+                    "anchor_local_time": "10:00:00.000000"
+                }
+            }
+        ],
+        "conversion": [
+            {
+                "name": "prueba a suscripción mensual",
+                "time_zone": "America/Monterrey",
+                "terms": {
+                    "license_type": "subscription",
+                    "billing_period": "monthly"
+                },
+                "paid_at": "2026-11-25T18:00:00.000000Z",
+                "expected": {
+                    "period_starts_at": "2026-11-25T18:00:00.000000Z",
+                    "expires_at": "2026-12-25T18:00:00.000000Z",
+                    "updates_until": "2026-12-25T18:00:00.000000Z",
+                    "anchor_day": 25,
+                    "anchor_local_time": "12:00:00.000000"
+                }
+            },
+            {
+                "name": "prueba a suscripción anual",
+                "time_zone": "America/Monterrey",
+                "terms": {
+                    "license_type": "subscription",
+                    "billing_period": "annual"
+                },
+                "paid_at": "2026-11-25T18:00:00.000000Z",
+                "expected": {
+                    "period_starts_at": "2026-11-25T18:00:00.000000Z",
+                    "expires_at": "2027-11-25T18:00:00.000000Z",
+                    "updates_until": "2027-11-25T18:00:00.000000Z",
+                    "anchor_day": 25,
+                    "anchor_local_time": "12:00:00.000000"
+                }
+            },
+            {
+                "name": "prueba a perpetua con 6 meses",
+                "time_zone": "America/Monterrey",
+                "terms": {
+                    "license_type": "perpetual",
+                    "updates_months": 6
+                },
+                "paid_at": "2026-11-25T18:00:00.000000Z",
+                "expected": {
+                    "period_starts_at": "2026-11-25T18:00:00.000000Z",
+                    "expires_at": null,
+                    "updates_until": "2027-05-25T18:00:00.000000Z",
+                    "anchor_day": 25,
+                    "anchor_local_time": "12:00:00.000000"
+                }
+            },
+            {
+                "name": "prueba a perpetua sin actualizaciones",
+                "time_zone": "America/Monterrey",
+                "terms": {
+                    "license_type": "perpetual",
+                    "updates_months": 0
+                },
+                "paid_at": "2026-11-25T18:00:00.000000Z",
+                "expected": {
+                    "period_starts_at": "2026-11-25T18:00:00.000000Z",
+                    "expires_at": null,
+                    "updates_until": "2026-11-25T18:00:00.000000Z",
+                    "anchor_day": 25,
+                    "anchor_local_time": "12:00:00.000000"
+                }
+            }
+        ],
+        "maintenance": [
+            {
+                "name": "antes de que terminen las actualizaciones",
+                "time_zone": "America/Monterrey",
+                "updates_until": "2027-05-16T06:30:00.000000Z",
+                "anchor_day": 16,
+                "anchor_local_time": "00:30:00.000000",
+                "paid_at": "2027-04-01T18:00:00.000000Z",
+                "expected": {
+                    "updates_from": "2027-05-16T06:30:00.000000Z",
+                    "updates_until": "2028-05-16T06:30:00.000000Z",
+                    "anchor_day": 16,
+                    "anchor_local_time": "00:30:00.000000"
+                }
+            },
+            {
+                "name": "encadenado: la segunda compra se suma al fin nuevo",
+                "time_zone": "America/Monterrey",
+                "updates_until": "2028-05-16T06:30:00.000000Z",
+                "anchor_day": 16,
+                "anchor_local_time": "00:30:00.000000",
+                "paid_at": "2027-06-01T18:00:00.000000Z",
+                "expected": {
+                    "updates_from": "2028-05-16T06:30:00.000000Z",
+                    "updates_until": "2029-05-16T06:30:00.000000Z",
+                    "anchor_day": 16,
+                    "anchor_local_time": "00:30:00.000000"
+                }
+            },
+            {
+                "name": "después de que terminaron: desde la fecha de pago",
+                "time_zone": "America/Monterrey",
+                "updates_until": "2026-11-16T06:30:00.000000Z",
+                "anchor_day": 16,
+                "anchor_local_time": "00:30:00.000000",
+                "paid_at": "2027-01-20T18:00:00.000000Z",
+                "expected": {
+                    "updates_from": "2027-01-20T18:00:00.000000Z",
+                    "updates_until": "2028-01-20T18:00:00.000000Z",
+                    "anchor_day": 20,
+                    "anchor_local_time": "12:00:00.000000"
+                }
+            }
         ]
     },
+    "credits": [
+        {
+            "name": "mensual de 900.00, faltan 16 de 31 días",
+            "paid_cents": 90000,
+            "paid_mxn": "900.00",
+            "period_starts_at": "2027-03-01T16:00:00.000000Z",
+            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "paid_at": "2027-03-16T16:00:00.000000Z",
+            "expected": {
+                "remaining_seconds": 1382400,
+                "period_seconds": 2678400,
+                "credit_cents": 46452,
+                "credit_mxn": "464.52"
+            }
+        },
+        {
+            "name": "mensual de 850.00, faltan 16 de 31 días",
+            "paid_cents": 85000,
+            "paid_mxn": "850.00",
+            "period_starts_at": "2027-03-01T16:00:00.000000Z",
+            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "paid_at": "2027-03-16T16:00:00.000000Z",
+            "expected": {
+                "remaining_seconds": 1382400,
+                "period_seconds": 2678400,
+                "credit_cents": 43871,
+                "credit_mxn": "438.71"
+            }
+        },
+        {
+            "name": "anual de 9,000.00, mayor que el precio nuevo de un plan mensual",
+            "paid_cents": 900000,
+            "paid_mxn": "9000.00",
+            "period_starts_at": "2027-03-01T16:00:00.000000Z",
+            "expires_at": "2028-03-01T16:00:00.000000Z",
+            "paid_at": "2027-03-16T16:00:00.000000Z",
+            "expected": {
+                "remaining_seconds": 30326400,
+                "period_seconds": 31622400,
+                "credit_cents": 863115,
+                "credit_mxn": "8631.15"
+            }
+        },
+        {
+            "name": "al empezar el periodo, todo lo pagado",
+            "paid_cents": 90000,
+            "paid_mxn": "900.00",
+            "period_starts_at": "2027-03-01T16:00:00.000000Z",
+            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "paid_at": "2027-03-01T16:00:00.000000Z",
+            "expected": {
+                "remaining_seconds": 2678400,
+                "period_seconds": 2678400,
+                "credit_cents": 90000,
+                "credit_mxn": "900.00"
+            }
+        },
+        {
+            "name": "al vencer, nada",
+            "paid_cents": 90000,
+            "paid_mxn": "900.00",
+            "period_starts_at": "2027-03-01T16:00:00.000000Z",
+            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "paid_at": "2027-04-01T16:00:00.000000Z",
+            "expected": {
+                "remaining_seconds": 0,
+                "period_seconds": 2678400,
+                "credit_cents": 0,
+                "credit_mxn": "0.00"
+            }
+        },
+        {
+            "name": "pagado antes del periodo, nunca más de lo pagado",
+            "paid_cents": 90000,
+            "paid_mxn": "900.00",
+            "period_starts_at": "2027-03-01T16:00:00.000000Z",
+            "expires_at": "2027-04-01T16:00:00.000000Z",
+            "paid_at": "2027-02-20T16:00:00.000000Z",
+            "expected": {
+                "remaining_seconds": 2678400,
+                "period_seconds": 2678400,
+                "credit_cents": 90000,
+                "credit_mxn": "900.00"
+            }
+        },
+        {
+            "name": "la mitad de un centavo sube",
+            "paid_cents": 1,
+            "paid_mxn": "0.01",
+            "period_starts_at": "2027-01-01T00:00:00.000000Z",
+            "expires_at": "2027-01-01T00:00:02.000000Z",
+            "paid_at": "2027-01-01T00:00:01.000000Z",
+            "expected": {
+                "remaining_seconds": 1,
+                "period_seconds": 2,
+                "credit_cents": 1,
+                "credit_mxn": "0.01"
+            }
+        },
+        {
+            "name": "segundos completos",
+            "paid_cents": 300,
+            "paid_mxn": "3.00",
+            "period_starts_at": "2027-01-01T00:00:00.000000Z",
+            "expires_at": "2027-01-01T00:00:03.000000Z",
+            "paid_at": "2027-01-01T00:00:01.000001Z",
+            "expected": {
+                "remaining_seconds": 1,
+                "period_seconds": 3,
+                "credit_cents": 100,
+                "credit_mxn": "1.00"
+            }
+        }
+    ],
     "temporal_states": [
         {
             "name": "un microsegundo antes de vencer",

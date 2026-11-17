@@ -2431,3 +2431,43 @@ Se quitaron **12 reglas**, todas detectadas: instante incluido en la tarea y al 
 | Playwright | Panel, sin internet y dispositivos de confianza OK |
 
 Las corridas de esta fase coincidieron con dos emuladores de Android del equipo (carga promedio de hasta 250): la suite tardó cerca de una hora por versión en lugar de dos minutos y medio, y pasó completa. La falla intermitente de E3-6.4 no se repitió.
+
+---
+
+## Etapa 3 · Fase 8 — Archivos del contrato (propuesta V1.1 n.º 6)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-8.1 Qué cambió
+
+`contracts/v1/generate-fixtures.php` escribe ahora, comprobado con `--check`:
+
+| Sección | Antes | Ahora | Casos nuevos |
+| --- | --- | --- | --- |
+| `licenses` | 11 | 17 | Suscripción renovada (revisión 2, misma activación), prueba convertida a suscripción, prueba convertida a perpetua, perpetua con mantenimiento, subida de plan y reducción aplicada por la tarea (revisión 3) |
+| `revision_cases` | 6 | 7 | La renovación llega como revisión mayor de la misma activación y se acepta |
+| `dates` | 24 | 40 | `renewal` (9): los cuatro ejemplos de §5.3, un microsegundo antes del límite, el límite exacto, día ancla 31 encadenado, cambio de duración y Tijuana con cambio de horario. `conversion` (4): prueba a suscripción mensual y anual, y a perpetua con 6 y con 0 meses. `maintenance` (3): antes de que terminen las actualizaciones, encadenado y después de que terminaron |
+| `credits` | — | 8 | Monto pagado, inicio, vencimiento, instante del pago y bonificación al centavo: 900.00 y 850.00 con 16 de 31 días, anual mayor que el precio nuevo, al empezar y al vencer, pago anterior al periodo, la mitad de un centavo y segundos completos |
+
+`openapi.yaml` y `license.schema.json` no cambian. `contracts/v1/README.md` describe los casos nuevos.
+
+### E3-8.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `ContractFilesTest` | +2 (`testCommercialDateCasesAreReproducedByTheDateEngine`, `testCreditCasesAreReproducedToTheCent`) | El motor de fechas y la bonificación del servidor dan exactamente los resultados escritos a mano. Las licencias nuevas cumplen el esquema, las acepta el validador y el servidor firma sus mismos bytes (prueba existente, con la lista ampliada) |
+| Verificador de referencia en Go | — | Acepta las 17 licencias y los 7 casos de revisión |
+
+### E3-8.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **10 reglas** con `ContractFilesTest`: límite exclusivo de la tolerancia, ancla del pago tardío, cambio de duración, mantenimiento desde la fecha posterior, redondeo y segundos completos de la bonificación, un archivo publicado distinto del generador y una licencia alterada en el generador. **Todas se detectaron**, menos la perpetua de 0 meses que termina en el pago: en Monterrey no hay horas repetidas, así que los casos del contrato no la distinguen. La vigila `CalendarPeriodTest` (etapa 2, Fase 3, decisión 5), y con ella sí se detecta.
+
+### E3-8.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 432 pruebas, 28 135 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 432 pruebas, 28 135 aserciones, todas OK |
+| `generate-fixtures.php --check` | 17 licencias, 17 casos negativos, 7 de revisión, 40 de fechas, 8 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go | OK en todos los casos |
+| Playwright | Sin cambios en el panel en esta fase; la última corrida (Fase 7) pasó |

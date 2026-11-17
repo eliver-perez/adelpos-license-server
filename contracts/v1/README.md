@@ -25,17 +25,18 @@ Todas las llaves de `fixtures/` salen de **semillas públicas**. Sirven solo par
 | Sección | Contenido |
 | --- | --- |
 | `signing_keys`, `installations` | Llaves de firma por entorno y dos instalaciones, con su semilla pública: `sha256("ADELPOS LICENSE PUBLIC TEST ONLY V1 " + name)` |
-| `licenses` | 11 licencias válidas: perpetua con 0, 6 y 12 meses de actualizaciones, suscripción mensual y anual, prueba de 15 días, personalizada, las tres revisiones de cierre (`deactivated`, `transferred`, `revoked`) y una firmada con otra llave de confianza |
+| `licenses` | 17 licencias válidas: perpetua con 0, 6 y 12 meses de actualizaciones, suscripción mensual y anual, prueba de 15 días, personalizada, las tres revisiones de cierre (`deactivated`, `transferred`, `revoked`), una firmada con otra llave de confianza y, del ciclo comercial, una suscripción renovada (revisión mayor, misma activación), una prueba convertida a suscripción y otra a perpetua, una perpetua con mantenimiento, una subida de plan y una reducción aplicada por la tarea programada |
 | `negative_licenses` | 17 licencias que deben rechazarse, con su motivo: firma o contenido alterados, `kid` desconocido, encabezado distinto, licencia de prueba en una instalación de producción, entorno que no coincide con la llave, otra instalación, otro producto, campo faltante, `schema_version` 2.0, tipos incorrectos y más |
-| `revision_cases` | 6 casos de la regla «la revisión nunca retrocede» (sección 10) |
-| `dates` | 24 casos de fechas con su resultado: meses de calendario con día ancla, años bisiestos, cambios de horario, 15 días de calendario y el primer periodo de cada tipo de licencia |
+| `revision_cases` | 7 casos de la regla «la revisión nunca retrocede» (sección 10), entre ellos la renovación que llega como revisión mayor de la misma activación |
+| `dates` | 40 casos de fechas con su resultado: meses de calendario con día ancla, años bisiestos, cambios de horario, 15 días de calendario y el primer periodo de cada tipo de licencia (24); renovación (`renewal`, 9: los cuatro ejemplos de §5.3, un microsegundo antes del límite de la tolerancia, día ancla 31 encadenado, cambio de duración y cambio de horario); conversión de una prueba (`conversion`, 4); y mantenimiento antes y después de que terminen las actualizaciones (`maintenance`, 3) |
+| `credits` | 8 casos de la bonificación de un cambio de plan, con monto pagado, inicio, vencimiento, instante del pago y bonificación al centavo, en centavos y en texto MXN. Útiles si algún día AD-EL POS muestra montos |
 | `temporal_states` | 13 casos del estado temporal (sección 5.6): límites exactos de vigente, tolerancia y vencida, y reloj atrasado |
 | `proofs` | Pruebas de posesión de las cuatro acciones. `transfer` es solo un vector criptográfico: la API todavía no la acepta |
 | `offline_requests` | Solicitudes `.licreq` de las tres acciones |
 
 Además, cada licencia está en `fixtures/licenses/<nombre>.lic` y cada solicitud en `fixtures/requests/<acción>.licreq`, tal como viajan.
 
-Los casos de renovación, cambio de plan, conversión de prueba y compra de mantenimiento se agregan cuando el servidor implemente esas reglas.
+Los casos del ciclo comercial se agregaron en la etapa 3, con el servidor ya implementando esas reglas. Los valores esperados de fechas y bonificaciones están calculados a mano.
 
 ```sh
 php contracts/v1/generate-fixtures.php           # vuelve a escribir fixtures/
@@ -68,7 +69,7 @@ El generador no usa el código del servidor: arma cada contenido a mano, con sus
 go run -C contracts/v1/verify . ../fixtures/vectors.json
 ```
 
-Las fechas (`dates`) no las ejecuta el verificador: **las calcula únicamente el servidor de licencias** (sección 5). Las comprueba la suite de PHP contra el motor de fechas.
+Las fechas (`dates`) y las bonificaciones (`credits`) no las ejecuta el verificador: **las calcula únicamente el servidor de licencias** (sección 5). Las comprueba la suite de PHP contra el motor de fechas y contra `Domain\Credit`. El verificador sí acepta las licencias nuevas del ciclo comercial y el caso de revisión de la renovación.
 
 No es un validador de producción. Es código de referencia para la etapa de integración de AD-EL POS: se puede copiar y adaptar. Quedan fuera las partes que el contrato deja a AD-EL POS, como guardar de forma persistente la licencia, la revisión aceptada y la última hora confiable.
 
