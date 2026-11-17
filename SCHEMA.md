@@ -2,7 +2,7 @@
 
 Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido, que no se modifica, [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
-Las partes marcadas como **Herencia temporal** provienen del motor de licencias heredado. Siguen vigentes, pero se reemplazan en las etapas 2 a 4 según el [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md). En el código están señaladas con `HEREDADO:`; la lista completa está en [AVANCE.md](AVANCE.md), sección 4.2.
+Al cerrar la etapa 2, el esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0 y ya no tiene nada del contenido firmado anterior. La sección 9 enumera lo que cambia en las etapas siguientes.
 
 ## 1. Convenciones
 
@@ -71,7 +71,7 @@ El esquema tiene **33 tablas**, más `schema_migrations`, que crea el migrador.
 | `grace_days` | Días de tolerancia | 5 en suscripción; 0 en prueba y perpetua |
 | `plan_id`, `plan_name`, `plan_custom` | Copia del plan al emitir. `plan_custom` vale 1 si algún cupo se cambió | Llave foránea a `plans`; nombre no vacío |
 | `cash_registers`, `order_takers`, `kitchen_displays` | Cupos que se firman | De 0 a 999 (`chk_license_limits`) |
-| `period_starts_at`, `expires_at`, `anchor_day`, `anchor_local_time`, `updates_until` | Periodo vigente. **Vacío hasta que la licencia se activa.** El día y la hora ancla son los del inicio, en la zona horaria del cliente, con microsegundos | `chk_license_period`: todo vacío o todo completo. En perpetua no hay vencimiento y las actualizaciones no terminan antes del inicio. En suscripción y prueba el vencimiento es posterior al inicio y las actualizaciones terminan con él |
+| `period_starts_at`, `expires_at`, `anchor_day`, `anchor_local_time`, `updates_until` | Periodo vigente. **Vacío hasta que la licencia se activa:** lo fija `LicenseActivator` en la primera activación, en línea o al aprobar una solicitud sin internet, y una activación posterior en otra computadora no lo cambia. El día y la hora ancla son los del inicio, en la zona horaria del cliente, con microsegundos | `chk_license_period`: todo vacío o todo completo. En perpetua no hay vencimiento y las actualizaciones no terminan antes del inicio. En suscripción y prueba el vencimiento es posterior al inicio y las actualizaciones terminan con él |
 
 Las tres restricciones de condiciones comparan primero con `IS NULL` o `IS NOT NULL`: en MySQL una restricción `CHECK` da por válido un resultado nulo.
 
@@ -173,10 +173,13 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 - el rechazo de migraciones modificadas o incompletas;
 - los permisos por tabla.
 
-## 9. Herencia temporal
+## 9. Pendiente para las etapas siguientes
 
-| Elemento del esquema | Regla heredada | Se reemplaza en |
+| Elemento del esquema | Estado al cerrar la etapa 2 | Etapa |
 | --- | --- | --- |
-| `subscription_periods`, `maintenance_purchases` | Historia de renovaciones y mantenimiento del motor anterior, sin escrituras | Etapa 3 (renovación con fecha de pago y compra de mantenimiento) |
-| `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | Etapa 4 (transferencia por autoservicio) |
-| `product_capabilities`, `capability_dependencies`, `license_features` | Módulos genéricos | Se conservan como `features` del contrato (vacío en V1); su uso comercial se define en la etapa 3 |
+| `subscription_periods`, `maintenance_purchases` | Tablas recibidas con el esquema inicial, sin escrituras: la renovación y el mantenimiento están deshabilitados | 3: se rediseñan con la renovación por fecha de pago y la compra de mantenimiento |
+| `plans` | Catálogo de solo lectura para la aplicación | 3: editor de planes y propagación a las licencias existentes |
+| `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | 4: transferencia por autoservicio |
+| `license_transfers` | Registra las transferencias y retiros que hace el propietario desde el panel | 4: transferencias por autoservicio, su confirmación y las alertas |
+| `product_capabilities`, `capability_dependencies`, `license_features` | Módulos del producto. Se firman como `features` del contrato, que en V1 va vacío para `adel_pos` | Su uso comercial se define más adelante |
+| `signing_keys.purpose = 'manifest'` | Propósito recibido, sin uso | Fuera de V1 (contrato, sección 15) |

@@ -882,7 +882,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 6 — Archivos sin internet | **Cerrada.** 357 pruebas, 26 674 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 5 de las 20 marcas de herencia. |
 | 7 — Archivos del contrato y verificador de referencia | **Cerrada.** 369 pruebas, 27 283 aserciones, todas OK. Verificador de referencia en Go OK. Playwright OK. Queda 1 de las 20 marcas de herencia. |
 | 8 — Panel: emisión con el modelo nuevo | **Cerrada.** 373 pruebas, 27 330 aserciones, todas OK. Verificador Go OK. Playwright OK. **Cero** marcas de herencia. |
-| 9 — Cierre | Pendiente |
+| 9 — Cierre | **Cerrada.** 377 pruebas, 27 440 aserciones, todas OK. Verificador Go OK. Playwright OK. Paquete de despliegue generado. **Etapa 2 terminada.** |
 
 ---
 
@@ -1821,3 +1821,179 @@ Todas las fechas de una licencia se muestran en la zona horaria de su cliente, c
 
 - **Etapa 3:** editar el periodo inicial de una suscripción sin activar (propuesta V1.1 n.º 11), renovación, mantenimiento y editor de planes.
 - **Etapa 5:** pantallas definitivas y diseño final de las constancias.
+
+---
+
+## Etapa 2 · Fase 9 — Cierre
+
+### E2-9.1 Cifras por fase
+
+| Fase | Commit | Pruebas | Aserciones | Reglas comprobadas quitándolas una a la vez |
+| --- | --- | --- | --- | --- |
+| 0 — Verificación contra el código | `792e9f3` | 164 | 21 384 | — |
+| 1 — Entornos de firma | `6b9a5a1` | 176 | 21 578 | Ver E2-1.3 |
+| 2 — Modelo de datos | `d087f05` | 186 | 21 918 | 38 |
+| 3 — Motor de fechas | `e8af6c8` | 258 | 26 242 | Ver E2-3.3 |
+| Repaso de formato | `349b4f7` | 261 | 26 248 | 2 (la prueba de estilo) |
+| 4 — Contenido y firma | `bdf7773` | 340 | 26 412 | 24 |
+| 5 — API en línea | `6ba5409` | 344 | 26 611 | 19 |
+| 6 — Archivos sin internet | `da21c61` | 357 | 26 674 | 15 |
+| 7 — Archivos del contrato y verificador | `1553559` | 369 | 27 283 | 24 |
+| 8 — Panel | `f4da774` | 373 | 27 330 | 14 |
+| 9 — Cierre | este commit | **377** | **27 440** | — |
+
+La etapa 1 cerró con 164 pruebas y 21 384 aserciones. La etapa 2 cierra con **213 pruebas más**.
+
+En las fases 4 a 8, quitar reglas una a una encontró **7 reglas que ninguna prueba vigilaba** (1 en la Fase 4, 3 en la 5, 2 en la 7 y 1 en la 8). Las siete tienen ahora su prueba, y una llevó además a simplificar el código: el límite de 16 KiB estaba escrito dos veces.
+
+### E2-9.2 Pruebas eliminadas, sustituidas y nuevas
+
+Ninguna prueba se eliminó sin sustituto. El detalle está en la sección de pruebas de cada fase:
+
+| Fase | Sustituidas | Motivo | Diferencia neta de pruebas |
+| --- | --- | --- | --- |
+| 1 | Ver E2-1.3 | Entorno de firma independiente de `APP_ENV` | +12 |
+| 2 | Ver E2-2.5 | Emisión con el modelo del contrato; renovación y mantenimiento deshabilitados | +10 |
+| 3 | — | — | +72 (casos del motor de fechas) |
+| Formato | — | — | +3 |
+| 4 | 2, en su mismo lugar | Contenido firmado heredado; comparación con archivos heredados | +79 |
+| 5 | 2 | Identidad en mayúsculas; protocolo anterior | +4 (6 nuevas menos 2 sustituidas) |
+| 6 | 3 (cambian de resultado esperado) | `renew` ya no firma; una activación terminada recibe su cierre | +13 |
+| 7 | — (vuelven las dos comparaciones con archivos de prueba) | — | +12 |
+| 8 | — | — | +4 |
+| 9 | — | — | +4 (`StageClosureTest`) |
+
+### E2-9.3 Qué se hizo en esta fase
+
+- **Marcas.** La búsqueda del marcador de herencia da cero resultados fuera de `AVANCE.md` y de la especificación de la etapa, que lo nombra. Lo que pasa a otra etapa está marcado con `PENDIENTE etapa N:` en 8 archivos: etapa 3 (renovación, mantenimiento, periodo inicial y editor de planes), etapa 4 (transferencia por autoservicio y alertas) y etapa 5 (diseño final de las constancias).
+- **Documentos.** `README.md`, `ARCHITECTURE.md`, `SCHEMA.md`, `SECURITY.md`, `OPERATIONS.md` y `TEST_PLAN.md` describen la etapa 2 cerrada. Las secciones de herencia se sustituyeron por «Pendiente para las etapas siguientes».
+- **`DECISIONS.md`.** Sección 6 cerrada, sección 9 con las propuestas V1.1 nuevas y sección 10 con las decisiones técnicas de cada fase y las dos dependencias de desarrollo.
+- **Paquete de despliegue.** Incluye `contracts/v1/license.schema.json` y `contracts/v1/openapi.yaml` como documentación. No incluye archivos de prueba, llaves de prueba, generador ni verificador. Generado y revisado: 133 archivos más `RELEASE.json`.
+- **Panel.** El alias interno de la identidad de la computadora dejó de llamarse como en el protocolo anterior.
+- **Prueba nueva `StageClosureTest`:** el contrato conserva su SHA-256, no queda marcador de herencia, no queda protocolo anterior en el código del servidor y toda marca de pendiente nombra su etapa.
+- **Datos sintéticos.** No queda ninguna base ni usuario `adelpos_license_test_*` en MySQL, ni archivos temporales de las pruebas.
+
+### E2-9.4 Consultas al propietario
+
+Se trabajaron las fases 4 a 9 sin detenerse, como se pidió. Estas decisiones se tomaron con el criterio indicado y **quedan a su aprobación**. Ninguna modifica el contrato y todas se pueden revertir.
+
+**Propuestas V1.1 nuevas** (ambigüedades del contrato encontradas al implementar):
+
+| N.º | Sección | Qué no queda definido | Criterio aplicado | Alternativa |
+| --- | --- | --- | --- | --- |
+| 14 | §8.6 | El contrato fija `"status": "deactivated"` en la respuesta de desactivar. No dice qué lleva si la activación ya había terminado por transferencia o revocación. | Siempre `deactivated`; el motivo real va en `status_reason` de la licencia firmada de esa misma respuesta. | Devolver el estado real (`transferred` o `revoked`), lo que obligaría a AD-EL POS a manejar tres valores. |
+| 15 | §9.1 | No dice si `renew` o `deactivate` sin internet se atienden cuando la licencia fue revocada. | Se atienden y entregan la revisión de cierre. | Rechazarlas: la computadora sin internet nunca se enteraría de la revocación. |
+| 16 | §9.1, §3 | Formato de `created_at` en un `.licreq`. | Solo UTC terminado en `Z`, con 0 a 9 decimales. | Aceptar también `+00:00`, como antes. |
+| 17 | §4 | El contenido dice `schema_version: "1.0"`; el cliente acepta cualquier `1.x`. | El esquema publicado fija `1.0`; el verificador de referencia acepta `1.x`. | Que el esquema acepte `1.x`. |
+| 18 | §3 | El servidor emite 6 decimales; el cliente acepta de 0 a 9. | El esquema admite de 0 a 9; el servidor se exige 6 antes de firmar. | Que el esquema exija 6. |
+| 19 | §8.7 | HTTP de una petición que llega sin TLS. | `403 INVALID_REQUEST`, como ya estaba. | `400`. |
+| 20 | §8.3 | La misma llave con otro `server_id`. | Es otra instalación: `ACTIVATION_LIMIT`. | — |
+
+**Decisiones que van más allá de la especificación:**
+
+| # | Decisión | Por qué | Cómo revertirla |
+| --- | --- | --- | --- |
+| A | La emisión rechaza productos distintos de `adel_pos` (Fase 4). | El contrato solo permite firmar ese producto: una licencia de otro no podría activarse. | Quitar la comprobación de `LicenseService::issue`; el validador seguiría impidiendo la firma. |
+| B | `license_key` en un `.licreq` solo se acepta en `activate` (Fase 6). | Es lo que dice el contrato; antes se aceptaba en cualquier acción. | — |
+| C | Dos dependencias nuevas de desarrollo: `opis/json-schema` y `symfony/yaml` (Fase 7). | La especificación las prevé para comparar el esquema y el OpenAPI con el código. No van al servidor. | — |
+
+**Pendiente de su autorización:**
+
+| # | Asunto |
+| --- | --- |
+| D | `database/migrations/001_esquema_inicial.sql` es el único archivo propio que no cumple la regla de código legible: tiene líneas de hasta 238 columnas e indentación con espacios. La especificación prohíbe modificarlo. Si lo autoriza, se reformatea igual que la `003`; no hay instalaciones, así que el cambio de checksum no afecta a nadie. |
+
+### E2-9.5 Criterios de aceptación
+
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| Todo lo que el servidor firma, recibe y devuelve coincide con el contrato V1.0. El contrato no se modificó | Cumplido | `ContractFilesTest`, `ActivationsTest`, `HttpApiTest` y `OfflineTest`. SHA-256 del contrato sin cambio (`StageClosureTest`) |
+| No queda rastro del protocolo anterior | Cumplido | `StageClosureTest::testThePreviousProtocolIsGoneFromTheServerCode`. Los prefijos y campos anteriores solo aparecen en pruebas y casos negativos que comprueban su rechazo, y en las migraciones `003` y `004`, que retiran sus columnas |
+| Entornos de firma `test` y `production`, separados y comprobados. Producción rechaza las llaves de prueba | Cumplido | `SigningEnvironmentsTest` y `ContractFilesTest::testEveryFixtureKeyIsRejectedByTheServerInProduction` |
+| El primer periodo se calcula con el motor de fechas, al activar en línea o al aprobar sin internet, con casos exactos | Cumplido | `CalendarPeriodTest`, `ActivationsTest` (contenido exacto de cada tipo), `OfflineTest::testThePeriodStartsWhenTheRequestIsApproved…` y los 24 casos de fechas de `fixtures/` |
+| API, archivos sin internet, errores y reintentos probados, incluida la concurrencia | Cumplido | Secciones E2-5.3 y E2-6.3 |
+| Existen `license.schema.json`, `openapi.yaml`, los archivos de prueba y el verificador Go, y coinciden con el código | Cumplido | `ContractFilesTest` (12 pruebas) y el verificador en Go |
+| El panel emite los tres tipos con plan o personalizada. Renovación y mantenimiento deshabilitados, con prueba | Cumplido | `panel.cjs` y `AdministrationTest` |
+| Cero marcadores de herencia. Los pendientes quedan marcados con su etapa | Cumplido | `StageClosureTest` |
+| La suite completa, Playwright, la revisión de secretos y el paquete de despliegue pasan | Cumplido | Ver E2-9.7 |
+
+### E2-9.6 Pendientes para las etapas 3 a 5
+
+**Etapa 3 — Renovación, mantenimiento y planes**
+
+- Renovación con fecha de pago y la regla de tolerancia (contrato, sección 5.3). `CalendarPeriod::addMonths` ya admite el ancla guardada.
+- Conversión de una prueba en pago y compra de mantenimiento de una perpetua.
+- Registrar una renovación al aprobar una solicitud `renew` sin internet.
+- Editar el periodo inicial de una suscripción sin activar.
+- Editor de planes y su propagación a las licencias existentes; una reducción nunca se aplica a licencias vigentes.
+- Rediseño de `subscription_periods` y `maintenance_purchases`, hoy sin escrituras.
+- Casos de prueba de renovación y cambio de plan en `contracts/v1/fixtures/`.
+- Límite conocido del motor de fechas (DECISIONS.md, sección 10, Fase 3, decisión 8), que importa al encadenar periodos.
+
+**Etapa 4 — Transferencia por autoservicio y alertas**
+
+- Ruta `POST /v1/activations/transfer` y acción `transfer` del desafío.
+- `TRANSFER_LIMIT` y el cálculo real de `transfer_available`.
+- Confirmación de la transferencia por la computadora anterior.
+- Alertas del panel: transferencia pendiente y más de una transferencia en 12 meses.
+- Agregar `transfer` a `openapi.yaml`.
+
+**Etapa 5 — Panel definitivo y despliegue**
+
+- Pantallas definitivas y diseño final de las constancias.
+- `limit_req` de Nginx para la API.
+- Despliegue en `licensing.sicrat.com` con `APP_ENV=production` y `LICENSE_ENVIRONMENT=test`.
+
+**Integración de AD-EL POS (fuera de este repositorio)**
+
+- `contracts/v1/verify/` es la base del verificador del servidor Go del restaurante.
+- Las llaves públicas del entorno se exportan con `php bin/signing-key.php --action=export`.
+
+### E2-9.7 Comandos para reproducir la verificación
+
+```sh
+# Dependencias (las de npm y las dos de desarrollo de Composer no van al servidor)
+composer install
+npm ci --ignore-scripts
+
+# Suite completa contra MySQL 8.0.46 aislado (377 pruebas, 27 440 aserciones)
+env TEST_MYSQL_DSN='mysql:unix_socket=/tmp/mysql.sock;charset=utf8mb4' TEST_MYSQL_USER=root \
+    TEST_MYSQL_PASSWORD='<contraseña de root de pruebas>' \
+    TEST_MYSQL_BIN=/ruta/mysql TEST_MYSQLDUMP_BIN=/ruta/mysqldump \
+    TEST_FPM_BIN=/ruta/php-fpm TEST_NGINX_BIN=/ruta/nginx TEST_OPENSSL_BIN=/ruta/openssl \
+    TEST_PDFTOTEXT_BIN=/ruta/pdftotext \
+    php vendor/bin/phpunit
+
+# Archivos del contrato
+php contracts/v1/generate-fixtures.php --check
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go run -C contracts/v1/verify . ../fixtures/vectors.json
+
+# Formato del código
+npm run format:check
+
+# Panel y dispositivos de confianza con Playwright (mismas variables TEST_*)
+php tests/run-panel-tests.php all
+
+# Antes de cada commit
+php bin/check-secrets.php
+
+# Paquete de despliegue (el destino no debe existir)
+php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
+
+# Cierre: marcas de herencia (solo deben aparecer AVANCE.md y la especificación de la etapa)
+git grep -l "HEREDADO"
+git grep -n "PENDIENTE etapa" -- src bin templates
+```
+
+**Resultado de la verificación final (2026-11-16):**
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit | 377 pruebas, 27 440 aserciones, todas OK |
+| `generate-fixtures.php --check` | Comprobado: 11 licencias, 17 casos negativos, 6 de revisión, 24 de fechas, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes `.licreq` |
+| Verificador de referencia en Go | OK en todos los casos |
+| `npm run format:check` | Sin diferencias |
+| Playwright | Panel y dispositivos de confianza OK; datos sintéticos eliminados |
+| `bin/check-secrets.php` | Sin hallazgos |
+| `bin/build-release.php` | Paquete de 133 archivos más `RELEASE.json`; del contrato, solo el esquema y el OpenAPI |
+| Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |

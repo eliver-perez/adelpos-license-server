@@ -7,8 +7,9 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class LicenseService
 {
-	// PENDIENTE etapa 3: renovación con fecha de pago y regla de tolerancia, conversión de prueba a pago
-	// y compra de mantenimiento (contrato, secciones 5.3 a 5.5).
+	// PENDIENTE etapa 3: renovación con fecha de pago y regla de tolerancia, conversión de prueba a pago,
+	// compra de mantenimiento, edición del periodo inicial de una suscripción sin activar, y editor de
+	// planes con su propagación a las licencias existentes (contrato, secciones 5.2 a 5.5 y 11).
 	public const PENDING = [
 		'renew' => 'La renovación de suscripciones estará disponible próximamente.',
 		'maintenance' => 'La compra de mantenimiento estará disponible próximamente.',

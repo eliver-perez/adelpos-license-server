@@ -180,6 +180,9 @@ $termNotes = [
 	</div>
 	<div class="col-xl-4">
 		<?php if ($canChange): ?>
+			<?php
+			// PENDIENTE etapa 3: formularios de renovación y de compra de mantenimiento.
+			?>
 			<section class="panel form-panel">
 				<span class="eyebrow">RENOVACIÓN Y MANTENIMIENTO</span>
 				<h2 class="mt-3">Disponible próximamente</h2>

@@ -21,7 +21,7 @@ $pageUrl = '/admin/licenses/' . V::escape($licenseId) . '?revision_page=';
 		<?php foreach ($license['activations'] as $activation): ?>
 			<div class="note-box mt-3">
 				<strong><?= V::escape($activationStates[$activation['state']]) ?></strong>
-				<div class="mono mt-2"><?= V::escape($activation['installation_text']) ?></div>
+				<div class="mono mt-2"><?= V::escape($activation['server_id_text']) ?></div>
 				<small>
 					Activada: <?= V::escape(V::date($activation['activated_at'])) ?>
 					<?php if ($activation['ended_at']): ?>

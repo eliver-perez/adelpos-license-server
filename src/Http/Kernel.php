@@ -488,7 +488,8 @@ final class Kernel
 				if (in_array($matches[2], ['revoke', 'reissue'], true)) {
 					$this->confirmIdentity();
 				}
-				// «renew» y «maintenance» siguen siendo rutas válidas para que el servicio responda que todavía no están disponibles.
+				// PENDIENTE etapa 3: renovación y mantenimiento. Sus rutas siguen existiendo para que el servicio
+				// responda que todavía no están disponibles.
 				$this->licenseResult(
 					$this->app->licenses->change($this->actor, $operationId, $matches[1], $matches[2], $_POST),
 				);

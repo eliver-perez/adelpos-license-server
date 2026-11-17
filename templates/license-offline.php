@@ -50,7 +50,7 @@ if ($actor->role === 'superadmin' && $canChange) {
 				<?php V::fields($csrf); ?>
 				<input type="hidden" name="version" value="<?= (int) $license['row_version'] ?>">
 				<input type="hidden" name="activation_id" value="<?= V::escape($activation['id_text']) ?>">
-				<p class="mono small">Instalación: <?= V::escape($activation['installation_text']) ?></p>
+				<p class="mono small">Instalación: <?= V::escape($activation['server_id_text']) ?></p>
 				<?php require __DIR__ . '/offline-confirm.php'; ?>
 				<label>
 					Motivo de recuperación

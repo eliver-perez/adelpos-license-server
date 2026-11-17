@@ -1,6 +1,6 @@
 # Seguridad
 
-Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados hoy. Las partes marcadas como **Herencia temporal** pertenecen al motor de licencias heredado y se reemplazan en las etapas 2 a 4 según el [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md). La lista de puntos heredados está en [AVANCE.md](AVANCE.md), sección 4.2, y las decisiones en [DECISIONS.md](DECISIONS.md).
+Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados al cerrar la etapa 2. El protocolo es el del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0. Las decisiones están en [DECISIONS.md](DECISIONS.md).
 
 ## 1. Modelo de amenazas
 
@@ -78,11 +78,13 @@ Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, 
   - tamaño máximo;
   - coincidencia de `kid`, entorno, propósito y llave pública entre archivo y base;
   - que el par Ed25519 sea consistente.
-- **Llaves públicas de prueba.** Las cuatro llaves de los archivos de prueba del contrato, derivadas de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`, se rechazan con `LICENSE_ENVIRONMENT=production` y en cualquier servidor con `APP_ENV=production`, aunque se les cambie el nombre en el archivo y en el registro. Así tampoco `licensing.sicrat.com` puede firmar con ellas. Lo verifica `SigningEnvironmentsTest::testPublicFixtureSeedsAreRejectedForProductionLicensesAndOnProductionServers`.
+- **Llaves públicas de prueba.** Las cinco llaves de los archivos de prueba del contrato (`contracts/v1/fixtures/`), derivadas de `ADELPOS LICENSE PUBLIC TEST ONLY V1 <nombre>`, se rechazan con `LICENSE_ENVIRONMENT=production` y en cualquier servidor con `APP_ENV=production`, aunque se les cambie el nombre en el archivo y en el registro. Así tampoco `licensing.sicrat.com` puede firmar con ellas. Lo verifica `SigningEnvironmentsTest::testPublicFixtureSeedsAreRejectedForProductionLicensesAndOnProductionServers`.
 - **Exportación de llaves públicas.** `bin/signing-key.php --action=export` lee solo el registro, nunca los archivos privados, y entrega `kid`, `environment` y `public_key` de las llaves de licencias del entorno.
 - **Generación y rotación** solo por CLI (`bin/signing-key.php`) con una cuenta de MySQL de gestión. La cuenta de la aplicación solo lee `signing_keys` y `signing_scopes`. Rotar deja la llave anterior en `verify_only` y no altera los JWS ya archivados.
 
-> **Pendiente en la etapa 2.** El campo `environment` todavía no forma parte del contenido firmado de la licencia; se agrega con el contenido del contrato (Fase 4). La confianza por entorno en AD-EL POS corresponde a su etapa de integración.
+- **Entorno firmado.** Cada licencia lleva el campo `environment`, que es el entorno de la llave que la firmó. El servidor no firma si no coinciden. La confianza por entorno dentro de AD-EL POS (una versión de producción solo confía en llaves de producción) corresponde a su etapa de integración; el verificador de referencia de `contracts/v1/verify/` ya la aplica.
+- **Validación antes de firmar.** `LicenseContent::assertValid()` comprueba el contenido completo contra las reglas de la sección 4 del contrato. Si algo no cumple, no se firma y la transacción se revierte, sin efectos parciales. El error nombra el campo, nunca su valor.
+- **Un solo producto.** El servidor solo emite y firma licencias de `adel_pos`.
 
 ## 4. Acceso al panel
 
@@ -150,21 +152,26 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 ## 7. API de instalaciones (`/v1`)
 
 - **Sin cookies del panel.** Solo `POST` con JSON de hasta 16 KiB, limitado en la aplicación y en Nginx. `StrictJson` rechaza claves duplicadas, tipos ambiguos y caracteres de control. Las codificaciones base64url deben ser canónicas.
-- **Prueba de posesión.** El cliente firma con Ed25519 un mensaje que incluye un desafío de un solo uso. El desafío dura poco, queda ligado a la acción y la identidad, y se consume bajo bloqueo. Una prueba inválida no consume un desafío legítimo.
+- **Identidad de la instalación.** `server_id` (UUID versión 4, solo en minúsculas) más su llave pública Ed25519 de licencias. La misma identidad con otra llave es otra instalación. El servidor no recibe huella del equipo ni ningún otro dato de la computadora.
+- **Prueba de posesión.** El cliente firma con Ed25519 el mensaje `ADELPOS-LIC-V1`, que incluye un desafío de un solo uso. El desafío dura 5 minutos, queda ligado a la acción, al producto y a la identidad, y se consume bajo bloqueo. Una prueba inválida no consume un desafío legítimo.
+- **Campos exactos.** Cada petición lleva exactamente los campos del contrato. Los del protocolo anterior se rechazan con `INVALID_REQUEST`.
 - **Errores uniformes.** Un código inexistente o incorrecto produce el mismo error. Los detalles comerciales solo se revelan después de autenticar.
 - **Códigos comerciales.** 15 símbolos aleatorios de un alfabeto de 31 (74.31 bits), sin prefijo ni dígito verificador. Se guardan como HMAC y como copia cifrada; nunca aparecen en registros, sesiones, auditoría ni respuestas idempotentes.
-- **Errores técnicos.** Producen un 503 genérico con una referencia de correlación, sin trazas, y no dejan efectos parciales.
+- **Errores técnicos.** Producen un 503 genérico (`TEMPORARY_UNAVAILABLE`), sin trazas, y no dejan efectos parciales. La referencia de correlación queda solo en el registro del servidor: la respuesta lleva el `request_id` del cliente o `null`.
+- **Una computadora a la vez.** Una licencia tiene como máximo una activación vigente, también bajo concurrencia (índice único en la base). Otra instalación recibe `ACTIVATION_LIMIT`.
 
-> **Herencia temporal.** El protocolo vigente es el heredado: mensajes `LIC-V1` y `LICREQ-V1`, tipo `lic+jws`, rutas `/v1` actuales y huella del equipo (`fingerprint_version` `'1'`). Se reemplaza en la etapa 2 por el del contrato: `ADELPOS-LIC-V1`, `adelpos-lic+jws`, `server_id` y llave de licencias de la instalación, sin huella.
+> **Pendiente (etapa 4).** La transferencia por autoservicio todavía no existe: la acción `transfer` y su ruta se rechazan. `limit_req` de Nginx para la API se configura en la etapa 5.
 
 ## 8. Flujo sin internet
 
-- **Importación.** Los archivos `.licreq` se aceptan solo por el formulario, con un máximo de 64 KiB. Se verifica la firma antes de reservar la solicitud y otra vez, sobre los bytes originales descifrados, al aprobar.
+- **Importación.** Los archivos `.licreq` se aceptan solo por el formulario, con un máximo de 64 KiB. Se verifica la firma (sobre `ADELPOS-LICREQ-V1` y el contenido tal como llegó) antes de reservar la solicitud y otra vez, sobre los bytes originales descifrados, al aprobar. El formato anterior se rechaza sin reservar nada.
 - **Archivo.** El original se guarda cifrado (`adelpos-license/offline-evidence/v1`, datos asociados `offline:v1:<id>`). La proyección consultable no incluye el código comercial opcional.
 - **Aprobación o rechazo.** Exigen sesión completa, rol, CSRF e idempotencia del formulario. Cada solicitud admite una sola decisión, y la evidencia, la decisión y la transferencia solo se insertan.
 - **Liberación y transferencia forzadas.** Exigen superadministrador, confirmación de identidad, motivo y aceptar explícitamente el límite: una solicitud firmada prueba posesión de la llave, no que se borraron las copias desconectadas. Si falla una firma o escritura, la instalación anterior sigue activa.
 
-> **Herencia temporal.** Una instalación activa por licencia, sin transferencia por autoservicio: etapas 2 a 4. La tolerancia ya es la del contrato: 5 días en suscripción y 0 en prueba y perpetua. Ajustes del flujo sin internet y alertas: etapa 4.
+- **Revisiones de cierre.** Una activación terminada o una licencia revocada solo pueden recibir su revisión de cierre: nunca vuelven a quedar activas por una solicitud `renew` o `deactivate`.
+
+> **Pendiente (etapa 4).** Alertas por transferencias repetidas y su relación con el autoservicio.
 
 ## 9. Constancias y verificación pública
 

@@ -5,6 +5,7 @@ use AdelPos\License\Http\View as V;
 $d = $document;
 $licensing = $d['type'] === 'licensing';
 $title = $licensing ? 'Constancia de licenciamiento' : 'Constancia de entrega para activación';
+// PENDIENTE etapa 5: diseño final de las constancias.
 // Las fechas de la licencia van en la zona horaria del cliente.
 $expiry = $d['license_type'] === 'perpetual' ? 'Sin vencimiento (uso perpetuo)' : V::licenseDate($d, 'expires_at');
 ?>

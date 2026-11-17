@@ -19,8 +19,9 @@ consoleRun(function (): void {
 	}
 	$root = dirname(__DIR__);
 	// Allowlist: only files versioned in git under these directories, plus the explicit files.
-	// Local configuration, keys, data (var/), tests, contracts, dev dependencies and untracked
-	// files (for example .DS_Store) never enter the package.
+	// Local configuration, keys, data (var/), tests, dev dependencies and untracked files (for example
+	// .DS_Store) never enter the package. Del contrato solo van, como documentación, el esquema de la
+	// licencia y la especificación de la API: ni archivos de prueba, ni llaves de prueba, ni verificador.
 	$process = proc_open(
 		['git', '-C', $root, 'ls-files', '-z', '--', 'bin', 'src', 'public', 'templates', 'database', 'deploy'],
 		[1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
@@ -51,6 +52,8 @@ consoleRun(function (): void {
 			'TEST_PLAN.md',
 			'DECISIONS.md',
 			'docs/CONTRATO_LICENCIAS_ADEL_POS.md',
+			'contracts/v1/license.schema.json',
+			'contracts/v1/openapi.yaml',
 		]
 		as $file
 	) {

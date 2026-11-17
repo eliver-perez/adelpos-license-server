@@ -224,7 +224,7 @@ final class ReadRepository
 			[Uuid::bytes($id)],
 		);
 		$license['activations'] = $this->db->all(
-			'SELECT BIN_TO_UUID(activation_id) AS id_text,BIN_TO_UUID(server_id) AS installation_text,
+			'SELECT BIN_TO_UUID(activation_id) AS id_text,BIN_TO_UUID(server_id) AS server_id_text,
 					installation_public_key,app_version,state,activated_at,ended_at
 				FROM activations
 				WHERE license_id=?

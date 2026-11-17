@@ -1,12 +1,12 @@
 # AD-EL POS — Licencias
 
-Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es un proyecto independiente del punto de venta: emite, firma, renueva, revoca y audita licencias, y ofrece un panel privado para el propietario.
+Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es un proyecto independiente del punto de venta: emite, firma, revoca y audita licencias, y ofrece un panel privado para el propietario.
 
 - **Panel administrativo:** clientes, productos, licencias, solicitudes sin internet, constancias PDF, administradores y auditoría.
 - **API `/v1`:** activación en línea con desafío y prueba de posesión, consulta de actualización y desactivación.
 - **Flujo sin internet:** el panel importa una solicitud `.licreq`, el propietario la aprueba y entrega un archivo `.lic` firmado.
 
-> **Estado: etapa 1 cerrada.** El código es la copia base renombrada y limpia. El protocolo de licencias todavía es el heredado: se reemplaza por el contrato de AD-EL POS ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)) en las etapas 2 a 4. La sección [Herencia temporal](#herencia-temporal) resume qué cambia y cuándo. El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
+> **Estado: etapa 2 cerrada.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea y archivos sin internet. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para las etapas 3 a 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
 
 ## Requisitos
 
@@ -144,37 +144,49 @@ php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
 **Qué incluye:**
 - solo los archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`;
 - `composer.json`, `composer.lock` y `config/local.example.php`;
-- la documentación de operación, `DECISIONS.md` y `docs/CONTRATO_LICENCIAS_ADEL_POS.md`.
+- la documentación de operación, `DECISIONS.md` y `docs/CONTRATO_LICENCIAS_ADEL_POS.md`;
+- del contrato, solo su forma publicada: `contracts/v1/license.schema.json` y `contracts/v1/openapi.yaml`.
 
 **Qué genera:** `RELEASE.json`, con el SHA-256 de cada archivo, y el archivo `.sha256` del paquete.
 
-**Qué nunca incluye:** `config/local.php`, `var/`, llaves, pruebas, `contracts/`, `vendor/` ni archivos sin versionar. El comando aborta si alguno aparece en la lista. En el servidor se ejecuta `composer install --no-dev` con el `composer.lock` incluido.
+**Qué nunca incluye:** `config/local.php`, `var/`, llaves, pruebas, los archivos de prueba del contrato (`contracts/v1/fixtures/`), su generador y el verificador en Go, `vendor/` ni archivos sin versionar. El comando aborta si alguno aparece en la lista. En el servidor se ejecuta `composer install --no-dev` con el `composer.lock` incluido.
 
-## Herencia temporal
+## Pendiente para las etapas siguientes
 
-Esta etapa conserva el motor de licencias recibido, sin cambiar su lógica. Cada regla fija en el código lleva el comentario `HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (<regla>)`, y la lista completa está en [AVANCE.md](AVANCE.md), sección 4.2.
+La etapa 2 no dejó nada del protocolo anterior. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:` y el servidor lo rechaza con un mensaje claro.
 
-| Comportamiento actual | Se reemplaza en |
+| Qué falta | Etapa |
 | --- | --- |
-| Contenido de la licencia, rutas `/v1`, prueba de posesión (`LIC-V1`), solicitud sin internet (`LICREQ-V1`), encabezado `lic+jws` y archivos de `contracts/v1/fixtures/` | Etapa 2 |
-| Una instalación por licencia, huella del equipo versión `'1'` y lista de límites (`max_installations`, `max_users`, `max_libraries`, `max_documents`) en el contenido firmado | Etapa 2 |
-| Renovación, conversión de prueba a pago y compra de mantenimiento: **deshabilitadas**, el servidor las rechaza. Editor de planes y su propagación | Etapa 3 |
-| Transferencias solo desde el panel (sin autoservicio), alertas y detalles del flujo sin internet | Etapa 4 |
-| Pantallas nuevas del panel, contenido de las constancias (planes y cupos) y despliegue en el VPS | Etapa 5 |
+| Renovación de suscripciones con fecha de pago y regla de tolerancia, conversión de prueba a pago y compra de mantenimiento: **deshabilitadas**, el servidor las rechaza. Editor de planes y su propagación. Editar el periodo inicial de una suscripción sin activar | 3 |
+| Transferencia por autoservicio (`transfer`, `TRANSFER_LIMIT` y `transfer_available`), confirmación por la computadora anterior y alertas. Hoy las transferencias las hace solo el propietario desde el panel | 4 |
+| Pantallas definitivas del panel, diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
+
+## Contrato
+
+| Dónde | Qué es |
+| --- | --- |
+| [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | El contrato V1.0. Es la fuente de verdad y no se modifica |
+| [contracts/v1/license.schema.json](contracts/v1/license.schema.json) | Contenido de la licencia firmada, en JSON Schema 2020-12 |
+| [contracts/v1/openapi.yaml](contracts/v1/openapi.yaml) | API en línea, en OpenAPI 3.1 |
+| [contracts/v1/fixtures/](contracts/v1/fixtures/) | Archivos de prueba compartidos, con llaves públicas de prueba |
+| [contracts/v1/verify/](contracts/v1/verify/) | Verificador de referencia en Go, base de la integración de AD-EL POS |
+
+Las ambigüedades encontradas al implementarlo están registradas como propuestas para una V1.1 en [DECISIONS.md](DECISIONS.md), sección 9.
 
 ## Documentación
 
 | Documento | Contenido |
 | --- | --- |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes, flujos y partes heredadas |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Componentes y flujos |
 | [SCHEMA.md](SCHEMA.md) | Esquema de base de datos |
 | [SECURITY.md](SECURITY.md) | Modelo de seguridad y controles |
 | [OPERATIONS.md](OPERATIONS.md) | Operación diaria, llaves, respaldos y recuperación |
 | [TEST_PLAN.md](TEST_PLAN.md) | Plan de pruebas y cómo reproducirlas |
 | [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Despliegue en Ubuntu 24.04 con Nginx y PHP-FPM |
 | [DECISIONS.md](DECISIONS.md) | Decisiones del propietario y técnicas, y procedencia |
-| [AVANCE.md](AVANCE.md) | Avance de la etapa 1, línea base y verificación |
+| [AVANCE.md](AVANCE.md) | Avance de las etapas 1 y 2, cifras de pruebas y verificación |
 | [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | Contrato de licencias V1.0 entre este servidor y AD-EL POS |
+| [contracts/v1/README.md](contracts/v1/README.md) | Esquema, OpenAPI, archivos de prueba y verificador de referencia |
 
 ## Procedencia
 

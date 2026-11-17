@@ -25,6 +25,9 @@ final class ReleasePackageTest extends TestCase
 		'TEST_PLAN.md',
 		'DECISIONS.md',
 		'docs/CONTRATO_LICENCIAS_ADEL_POS.md',
+		// Del contrato, solo su forma publicada: el esquema de la licencia y la especificación de la API.
+		'contracts/v1/license.schema.json',
+		'contracts/v1/openapi.yaml',
 	];
 	private const PLANTED = [
 		'config/local.php' => "<?php return [];\n",
@@ -85,11 +88,17 @@ final class ReleasePackageTest extends TestCase
 
 		foreach ($entries as $entry) {
 			self::assertDoesNotMatchRegularExpression(
-				'#\Aadelpos-license/(?:config/local\.php|var/|tests/|vendor/|node_modules/|contracts/' .
-					'|\.phpunit\.cache/|AVANCE\.md)|\.DS_Store|untracked-notes|\.(?:key|pem|adelposbackup)\z#',
+				'#\Aadelpos-license/(?:config/local\.php|var/|tests/|vendor/|node_modules/' .
+					'|contracts/v1/(?:fixtures|verify|generate-fixtures|README)' .
+					'|\.phpunit\.cache/|AVANCE\.md)|\.DS_Store|untracked-notes|\.(?:key|pem|adelposbackup|lic|licreq|go)\z#',
 				$entry,
 			);
 		}
+		// Ni archivos de prueba ni llaves de prueba: del contrato van exactamente dos archivos.
+		self::assertSame(
+			['adelpos-license/contracts/v1/license.schema.json', 'adelpos-license/contracts/v1/openapi.yaml'],
+			array_values(array_filter($entries, fn(string $entry) => str_contains($entry, '/contracts/'))),
+		);
 		foreach (
 			[
 				'bin/check-secrets.php',

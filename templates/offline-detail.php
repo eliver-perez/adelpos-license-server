@@ -12,7 +12,7 @@ foreach ($license['activations'] ?? [] as $activation) {
 // La misma computadora es la misma identidad con la misma llave que la instalación activa.
 $sameInstallation =
 	$active !== null &&
-	$active['installation_text'] === $payload['server_id'] &&
+	$active['server_id_text'] === $payload['server_id'] &&
 	$active['public_key_text'] === $payload['installation_public_key'];
 $needsTransfer = $payload['action'] === 'activate' && $active !== null && !$sameInstallation;
 // Activar exige una licencia vigente. Las otras dos acciones se atienden aunque esté revocada:
@@ -217,7 +217,7 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 					<?php if ($needsTransfer): ?>
 						<div class="note-box">
 							La licencia ya tiene una instalación activa. Esta recuperación por equipo averiado retirará
-							<?= V::escape($active['installation_text']) ?> y activará el destino en una sola operación.
+							<?= V::escape($active['server_id_text']) ?> y activará el destino en una sola operación.
 						</div>
 						<label class="form-check"><input
 								class="form-check-input"

@@ -276,7 +276,13 @@ final class OfflineService
 		);
 	}
 
-	/** HTTP caller requires fresh password + TOTP; role and current state are rechecked here. */
+	/**
+	 * Retira la licencia de una computadora desde el panel, sin computadora de destino.
+	 * Quien llama por HTTP ya confirmó su contraseña y su código; aquí se vuelven a comprobar
+	 * el rol y el estado vigente.
+	 */
+	// PENDIENTE etapa 4: las transferencias del propietario cuentan para la alerta de más de una
+	// transferencia en 12 meses, y no consumen el cupo del autoservicio (contrato, sección 8.4).
 	public function release(Actor $actor, string $operationId, string $licenseId, array $input): array
 	{
 		$reason = Input::text($input, 'reason', 500);

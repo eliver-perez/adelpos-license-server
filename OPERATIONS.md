@@ -2,14 +2,13 @@
 
 Cómo configurar, operar, respaldar y verificar el servidor. La instalación paso a paso en Ubuntu 24.04 está en [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md); las decisiones, en [DECISIONS.md](DECISIONS.md); el contrato con AD-EL POS, en [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
 
-> **Herencia temporal.** La emisión ya usa el modelo del contrato (tipo, plan y cupos, sin fechas hasta activar). El contenido firmado y el protocolo todavía son los heredados: `LIC-V1`/`lic+jws`, huella del equipo, una instalación por licencia y límites heredados. Cada regla fija está marcada en el código con `HEREDADO:` y listada en [AVANCE.md](AVANCE.md) (Fase 4, 4.2). Se reemplaza según el contrato así:
+> **Estado: etapa 2 cerrada.** El servidor firma, recibe y devuelve lo que define el contrato V1.0. Lo que todavía no existe, y en qué etapa llega:
 >
 > | Etapa | Qué cambia en la operación |
 > | --- | --- |
-> | 2 | Contenido de la licencia, rutas, prueba de posesión y archivos `.licreq`/`.lic`. Los entornos de firma `test`/`production` ya están en uso (sección 5) |
-> | 3 | Planes, tipos de licencia (incluida la prueba), fechas de calendario, renovación y propagación de planes |
-> | 4 | Transferencia por autoservicio, alertas y ajustes del flujo sin internet |
-> | 5 | Pantallas nuevas del panel, contenido de las constancias y despliegue en el VPS |
+> | 3 | Renovación con fecha de pago, conversión de prueba a pago, compra de mantenimiento, editor de planes y su propagación |
+> | 4 | Transferencia por autoservicio y alertas |
+> | 5 | Pantallas definitivas del panel, diseño final de las constancias y despliegue en el VPS |
 
 ## 1. Requisitos
 
@@ -107,20 +106,27 @@ Cada comando muestra primero el entorno de licencias en el que opera (`Entorno d
 
 Todo se hace en el panel:
 - **Licencias:** emitir (muestra el código 3-4-4-4 una sola vez), cambiar módulos, reemplazar la clave, revocar y generar constancias en PDF.
-  - **Al emitir** se elige el tipo y su condición: perpetua con 0, 6 o 12 meses de actualizaciones; suscripción mensual, trimestral, semestral o anual; o prueba de 15 días, 1 mes o 3 meses. También el plan, que fija los cupos de cajas, comanderos y KDS.
-  - **Las fechas empiezan al activar.** Una licencia emitida no tiene vencimiento asignado; el panel muestra «Empieza al activar».
+  - **Al emitir** se elige el tipo y su condición: perpetua con 0, 6 o 12 meses de actualizaciones; suscripción mensual, trimestral, semestral o anual; o prueba de 15 días, 1 mes o 3 meses. También el plan, que llena los cupos de cajas, comanderos y pantallas de cocina (KDS). Si se cambia algún cupo, el panel avisa que la licencia queda **personalizada** y deja de seguir a su plan.
+  - **Solo se emiten licencias de AD-EL POS** (`adel_pos`): es el único producto que el contrato permite firmar.
+  - **Las fechas empiezan al activar.** Una licencia emitida no tiene vencimiento asignado; el panel muestra «Empieza al activar». El primer periodo empieza cuando el servidor confirma la primera activación en línea, o cuando se aprueba la primera solicitud sin internet. Si después se activa en otra computadora, conserva sus fechas.
+  - **El detalle de la licencia** muestra tipo, plan, cupos, inicio, vencimiento y fin de actualizaciones, en la zona horaria del cliente, y el motivo de cierre de cada revisión firmada: licencia liberada, transferida a otra computadora o revocada por el propietario.
+  - **Una computadora principal a la vez.** Para pasarla a otra computadora, la primera libera la licencia, o el propietario la transfiere desde el panel.
   - **Renovar y registrar mantenimiento: disponibles próximamente.** El panel no los ofrece y el servidor los rechaza aunque se pidan directamente (etapa 3).
-- **Clientes:** cada cliente tiene una zona horaria (por omisión `America/Monterrey`), con la que se calculan las fechas de sus licencias.
+- **Clientes:** cada cliente tiene una zona horaria, que se elige de una lista en su ficha (por omisión `America/Monterrey`). Con ella se calculan y se muestran las fechas de sus licencias. Cambiarla no modifica fechas ya firmadas.
 - **Solicitudes sin internet:**
   - importar un `.licreq` (máximo 64 KiB);
   - revisar la identidad del equipo;
   - elegir la licencia, aprobar o rechazar;
   - descargar el `.lic`.
 
-  Importar no concede nada: solo la aprobación firma una revisión.
-- **Recuperación de equipo averiado:** libera la plaza con autorización excepcional. La firma no demuestra que se hayan borrado copias del equipo anterior.
+  Importar no concede nada: solo la aprobación entrega un archivo.
+  - **Activar:** el propietario elige la licencia. Si esa misma computadora ya la tiene activa, recibe su archivo vigente.
+  - **Renovar (`renew`):** entrega el archivo vigente de la licencia, tal como está firmado. Sirve después de un cambio de módulos. Registrar una renovación llega en la etapa 3.
+  - **Desactivar:** libera la licencia y entrega la revisión de cierre.
+  - Una computadora cuya activación ya terminó, o cuya licencia fue revocada, recibe su revisión de cierre: así se entera sin internet.
+- **Recuperación de equipo averiado:** retira la licencia de esa computadora con autorización excepcional; queda firmada como transferida. La firma no demuestra que se hayan borrado copias del equipo anterior.
 
-La API en línea solo atiende `POST` a `/v1/activations/challenge`, `/v1/activations`, `/v1/activations/refresh` y `/v1/activations/deactivate`, con JSON de hasta 16 KiB. **Herencia temporal (etapa 2):** el contrato de AD-EL POS sustituye estas rutas, sus cuerpos y los formatos `LIC-V1`/`LICREQ-V1`.
+La API en línea solo atiende `POST` a `/v1/activations/challenge`, `/v1/activations`, `/v1/activations/refresh` y `/v1/activations/deactivate`, con JSON de hasta 16 KiB. Su especificación es `contracts/v1/openapi.yaml`. La transferencia por autoservicio (`/v1/activations/transfer`) llega en la etapa 4.
 
 ## 7. Mantenimiento diario
 
@@ -178,8 +184,9 @@ php bin/build-release.php --output=/ruta/existente/adelpos-license.tar.gz
   - solo los archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`;
   - `composer.json` y `composer.lock`;
   - `config/local.example.php`;
-  - la documentación.
-- **Qué deja fuera:** pruebas, `contracts/`, `vendor/`, `var/`, configuración local y archivos sin versionar.
+  - la documentación;
+  - del contrato, `contracts/v1/license.schema.json` y `contracts/v1/openapi.yaml`, como documentación.
+- **Qué deja fuera:** pruebas, los archivos de prueba del contrato con sus llaves públicas de prueba, su generador y el verificador en Go, `vendor/`, `var/`, configuración local y archivos sin versionar.
 - **Cuándo aborta:** si aparece `config/local.php`, algo bajo `var/`, un `.DS_Store` o un archivo `.key`/`.pem`.
 - **Qué genera:** `RELEASE.json`, con el SHA-256 de cada archivo, y el `.sha256` del paquete. En el servidor se ejecuta `composer install --no-dev` con el `composer.lock` incluido.
 

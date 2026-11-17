@@ -89,24 +89,18 @@ Todas son del 2026-11-16.
 | 12 | Pruebas del panel con Playwright, usando el Chrome del equipo, instalado con `npm ci --ignore-scripts`. `tests/run-panel-tests.php` garantiza la limpieza. | Ejecutarlas sin dejar bases, usuarios ni configuraciones de prueba. |
 | 13 | Se corrigió la prueba de renovación sin internet: el panel lee las fechas en `America/Monterrey` y firma en UTC. | Defecto heredado: la conversión entró después de la última actualización de la prueba. El código no cambió. |
 
-## 6. Herencia temporal
+## 6. Herencia temporal (cerrada en la etapa 2)
 
-El motor de licencias heredado sigue activo hasta las etapas 2 a 4. No se cambió su lógica. Donde la regla está fija en el código lleva el marcador:
+En la etapa 1 el motor de licencias recibido siguió activo, sin cambios de lógica. Cada regla fija en el código llevaba un comentario marcador de herencia, con la forma «(marcador): se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (regla)». La especificación pedía un marcador que nombraba el producto de origen; se cambió por la decisión 4 de la sección 3.
 
-```
-HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (<regla>)
-```
+Las reglas marcadas eran cuatro: una instalación por licencia, tolerancia de 15 días, huella del equipo versión `'1'` y lista de límites. Sumaban 20 puntos, enumerados en AVANCE.md (etapa 1, Fase 4, y etapa 2, sección E2-0.2).
 
-Las reglas marcadas son cuatro:
-- una instalación por licencia;
-- tolerancia de 15 días;
-- huella del equipo versión `'1'`;
-- lista de límites.
+**La etapa 2 resolvió los 20.** La búsqueda del marcador ya no da resultados en el código, las plantillas, las migraciones, las pruebas ni los documentos de operación. Solo lo conservan AVANCE.md, que guarda el registro de las dos etapas, y la especificación de la etapa 2, que lo nombra.
 
-La especificación pedía un marcador que nombraba el producto de origen; se cambió por la decisión 4 de la sección 3. La lista de los 20 puntos marcados está en AVANCE.md, Fase 4, y se regenera con:
+Lo que queda para otras etapas se marca con `PENDIENTE etapa N:` y se lista con:
 
 ```sh
-git grep -n -o -E "HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS\.md \([^)]*\)"
+git grep -n "PENDIENTE etapa" -- src bin templates
 ```
 
 ## 7. Archivos de marca
@@ -149,6 +143,18 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 4 | §5.1 | Hora inexistente por cambio de horario | Aprobada (decisión 6) |
 | 5 | §8.6 | `deactivate` sobre una activación terminada | Aprobada (decisión 7) |
 | 6 a 13 | §13, §8.7, §4, §11, §5.2, §9.1, §2 | Casos de renovación en la etapa 3, uso de `INCOMPATIBLE_SCHEMA`, `request_id` nulo, nombres de los planes, motivo de la liberación forzada, edición del periodo inicial, casos sin internet y formatos menores | Aplicadas sin objeción (decisión 8) |
+
+**Propuestas nuevas, encontradas al implementar las fases 4 a 8.** Se aplicaron con el criterio indicado para no detener el trabajo, y **están pendientes de la aprobación del propietario**. Cada una se puede revertir sin tocar el contrato. El detalle está en AVANCE.md, sección E2-9.4.
+
+| N.º | Sección | Qué no queda definido | Criterio aplicado |
+| --- | --- | --- | --- |
+| 14 | §8.6 | La respuesta de desactivar fija `"status": "deactivated"`. No dice qué valor lleva cuando la activación ya había terminado por una transferencia o una revocación. | Siempre `deactivated`. El motivo real está en `status_reason` de la licencia firmada que viaja en la misma respuesta. |
+| 15 | §9.1 | No dice si una solicitud `renew` o `deactivate` se atiende cuando la licencia fue revocada. | Se atiende y entrega la revisión de cierre: es la única forma de que una computadora sin internet se entere. Amplía la propuesta n.º 12. |
+| 16 | §9.1, §3 | `created_at` de una solicitud: no fija los decimales ni si admite `+00:00`. | Solo UTC terminado en `Z`, con 0 a 9 decimales. Es un dato informativo: ninguna fecha de la licencia sale de él. |
+| 17 | §4 | El contenido lleva `schema_version: "1.0"` y el cliente debe aceptar cualquier versión que empiece con `1.`. No dice cuál de las dos reglas va en el esquema publicado. | El esquema fija `1.0`, que es lo que el servidor firma. El verificador de referencia acepta cualquier `1.x`. |
+| 18 | §3 | El servidor emite instantes con 6 decimales y el cliente acepta de 0 a 9. No dice cuál describe el esquema. | El esquema admite de 0 a 9; el servidor se exige 6 exactos antes de firmar. |
+| 19 | §8.7 | La tabla no incluye el HTTP de una petición que llega sin TLS. La decisión 5 del propietario enumeró 404, 405, 413 y 415. | Se conserva `403` con `INVALID_REQUEST`, que ya existía. En producción Nginx no deja pasar HTTP. |
+| 20 | §8.3 | Define «la misma instalación» como el mismo `server_id` y la misma llave. La especificación aclara el caso del mismo `server_id` con otra llave; no el de la misma llave con otro `server_id`. | Los dos casos son otra instalación: reciben `ACTIVATION_LIMIT`. |
 
 ## 10. Decisiones técnicas de la etapa 2
 
