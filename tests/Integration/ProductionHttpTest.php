@@ -222,8 +222,12 @@ final class ProductionHttpTest extends TestCase
 		}
 		$api = $this->stack->request('/v1/activations/challenge');
 		self::assertSame(503, $api['status']);
-		self::assertSame('TEMPORARY_UNAVAILABLE', $api['json']['error']['code']);
-		self::assertMatchesRegularExpression('/^[a-f0-9-]{36}$/', $api['json']['error']['request_id']);
+		// Formato de error del contrato, incluso cuando el servidor no pudo arrancar.
+		self::assertSame(
+			'{"error":{"code":"TEMPORARY_UNAVAILABLE","message":"El servicio no está disponible temporalmente.",' .
+				'"request_id":null,"details":{}}}',
+			$api['body'],
+		);
 		$log = file_get_contents($this->stack->directory . '/log/php-error.log');
 		self::assertStringContainsString('adelpos-license [', $log);
 		self::assertStringContainsString('RuntimeException at Config.php:', $log);

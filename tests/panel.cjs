@@ -246,7 +246,15 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.equal(response.status(), 403);
 		response = await context.request.get('/v1/activations/challenge');
 		assert.equal(response.status(), 405);
-		assert.match((await response.json()).error.request_id, /^[a-f0-9-]{36}$/);
+		// Formato de error del contrato: sin «request_id» del cliente va null, y «details» es un objeto.
+		assert.deepEqual(await response.json(), {
+			error: {
+				code: 'INVALID_REQUEST',
+				message: 'La solicitud no es válida.',
+				request_id: null,
+				details: {},
+			},
+		});
 
 		await page.goto('/admin/licenses/new');
 		await page.locator('#customer_id').selectOption(customerId);

@@ -82,7 +82,7 @@ final class ActivationsTest extends TestCase
 			$this->app->activations->challenge([
 				'action' => $action,
 				'product_id' => 'adel_pos',
-				'installation_id' => $device['id'],
+				'server_id' => $device['id'],
 				'activation_id' => $activation,
 			])->body,
 			true,
@@ -90,7 +90,7 @@ final class ActivationsTest extends TestCase
 		$input = [
 			'request_id' => Uuid::create(),
 			'product_id' => 'adel_pos',
-			'installation_id' => $device['id'],
+			'server_id' => $device['id'],
 			'challenge_id' => $challenge['challenge_id'],
 			'app_version' => '1.0.0',
 		];
@@ -98,8 +98,6 @@ final class ActivationsTest extends TestCase
 			$input += [
 				'license_key' => $this->issued['secret'],
 				'installation_public_key' => $device['public'],
-				'fingerprint_version' => '1',
-				'fingerprint_hash' => 'sha256:' . str_repeat('a', 64),
 			];
 		} else {
 			$input['activation_id'] = $activation;
@@ -447,7 +445,7 @@ final class ActivationsTest extends TestCase
 			$this->app->activations->execute('activate', $input);
 			self::fail('Changed retry accepted');
 		} catch (ApiProblem $e) {
-			self::assertSame(409, $e->status);
+			self::assertSame(['REQUEST_CONFLICT', 409], [$e->errorCode, $e->status]);
 		}
 		foreach (
 			[
@@ -519,7 +517,14 @@ final class ActivationsTest extends TestCase
 		$input = $this->request('activate', $other);
 		$response = $this->app->activations->execute('activate', $input);
 		self::assertSame(409, $response->status);
-		self::assertSame('ACTIVATION_LIMIT', json_decode($response->body, true)['error']['code']);
+		// Formato de error del contrato, con «transfer_available» en los detalles.
+		self::assertSame(
+			'{"error":{"code":"ACTIVATION_LIMIT","message":"La licencia ya está activa en otra computadora.",' .
+				'"request_id":"' .
+				$input['request_id'] .
+				'","details":{"transfer_available":false}}}',
+			$response->body,
+		);
 		self::assertSame($response->body, $this->app->activations->execute('activate', $input)->body);
 		$input['request_id'] = Uuid::create();
 		try {
@@ -537,6 +542,8 @@ final class ActivationsTest extends TestCase
 		$response = $this->app->activations->execute('activate', $input);
 		self::assertSame(404, $response->status);
 		self::assertSame('LICENSE_NOT_FOUND', json_decode($response->body, true)['error']['code']);
+		// Sin detalles, «details» sigue siendo un objeto JSON vacío.
+		self::assertStringEndsWith(',"request_id":"' . $input['request_id'] . '","details":{}}}', $response->body);
 		self::assertSame($response->body, $this->app->activations->execute('activate', $input)->body);
 		self::assertStringNotContainsString(
 			$input['license_key'],
@@ -551,8 +558,21 @@ final class ActivationsTest extends TestCase
 		$input = $this->request('deactivate', null, $first['activation_id']);
 		$ack = $this->app->activations->execute('deactivate', $input);
 		$data = json_decode($ack->body, true);
-		self::assertSame(['activation_id', 'deactivated_at', 'status'], array_keys($data));
-		self::assertSame('deactivated', $data['status']);
+		self::assertSame(
+			['activation_id', 'deactivated_at', 'status', 'license_jws', 'server_time', 'request_id'],
+			array_keys($data),
+		);
+		self::assertSame(
+			[$first['activation_id'], '2026-09-25T12:00:00.000000Z', 'deactivated', '2026-09-25T12:00:00.000000Z'],
+			[$data['activation_id'], $data['deactivated_at'], $data['status'], $data['server_time']],
+		);
+		self::assertSame($input['request_id'], $data['request_id']);
+		// La respuesta trae la revisión de cierre: la computadora no necesita otra consulta.
+		$closing = $this->payload($ack);
+		self::assertSame(
+			['revoked', 'deactivated', 2],
+			[$closing['license_status'], $closing['status_reason'], $closing['license_revision']],
+		);
 		self::assertSame('issued', $this->app->read->license($this->issued['id'])['commercial_status']);
 		$other = $this->device();
 		// Días después, en otra computadora.
@@ -565,10 +585,15 @@ final class ActivationsTest extends TestCase
 		self::assertSame($first['period_starts_at'], $next['period_starts_at']);
 		self::assertSame($first['updates_until'], $next['updates_until']);
 		self::assertSame($ack->body, $this->app->activations->execute('deactivate', $input)->body);
-		self::assertSame(
-			$ack->body,
+		// Otra solicitud de desactivación de la misma activación, ya terminada: la misma revisión de cierre.
+		$again = json_decode(
 			$this->app->activations->execute('deactivate', $this->request('deactivate', null, $first['activation_id']))
 				->body,
+			true,
+		);
+		self::assertSame(
+			[$data['activation_id'], $data['deactivated_at'], 'deactivated', $data['license_jws']],
+			[$again['activation_id'], $again['deactivated_at'], $again['status'], $again['license_jws']],
 		);
 		$old = $this->payload(
 			$this->app->activations->execute('refresh', $this->request('refresh', null, $first['activation_id'])),
@@ -771,25 +796,246 @@ final class ActivationsTest extends TestCase
 			$this->app->db->execute('SELECT state FROM signing_keys WHERE kid=\'random-test-a\'')->fetchColumn(),
 		);
 	}
-	public function testUppercaseUuidBytesAreUsedInProofWithoutNormalization(): void
+	public function testServerIdMustBeLowercaseAndOtherUuidsKeepTheirReceivedBytesInTheProof(): void
 	{
-		$device = $this->device;
-		$device['id'] = strtoupper($device['id']);
-		$input = $this->request('activate', $device);
+		// La identidad de la instalación solo se acepta en minúsculas (contrato, sección 2).
+		try {
+			$this->app->activations->challenge([
+				'action' => 'activate',
+				'product_id' => 'adel_pos',
+				'server_id' => strtoupper($this->device['id']),
+				'activation_id' => null,
+			]);
+			self::fail('Uppercase server_id accepted in a challenge');
+		} catch (ApiProblem $e) {
+			self::assertSame(['INVALID_REQUEST', 400], [$e->errorCode, $e->status]);
+		}
+		$input = $this->request();
+		try {
+			$this->app->activations->execute(
+				'activate',
+				array_replace($input, ['server_id' => strtoupper($input['server_id'])]),
+			);
+			self::fail('Uppercase server_id accepted');
+		} catch (ApiProblem $e) {
+			self::assertSame('INVALID_REQUEST', $e->errorCode);
+		}
+		// Los demás UUID se aceptan en cualquier caja y la prueba de posesión usa los bytes recibidos.
 		$nonce = $this->app->db
 			->execute('SELECT nonce FROM activation_challenges WHERE challenge_id=?', [
 				Uuid::bytes($input['challenge_id']),
 			])
 			->fetchColumn();
 		$input['challenge_id'] = strtoupper($input['challenge_id']);
+		$input['request_id'] = strtoupper($input['request_id']);
 		$input['proof'] = Protocol::encode(
-			sodium_crypto_sign_detached(Protocol::proofMessage('activate', $input, $nonce), $device['secret']),
+			sodium_crypto_sign_detached(Protocol::proofMessage('activate', $input, $nonce), $this->device['secret']),
 		);
-		self::assertSame(
-			strtolower($device['id']),
-			$this->payload($this->app->activations->execute('activate', $input))['server_id'],
-		);
+		$response = $this->app->activations->execute('activate', $input);
+		self::assertSame($this->device['id'], $this->payload($response)['server_id']);
+		self::assertSame($input['request_id'], json_decode($response->body, true)['request_id']);
 	}
+
+	public function testTheSameInstallationActivatesAgainAndReceivesItsCurrentRevision(): void
+	{
+		$first = $this->app->activations->execute('activate', $this->request());
+		$payload = $this->payload($first);
+		$license = $this->app->db->one('SELECT * FROM licenses');
+
+		// Días después, la misma computadora (misma identidad y misma llave) vuelve a activar con su código.
+		$this->clock->instant = $this->clock->instant->modify('+10 days');
+		$retry = $this->request();
+		$retry['app_version'] = '1.1.0';
+		$retry['proof'] = Protocol::encode(
+			sodium_crypto_sign_detached(
+				Protocol::proofMessage(
+					'activate',
+					$retry,
+					$this->app->db
+						->execute('SELECT nonce FROM activation_challenges WHERE challenge_id=?', [
+							Uuid::bytes($retry['challenge_id']),
+						])
+						->fetchColumn(),
+				),
+				$this->device['secret'],
+			),
+		);
+		$second = $this->app->activations->execute('activate', $retry);
+		self::assertSame(200, $second->status);
+		$data = json_decode($second->body, true);
+		self::assertSame(['license_jws', 'server_time', 'request_id'], array_keys($data));
+		// La misma revisión firmada, byte a byte: ni otra activación, ni otra firma, ni otras fechas.
+		self::assertSame(json_decode($first->body, true)['license_jws'], $data['license_jws']);
+		self::assertSame('2026-10-05T12:00:00.000000Z', $data['server_time']);
+		self::assertSame(1, (int) $this->app->db->execute('SELECT COUNT(*) FROM activations')->fetchColumn());
+		self::assertSame(1, (int) $this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
+		$after = $this->app->db->one('SELECT * FROM licenses');
+		foreach (
+			['period_starts_at', 'updates_until', 'anchor_day', 'anchor_local_time', 'revision_counter']
+			as $field
+		) {
+			self::assertSame($license[$field], $after[$field], $field);
+		}
+		// Queda registrada la versión de AD-EL POS de su última operación.
+		self::assertSame('1.1.0', $this->app->db->one('SELECT app_version FROM activations')['app_version']);
+		// La solicitud consumió su desafío y quedó guardada para sus reintentos.
+		self::assertSame($second->body, $this->app->activations->execute('activate', $retry)->body);
+
+		// Si los derechos cambiaron, recibe la revisión vigente, no la primera.
+		$this->app->licenses->change($this->actor, Uuid::create(), $this->issued['id'], 'features', [
+			'version' => 1,
+			'features' => ['prueba_d'],
+			'reason' => 'Cambio de módulos',
+		]);
+		$current = $this->payload($this->app->activations->execute('activate', $this->request()));
+		self::assertSame(
+			[2, $payload['activation_id'], ['prueba_d' => true]],
+			[$current['license_revision'], $current['activation_id'], $current['features']],
+		);
+
+		// La misma identidad con otra llave es otra instalación: no recibe la licencia.
+		$impostor = $this->device();
+		$impostor['id'] = $this->device['id'];
+		$refused = $this->app->activations->execute('activate', $this->request('activate', $impostor));
+		self::assertSame(409, $refused->status);
+		self::assertSame(
+			['code' => 'ACTIVATION_LIMIT', 'details' => ['transfer_available' => false]],
+			array_intersect_key(json_decode($refused->body, true)['error'], ['code' => 1, 'details' => 1]),
+		);
+		// Y la misma llave con otra identidad, también.
+		$clone = $this->device;
+		$clone['id'] = Uuid::create();
+		self::assertSame(
+			'ACTIVATION_LIMIT',
+			json_decode($this->app->activations->execute('activate', $this->request('activate', $clone))->body, true)[
+				'error'
+			]['code'],
+		);
+		// La consulta de actualización también registra la versión.
+		$refresh = $this->request('refresh', null, $payload['activation_id']);
+		self::assertSame(200, $this->app->activations->execute('refresh', $refresh)->status);
+		self::assertSame('1.0.0', $this->app->db->one('SELECT app_version FROM activations')['app_version']);
+		self::assertSame(1, (int) $this->app->db->execute('SELECT COUNT(*) FROM activations')->fetchColumn());
+	}
+
+	public function testEndedActivationsReceiveTheirClosingRevisionAndOnlyActivateAnswersRevoked(): void
+	{
+		$count = fn(): int => (int) $this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn();
+		$deactivate = function (array $device, string $activationId): array {
+			$response = $this->app->activations->execute(
+				'deactivate',
+				$this->request('deactivate', $device, $activationId),
+			);
+			self::assertSame(200, $response->status, $response->body);
+			$data = json_decode($response->body, true);
+			return [$data['status'], $this->payload($response)['status_reason'], $data['deactivated_at']];
+		};
+
+		// Retirada desde el panel sin computadora de destino: «transferred».
+		$first = $this->activate();
+		$firstDevice = $this->device;
+		$this->clock->instant = $this->clock->instant->modify('+1 day');
+		$this->app->offline->release($this->actor, Uuid::create(), $this->issued['id'], [
+			'activation_id' => $first['activation_id'],
+			'version' => 1,
+			'reason' => 'Equipo averiado',
+			'accept_offline_limit' => '1',
+		]);
+		self::assertSame(2, $count());
+		$this->clock->instant = $this->clock->instant->modify('+1 day');
+		self::assertSame(
+			['deactivated', 'transferred', '2026-09-26T12:00:00.000000Z'],
+			$deactivate($firstDevice, $first['activation_id']),
+		);
+		// No se firma otra revisión y la activación conserva su estado.
+		self::assertSame(2, $count());
+		self::assertSame('transferred', $this->app->db->one('SELECT state FROM activations')['state']);
+
+		// Licencia revocada por el propietario: «revoked».
+		$this->device = $this->device();
+		$second = $this->activate();
+		$this->app->licenses->change($this->actor, Uuid::create(), $this->issued['id'], 'revoke', [
+			'version' => 1,
+			'reason' => 'Revocación comercial',
+		]);
+		self::assertSame(4, $count());
+		self::assertSame(
+			['deactivated', 'revoked', '2026-09-27T12:00:00.000000Z'],
+			$deactivate($this->device, $second['activation_id']),
+		);
+		self::assertSame(4, $count());
+		// «REVOKED» queda para quien intenta activar una licencia revocada, incluso la misma computadora.
+		foreach ([$this->device, $this->device()] as $device) {
+			$refused = $this->app->activations->execute('activate', $this->request('activate', $device));
+			self::assertSame(403, $refused->status);
+			self::assertSame(
+				['code' => 'REVOKED', 'details' => []],
+				array_intersect_key(json_decode($refused->body, true)['error'], ['code' => 1, 'details' => 1]),
+			);
+		}
+		self::assertSame(4, $count());
+	}
+
+	public function testThePreviousProtocolIsNoLongerAccepted(): void
+	{
+		$invalid = function (callable $call, string $label): void {
+			try {
+				$call();
+				self::fail('Accepted: ' . $label);
+			} catch (ApiProblem $e) {
+				self::assertSame(['INVALID_REQUEST', 400], [$e->errorCode, $e->status], $label);
+			}
+		};
+		$challenge = [
+			'action' => 'activate',
+			'product_id' => 'adel_pos',
+			'server_id' => $this->device['id'],
+			'activation_id' => null,
+		];
+		$renamed = $challenge;
+		unset($renamed['server_id']);
+		$renamed['installation_id'] = $this->device['id'];
+		$invalid(fn() => $this->app->activations->challenge($renamed), 'installation_id in a challenge');
+		// La transferencia por autoservicio llega en la etapa 4: todavía no existe como acción.
+		$invalid(
+			fn() => $this->app->activations->challenge(array_replace($challenge, ['action' => 'transfer'])),
+			'transfer challenge',
+		);
+		$invalid(fn() => $this->app->activations->execute('transfer', $this->request()), 'transfer operation');
+
+		$input = $this->request();
+		$fingerprint = ['fingerprint_version' => '1', 'fingerprint_hash' => 'sha256:' . str_repeat('a', 64)];
+		$invalid(fn() => $this->app->activations->execute('activate', $input + $fingerprint), 'fingerprint');
+		$old = $input;
+		unset($old['server_id']);
+		$old['installation_id'] = $input['server_id'];
+		$invalid(fn() => $this->app->activations->execute('activate', $old), 'installation_id');
+		$invalid(fn() => $this->app->activations->execute('activate', $old + $fingerprint), 'previous request');
+
+		// Una prueba de posesión firmada con el prefijo anterior no autentica.
+		$nonce = $this->app->db
+			->execute('SELECT nonce FROM activation_challenges WHERE challenge_id=?', [
+				Uuid::bytes($input['challenge_id']),
+			])
+			->fetchColumn();
+		$message = Protocol::proofMessage('activate', $input, $nonce);
+		self::assertStringStartsWith("ADELPOS-LIC-V1\nactivate\n", $message);
+		$legacy = $input;
+		$legacy['proof'] = Protocol::encode(
+			sodium_crypto_sign_detached(substr($message, strlen('ADELPOS-')), $this->device['secret']),
+		);
+		try {
+			$this->app->activations->execute('activate', $legacy);
+			self::fail('Previous proof prefix accepted');
+		} catch (ApiProblem $e) {
+			self::assertSame(['INVALID_PROOF', 401], [$e->errorCode, $e->status]);
+		}
+		self::assertSame(0, (int) $this->app->db->execute('SELECT COUNT(*) FROM activations')->fetchColumn());
+		self::assertSame(0, (int) $this->app->db->execute('SELECT COUNT(*) FROM license_requests')->fetchColumn());
+		// El desafío no se consumió: la solicitud correcta todavía activa.
+		self::assertSame(200, $this->app->activations->execute('activate', $input)->status);
+	}
+
 	public function testAuditFailureAfterSigningRollsBackEveryProtocolEffect(): void
 	{
 		$input = $this->request();

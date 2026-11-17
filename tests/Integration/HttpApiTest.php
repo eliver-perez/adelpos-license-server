@@ -117,7 +117,7 @@ final class HttpApiTest extends TestCase
 			Protocol::json([
 				'action' => $action,
 				'product_id' => 'adel_pos',
-				'installation_id' => $device['id'],
+				'server_id' => $device['id'],
 				'activation_id' => $activation,
 			]),
 		);
@@ -125,7 +125,7 @@ final class HttpApiTest extends TestCase
 		$input = [
 			'request_id' => Uuid::create(),
 			'product_id' => 'adel_pos',
-			'installation_id' => $device['id'],
+			'server_id' => $device['id'],
 			'challenge_id' => $challenge['json']['challenge_id'],
 			'app_version' => 'HTTP-test',
 		];
@@ -133,8 +133,6 @@ final class HttpApiTest extends TestCase
 			$input += [
 				'license_key' => $key,
 				'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($device['pair'])),
-				'fingerprint_version' => '1',
-				'fingerprint_hash' => 'sha256:' . str_repeat('b', 64),
 			];
 		} else {
 			$input['activation_id'] = $activation;
@@ -209,7 +207,13 @@ final class HttpApiTest extends TestCase
 		$deactivation = $this->signed('deactivate', $device, '', $payload['activation_id']);
 		$ack = $this->http('/v1/activations/deactivate', Protocol::json($deactivation));
 		self::assertSame(200, $ack['status']);
+		self::assertSame(
+			['activation_id', 'deactivated_at', 'status', 'license_jws', 'server_time', 'request_id'],
+			array_keys($ack['json']),
+		);
 		self::assertSame('deactivated', $ack['json']['status']);
+		self::assertSame($deactivation['request_id'], $ack['json']['request_id']);
+		self::assertSame('deactivated', $this->payload($ack)['status_reason']);
 		self::assertSame(
 			$ack['body'],
 			$this->http('/v1/activations/deactivate', Protocol::json($deactivation))['body'],
@@ -226,6 +230,24 @@ final class HttpApiTest extends TestCase
 			$this->http('/v1/activations', Protocol::json($this->signed('activate', $other, $license['secret']))),
 		);
 		self::assertNotSame($payload['activation_id'], $next['activation_id']);
+		// La computadora anterior ya no puede activar: la licencia está en otra.
+		$occupied = $this->signed('activate', $device, $license['secret']);
+		$limit = $this->http('/v1/activations', Protocol::json($occupied));
+		self::assertSame(409, $limit['status']);
+		self::assertSame(
+			[
+				'error' => [
+					'code' => 'ACTIVATION_LIMIT',
+					'message' => 'La licencia ya está activa en otra computadora.',
+					'request_id' => $occupied['request_id'],
+					'details' => ['transfer_available' => false],
+				],
+			],
+			$limit['json'],
+		);
+		// La que la tiene vuelve a activar y recibe su revisión vigente.
+		$again = $this->http('/v1/activations', Protocol::json($this->signed('activate', $other, $license['secret'])));
+		self::assertSame($next, $this->payload($again));
 		$app->licenses->change($actor, Uuid::create(), $license['id'], 'revoke', [
 			'version' => 2,
 			'reason' => 'HTTP revocation',
@@ -237,6 +259,14 @@ final class HttpApiTest extends TestCase
 			),
 		);
 		self::assertSame('revoked', $revoked['license_status']);
+		self::assertSame('revoked', $revoked['status_reason']);
+		$refused = $this->http(
+			'/v1/activations',
+			Protocol::json($this->signed('activate', $other, $license['secret'])),
+		);
+		self::assertSame(403, $refused['status']);
+		self::assertSame('REVOKED', $refused['json']['error']['code']);
+		self::assertStringContainsString('"details":{}', $refused['body']);
 		self::assertSame(0, (int) $app->db->execute('SELECT COUNT(*) FROM admin_sessions')->fetchColumn());
 		self::assertStringNotContainsString($license['secret'], file_get_contents($this->directory . '/server.log'));
 	}
@@ -249,7 +279,7 @@ final class HttpApiTest extends TestCase
 		$body = Protocol::json([
 			'action' => 'activate',
 			'product_id' => 'adel_pos',
-			'installation_id' => Uuid::create(),
+			'server_id' => Uuid::create(),
 			'activation_id' => null,
 		]);
 		self::assertSame(200, $this->http($path, $body)['status']);
@@ -292,13 +322,41 @@ final class HttpApiTest extends TestCase
 		$get = $this->http($path, '', 'GET');
 		self::assertSame(405, $get['status']);
 		self::assertStringContainsString('allow: post', $get['headers']);
-		self::assertSame(404, $this->http('/v1/other')['status']);
-		self::assertSame(415, $this->http($path, '{}', 'POST', ['Content-Type: text/plain'])['status']);
-		self::assertSame(400, $this->http($path, '{"action":"activate","action":"refresh"}')['status']);
-		self::assertSame(413, $this->http($path, str_repeat(' ', 16385))['status']);
-		$invalid = $this->http('/v1/activations', '{"request_id":"not-a-uuid"}');
-		self::assertSame(400, $invalid['status']);
-		self::assertMatchesRegularExpression('/^[a-f0-9-]{36}$/', $invalid['json']['error']['request_id']);
+		// Formato de error del contrato: sin «request_id» válido del cliente, va null; «details» es un objeto.
+		$error = fn(string $message, int|string|null $requestId = null): string => Protocol::json([
+			'error' => [
+				'code' => 'INVALID_REQUEST',
+				'message' => $message,
+				'request_id' => $requestId,
+				'details' => new \stdClass(),
+			],
+		]);
+		$invalidRequest = $error('La solicitud no es válida.');
+		self::assertSame($invalidRequest, $get['body']);
+		// Los errores de transporte conservan su HTTP estándar, siempre con el código INVALID_REQUEST.
+		foreach (
+			[
+				[404, $this->http('/v1/other')],
+				[404, $this->http('/v1/activations/transfer', '{}')],
+				[415, $this->http($path, '{}', 'POST', ['Content-Type: text/plain'])],
+				[400, $this->http($path, '{"action":"activate","action":"refresh"}')],
+				[400, $this->http($path, '[]')],
+				[413, $this->http($path, str_repeat(' ', 16385))],
+				// El desafío no lleva «request_id»: aunque llegue uno, la respuesta lo deja en null.
+				[400, $this->http($path, '{"request_id":"11111111-1111-4111-8111-111111111111"}')],
+				[400, $this->http('/v1/activations', '{"request_id":"not-a-uuid"}')],
+				[400, $this->http('/v1/activations', '{"request_id":17}')],
+				[400, $this->http('/v1/activations/refresh', '{}')],
+			]
+			as [$status, $response]
+		) {
+			self::assertSame($status, $response['status']);
+			self::assertSame($invalidRequest, $response['body']);
+		}
+		// Con un «request_id» válido, el error lo devuelve tal como llegó.
+		$valid = $this->http('/v1/activations/deactivate', '{"request_id":"AAAAAAAA-1111-4111-8111-111111111111"}');
+		self::assertSame(400, $valid['status']);
+		self::assertSame($error('La solicitud no es válida.', 'AAAAAAAA-1111-4111-8111-111111111111'), $valid['body']);
 		$this->config['APP_ENV'] = 'production';
 		$this->config['APP_URL'] = 'https://license.example.test';
 		$this->writeConfig();
@@ -313,7 +371,7 @@ final class HttpApiTest extends TestCase
 		$body = Protocol::json([
 			'action' => 'activate',
 			'product_id' => 'adel_pos',
-			'installation_id' => Uuid::create(),
+			'server_id' => Uuid::create(),
 			'activation_id' => null,
 		]);
 		for ($i = 0; $i < 30; ++$i) {
@@ -321,7 +379,11 @@ final class HttpApiTest extends TestCase
 		}
 		$limited = $this->http($path, $body);
 		self::assertSame(429, $limited['status']);
-		self::assertSame('RATE_LIMITED', $limited['json']['error']['code']);
+		self::assertSame(
+			'{"error":{"code":"RATE_LIMITED","message":"Demasiadas solicitudes. Intenta nuevamente más tarde.",' .
+				'"request_id":null,"details":{}}}',
+			$limited['body'],
+		);
 		self::assertStringContainsString('retry-after: 60', $limited['headers']);
 		self::assertStringNotContainsString('access-control-allow-origin:', $limited['headers']);
 	}

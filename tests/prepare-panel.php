@@ -34,7 +34,7 @@ foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index
 			$app->activations->challenge([
 				'action' => 'activate',
 				'product_id' => 'adel_pos',
-				'installation_id' => $installation,
+				'server_id' => $installation,
 				'activation_id' => null,
 			])->body,
 			true,
@@ -42,11 +42,9 @@ foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index
 		$input = [
 			'request_id' => AdelPos\License\Domain\Uuid::create(),
 			'product_id' => 'adel_pos',
-			'installation_id' => $installation,
+			'server_id' => $installation,
 			'license_key' => $issued['secret'],
 			'installation_public_key' => AdelPos\License\Domain\Protocol::encode(sodium_crypto_sign_publickey($pair)),
-			'fingerprint_version' => '1',
-			'fingerprint_hash' => 'sha256:' . str_repeat('c', 64),
 			'challenge_id' => $challenge['challenge_id'],
 			'app_version' => 'panel-test',
 		];

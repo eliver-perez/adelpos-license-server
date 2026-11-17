@@ -216,6 +216,23 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 11 | Los archivos de `contracts/v1/` siguen siendo los heredados hasta la Fase 7. La prueba que comparaba el JWS publicado con esos archivos se sustituye por una del encabezado exacto. | Criterio 8 de AVANCE.md, sección E2-0.6. |
 | 12 | Sin dependencias nuevas de Composer en esta fase. | — |
 
+### Fase 5 — API en línea
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `ApiProblem::STATUS` es la tabla de códigos y HTTP del contrato (sección 8.7). Solo los errores de transporte de `INVALID_REQUEST` llevan otro HTTP: 404, 405, 413 y 415, y 403 si la petición llega sin TLS fuera del desarrollo local. | Decisión 5 del propietario. El 403 sin TLS ya existía; en producción Nginx no deja pasar HTTP, así que solo protege una mala configuración. |
+| 2 | `request_id` de un error: el que envió el cliente si es un UUID válido, con sus mismos bytes; `null` en el desafío, cuando falta o cuando no es válido. El servidor ya no inventa uno. Para el registro de fallas usa una referencia propia. | Propuesta V1.1 n.º 8. |
+| 3 | `details` es siempre un objeto JSON: `{}` si no aplica y `{"transfer_available": false}` en `ACTIVATION_LIMIT`. | Contrato, secciones 8.3 y 8.7. |
+| 4 | La misma instalación es la misma identidad (`server_id`) **y** la misma llave pública, con una activación vigente de esa licencia. Recibe su revisión vigente con `200`. La misma identidad con otra llave, o la misma llave con otra identidad, es otra instalación y recibe `ACTIVATION_LIMIT`. | Contrato, sección 8.3, y especificación, Fase 5, punto 3. |
+| 5 | Desactivar una activación que ya terminó responde `200` con su revisión de cierre, sea cual sea el motivo, y con `"status": "deactivated"`. El motivo real está en `status_reason` de la licencia firmada. No se firma otra revisión. | Decisión 7 del propietario. El contrato fija el valor de `status` en la respuesta. |
+| 6 | `REVOKED` solo lo responde `activate` sobre una licencia revocada, incluso a la computadora que la tenía. | Decisión 7 del propietario. |
+| 7 | `server_id` se acepta solo como UUID versión 4 en minúsculas. Los demás UUID se aceptan en cualquier caja y la prueba de posesión usa los bytes recibidos. | Propuesta V1.1 n.º 13. |
+| 8 | La versión de AD-EL POS (`app_version`) se guarda en la activación en cada operación autenticada: activar, volver a activar, consultar y desactivar. | Especificación, inventario de la Fase 0: se recibía y no se guardaba. |
+| 9 | `transfer` no existe todavía: el desafío con esa acción recibe `INVALID_REQUEST` y la ruta `/v1/activations/transfer` responde 404. `TRANSFER_LIMIT` queda definido sin uso y `transfer_available` es siempre `false`. Los tres puntos llevan la marca `PENDIENTE etapa 4`. | Especificación, Fase 5, puntos 1, 3 y 6. |
+| 10 | El fallo de arranque (`public/index.php`) responde a `/v1/…` con el formato de error del contrato, con `request_id: null`. | Sin arranque no se puede leer la petición. |
+| 11 | Las rutas (`ApiKernel::ROUTES`) y el tamaño máximo (`MAX_BODY_BYTES`, 16 KiB) son constantes públicas. | La Fase 7 las compara con `openapi.yaml`. |
+| 12 | Sin dependencias nuevas de Composer en esta fase. | — |
+
 ### Repaso de formato
 
 | # | Decisión | Motivo |

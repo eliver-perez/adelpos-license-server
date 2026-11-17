@@ -31,7 +31,7 @@ final class ActivationService
 				Uuid::bytes($id),
 				$input['action'],
 				$input['product_id'],
-				Uuid::bytes($input['installation_id']),
+				Uuid::bytes($input['server_id']),
 				$input['activation_id'] === null ? null : Uuid::bytes($input['activation_id']),
 				$nonce,
 				$this->clock->sql(),
@@ -96,7 +96,7 @@ final class ActivationService
 					$requestBytes,
 					$action,
 					$digest,
-					Uuid::bytes($input['installation_id']),
+					Uuid::bytes($input['server_id']),
 					isset($input['activation_id']) ? Uuid::bytes($input['activation_id']) : null,
 					$public,
 					$message,
@@ -142,7 +142,7 @@ final class ActivationService
 	private function activate(array $input): ApiResponse
 	{
 		if (ActivationCode::normalize($input['license_key']) === null) {
-			return $this->failure('LICENSE_NOT_FOUND', 404, $input);
+			return $this->failure('LICENSE_NOT_FOUND', $input);
 		}
 		$digest = $this->crypto->digest('CREDENTIAL_KEY', $input['license_key']);
 		$candidate = $this->db->one(
@@ -153,7 +153,7 @@ final class ActivationService
 			[$digest, $input['product_id']],
 		);
 		if (!$candidate) {
-			return $this->failure('LICENSE_NOT_FOUND', 404, $input);
+			return $this->failure('LICENSE_NOT_FOUND', $input);
 		}
 		$license = $this->db->one('SELECT * FROM licenses WHERE license_id=? FOR UPDATE', [$candidate['license_id']]);
 		$credential = $this->db->one(
@@ -161,48 +161,45 @@ final class ActivationService
 			[$digest, $license['license_id']],
 		);
 		if ($license['commercial_status'] === 'revoked') {
-			return $this->failure('REVOKED', 403, $input);
+			return $this->failure('REVOKED', $input);
 		}
 		if (!$credential || $credential['state'] !== 'active') {
-			return $this->failure('LICENSE_NOT_FOUND', 404, $input);
+			return $this->failure('LICENSE_NOT_FOUND', $input);
 		}
+		$serverId = Uuid::bytes($input['server_id']);
+		$publicKey = Protocol::decode($input['installation_public_key'], 32);
 		// Una licencia vale para una sola computadora principal a la vez (contrato, sección 1).
-		if (
-			$this->db->one("SELECT activation_id FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [
-				$license['license_id'],
-			])
-		) {
-			return $this->failure('ACTIVATION_LIMIT', 409, $input);
+		$active = $this->db->one("SELECT * FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [
+			$license['license_id'],
+		]);
+		if (!$active) {
+			$activation = $this->activator->activate($license, $serverId, $publicKey, $input['app_version']);
+			return $this->licenseResponse($activation['revision']['jws'], $input);
 		}
-		$activation = $this->activator->activate(
-			$license,
-			Uuid::bytes($input['installation_id']),
-			Protocol::decode($input['installation_public_key'], 32),
-			$input['app_version'],
-		);
-		return $this->licenseResponse($activation['revision']['jws'], $input);
+		// La misma instalación es la misma identidad con la misma llave. Vuelve a recibir su
+		// revisión vigente: no se crea otra activación ni cambian las fechas.
+		if ($active['server_id'] === $serverId && hash_equals($active['installation_public_key'], $publicKey)) {
+			$this->recordVersion($active, $input);
+			return $this->licenseResponse($this->currentJws($active), $input);
+		}
+		// PENDIENTE etapa 4: calcular «transfer_available» con las reglas de la transferencia
+		// por autoservicio (contrato, sección 8.4). Hasta entonces siempre es false.
+		return $this->failure('ACTIVATION_LIMIT', $input, ['transfer_available' => false]);
 	}
 
+	/** «refresh» y «deactivate»: operaciones de una activación que ya existe. */
 	private function existing(string $action, array $input, string $public): ApiResponse
 	{
 		$candidate = $this->identity($input);
 		$this->db->one('SELECT license_id FROM licenses WHERE license_id=? FOR UPDATE', [$candidate['license_id']]);
 		$activation = $this->identity($input, true);
 		if (!hash_equals($public, $activation['installation_public_key'])) {
-			throw new ApiProblem('INVALID_PROOF', 401);
+			throw new ApiProblem('INVALID_PROOF');
 		}
+		$this->recordVersion($activation, $input);
 		if ($action === 'refresh') {
-			$revision = $this->db->one(
-				'SELECT license_jws FROM license_revisions WHERE revision_id=? AND activation_id=?',
-				[$activation['current_revision_id'], $activation['activation_id']],
-			);
-			if (!$revision) {
-				throw new \RuntimeException('Missing current revision.');
-			}
-			return $this->licenseResponse($revision['license_jws'], $input);
-		}
-		if ($activation['state'] === 'revoked') {
-			return $this->failure('REVOKED', 403, $input);
+			// La revisión vigente de la activación. Si ya terminó, es su revisión de cierre.
+			return $this->licenseResponse($this->currentJws($activation), $input);
 		}
 		if ($activation['state'] === 'active') {
 			$activation['ended_at'] = $this->clock->sql();
@@ -210,13 +207,40 @@ final class ActivationService
 				$activation['ended_at'],
 				$activation['activation_id'],
 			]);
-			$this->publisher->publish($activation['license_id'], $activation['activation_id']);
+			$jws = $this->publisher->publish($activation['license_id'], $activation['activation_id'])['jws'];
+		} else {
+			// Ya había terminado, por el motivo que sea: se entrega su revisión de cierre, sin firmar otra.
+			$jws = $this->currentJws($activation);
 		}
 		return ApiResponse::data([
 			'activation_id' => Uuid::text($activation['activation_id']),
 			'deactivated_at' => Protocol::utc($activation['ended_at']),
 			'status' => 'deactivated',
+			'license_jws' => $jws,
+			'server_time' => Protocol::utc($this->clock->sql()),
+			'request_id' => $input['request_id'],
 		]);
+	}
+
+	/** JWS de la revisión vigente de una activación. */
+	private function currentJws(array $activation): string
+	{
+		$revision = $this->db->one(
+			'SELECT license_jws FROM license_revisions WHERE revision_id=? AND activation_id=?',
+			[$activation['current_revision_id'], $activation['activation_id']],
+		);
+		return $revision['license_jws'] ?? throw new \RuntimeException('Missing current revision.');
+	}
+
+	/** Guarda la versión de AD-EL POS que hizo la última operación autenticada de la activación. */
+	private function recordVersion(array $activation, array $input): void
+	{
+		if ($activation['app_version'] !== $input['app_version']) {
+			$this->db->execute('UPDATE activations SET app_version=? WHERE activation_id=?', [
+				$input['app_version'],
+				$activation['activation_id'],
+			]);
+		}
 	}
 
 	private function identity(array $input, bool $lock = false): array
@@ -224,9 +248,9 @@ final class ActivationService
 		$record = $this->db->one(
 			'SELECT * FROM activations WHERE activation_id=? AND product_id=? AND server_id=?' .
 				($lock ? ' FOR UPDATE' : ''),
-			[Uuid::bytes($input['activation_id']), $input['product_id'], Uuid::bytes($input['installation_id'])],
+			[Uuid::bytes($input['activation_id']), $input['product_id'], Uuid::bytes($input['server_id'])],
 		);
-		return $record ?? throw new ApiProblem('INVALID_PROOF', 401);
+		return $record ?? throw new ApiProblem('INVALID_PROOF');
 	}
 
 	private function matchChallenge(?array $challenge, array $input, string $action, bool $checkTime): void
@@ -235,14 +259,14 @@ final class ActivationService
 			!$challenge ||
 			$challenge['action'] !== $action ||
 			$challenge['product_id'] !== $input['product_id'] ||
-			$challenge['server_id'] !== Uuid::bytes($input['installation_id']) ||
+			$challenge['server_id'] !== Uuid::bytes($input['server_id']) ||
 			$challenge['activation_id'] !==
 				(isset($input['activation_id']) ? Uuid::bytes($input['activation_id']) : null)
 		) {
-			throw new ApiProblem('INVALID_PROOF', 401);
+			throw new ApiProblem('INVALID_PROOF');
 		}
 		if ($checkTime && ($challenge['expires_at'] <= $this->clock->sql() || $challenge['consumed_at'] !== null)) {
-			throw new ApiProblem('INVALID_PROOF', 401);
+			throw new ApiProblem('INVALID_PROOF');
 		}
 	}
 
@@ -250,7 +274,7 @@ final class ActivationService
 	{
 		// Cross-channel attempts reach here only after their own online proof was verified.
 		if ($record['channel'] !== 'online') {
-			throw new ApiProblem('INVALID_REQUEST', 409);
+			throw new ApiProblem('REQUEST_CONFLICT');
 		}
 		$this->verify($input['proof'], $record['proof_message'], $record['public_key']);
 		if (
@@ -259,23 +283,24 @@ final class ActivationService
 			(int) $record['digest_key_version'] !== 1 ||
 			!hash_equals($record['input_digest'], $digest)
 		) {
-			throw new ApiProblem('INVALID_REQUEST', 409);
+			throw new ApiProblem('REQUEST_CONFLICT');
 		}
 	}
 
 	private function verify(string $proof, string $message, string $public): void
 	{
 		if (!sodium_crypto_sign_verify_detached(Protocol::decode($proof, 64), $message, $public)) {
-			throw new ApiProblem('INVALID_PROOF', 401);
+			throw new ApiProblem('INVALID_PROOF');
 		}
 	}
 	private function limitIdentity(array $input, string $public): void
 	{
 		$this->rate->consume('api-identity', $input['product_id'] . ':' . bin2hex($public), 30, 60);
 	}
-	private function failure(string $code, int $status, array $input): ApiResponse
+	/** Negativa comercial: se responde y se guarda, a diferencia de los errores que revierten la operación. */
+	private function failure(string $code, array $input, array $details = []): ApiResponse
 	{
-		return ApiResponse::error(new ApiProblem($code, $status), $input['request_id']);
+		return ApiResponse::error(new ApiProblem($code, null, $details), $input['request_id']);
 	}
 	private function licenseResponse(string $jws, array $input): ApiResponse
 	{

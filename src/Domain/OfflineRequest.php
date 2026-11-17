@@ -63,7 +63,10 @@ final class OfflineRequest
 			}
 		}
 		Protocol::uuid($payload['request_id']);
-		Protocol::uuid($payload['installation_id'], true);
+		$uuidV4 = '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i';
+		if (!preg_match($uuidV4, $payload['installation_id'])) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
 		if ($payload['action'] !== 'activate') {
 			Protocol::uuid($payload['license_id']);
 			Protocol::uuid($payload['activation_id']);
@@ -98,7 +101,7 @@ final class OfflineRequest
 				$public,
 			)
 		) {
-			throw new ApiProblem('INVALID_PROOF', 401);
+			throw new ApiProblem('INVALID_PROOF');
 		}
 		unset($payload['license_key']); // Only the encrypted original may contain a commercial credential.
 		return [

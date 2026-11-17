@@ -53,13 +53,18 @@ try {
 	http_response_code(503);
 	if (str_starts_with($_SERVER['REQUEST_URI'] ?? '', '/v1/')) {
 		header('Content-Type: application/json; charset=utf-8');
-		echo json_encode([
-			'error' => [
-				'code' => 'TEMPORARY_UNAVAILABLE',
-				'message' => 'El servicio no está disponible temporalmente.',
-				'request_id' => $reference,
+		// Formato de error del contrato. Sin arranque no se puede leer la petición: «request_id» es null.
+		echo json_encode(
+			[
+				'error' => [
+					'code' => 'TEMPORARY_UNAVAILABLE',
+					'message' => 'El servicio no está disponible temporalmente.',
+					'request_id' => null,
+					'details' => new stdClass(),
+				],
 			],
-		]);
+			JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+		);
 	} else {
 		echo '<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" ' .
 			'content="width=device-width,initial-scale=1"><title>AD-EL POS — Licencias · Servicio no ' .

@@ -28,57 +28,74 @@ final class Protocol
 		}
 	}
 
-	public static function uuid(mixed $value, bool $v4 = false): string
+	public static function uuid(mixed $value): string
 	{
 		if (
 			!is_string($value) ||
-			!preg_match(
-				$v4
-					? '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i'
-					: '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i',
-				$value,
-			)
+			!preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i', $value)
 		) {
 			throw new ApiProblem('INVALID_REQUEST');
 		}
-		return $value; // Preserve received bytes for the proof; compare UUIDs in binary.
+		// Se conservan los bytes recibidos; los UUID se comparan en binario.
+		return $value;
 	}
 
+	/** Identidad de la instalación: UUID versión 4 y solo en minúsculas (contrato, sección 2). */
+	public static function serverId(mixed $value): string
+	{
+		if (
+			!is_string($value) ||
+			!preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/', $value)
+		) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+		return $value;
+	}
+
+	/** Acciones que admite un desafío. */
+	// PENDIENTE etapa 4: aceptar «transfer», la transferencia por autoservicio (contrato, sección 8.4).
+	public const CHALLENGE_ACTIONS = ['activate', 'refresh', 'deactivate'];
+
+	/** Campos exactos de cada petición (contrato, secciones 8.1, 8.3, 8.5 y 8.6). */
+	private const FIELDS = [
+		'challenge' => ['action', 'product_id', 'server_id', 'activation_id'],
+		'activate' => [
+			'request_id',
+			'product_id',
+			'license_key',
+			'server_id',
+			'installation_public_key',
+			'challenge_id',
+			'proof',
+			'app_version',
+		],
+		'refresh' => ['request_id', 'product_id', 'server_id', 'activation_id', 'challenge_id', 'proof', 'app_version'],
+		'deactivate' => [
+			'request_id',
+			'product_id',
+			'server_id',
+			'activation_id',
+			'challenge_id',
+			'proof',
+			'app_version',
+		],
+	];
+
+	/**
+	 * Valida una petición de la API: ni campos faltantes ni sobrantes, y cada uno con su formato.
+	 * Devuelve los campos ordenados por nombre, que es la forma con la que se compara un reintento.
+	 */
 	public static function input(string $action, array $input): array
 	{
-		$fields = match ($action) {
-			'challenge' => ['action', 'product_id', 'installation_id', 'activation_id'],
-			'activate' => [
-				'request_id',
-				'product_id',
-				'license_key',
-				'installation_id',
-				'installation_public_key',
-				'fingerprint_version',
-				'fingerprint_hash',
-				'challenge_id',
-				'proof',
-				'app_version',
-			],
-			'refresh', 'deactivate' => [
-				'request_id',
-				'product_id',
-				'installation_id',
-				'activation_id',
-				'challenge_id',
-				'proof',
-				'app_version',
-			],
-			default => throw new ApiProblem('INVALID_REQUEST'),
-		};
-		$keys = array_keys($input);
-		sort($keys);
-		$expected = $fields;
+		$expected = self::FIELDS[$action] ?? throw new ApiProblem('INVALID_REQUEST');
+		$received = array_keys($input);
+		sort($received);
 		sort($expected);
-		if ($keys !== $expected) {
+		if ($received !== $expected) {
 			throw new ApiProblem('INVALID_REQUEST');
 		}
 		foreach ($input as $field => $value) {
+			// El único valor que puede no ser texto: el desafío para activar no lleva activación.
 			if ($action === 'challenge' && $field === 'activation_id' && $value === null) {
 				continue;
 			}
@@ -95,55 +112,60 @@ final class Protocol
 		if (!preg_match('/\A[a-z][a-z0-9_]{1,63}\z/', $input['product_id'])) {
 			throw new ApiProblem('INVALID_REQUEST');
 		}
-		self::uuid($input['installation_id'], true);
+		self::serverId($input['server_id']);
 		if ($action === 'challenge') {
-			if (!in_array($input['action'], ['activate', 'refresh', 'deactivate'], true)) {
-				throw new ApiProblem('INVALID_REQUEST');
-			}
-			if ($input['action'] === 'activate') {
-				if ($input['activation_id'] !== null) {
-					throw new ApiProblem('INVALID_REQUEST');
-				}
-			} else {
-				self::uuid($input['activation_id']);
-			}
+			self::challengeInput($input);
 		} else {
-			self::uuid($input['request_id']);
-			self::uuid($input['challenge_id']);
-			self::decode($input['proof'], 64);
-			if (strlen($input['app_version']) > 100) {
-				throw new ApiProblem('INVALID_REQUEST');
-			}
-			if ($action === 'activate') {
-				self::decode($input['installation_public_key'], 32);
-				// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo, versión '1')
-				if (
-					$input['fingerprint_version'] !== '1' ||
-					!preg_match('/\Asha256:[a-f0-9]{64}\z/', $input['fingerprint_hash']) ||
-					strlen($input['license_key']) > 256
-				) {
-					throw new ApiProblem('INVALID_REQUEST');
-				}
-			} else {
-				self::uuid($input['activation_id']);
-			}
+			self::operationInput($action, $input);
 		}
 		ksort($input);
 		return $input;
 	}
 
+	private static function challengeInput(array $input): void
+	{
+		if (!in_array($input['action'], self::CHALLENGE_ACTIONS, true)) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+		if ($input['action'] !== 'activate') {
+			self::uuid($input['activation_id']);
+		} elseif ($input['activation_id'] !== null) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+	}
+
+	private static function operationInput(string $action, array $input): void
+	{
+		self::uuid($input['request_id']);
+		self::uuid($input['challenge_id']);
+		self::decode($input['proof'], 64);
+		if (strlen($input['app_version']) > 100) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+		if ($action !== 'activate') {
+			self::uuid($input['activation_id']);
+			return;
+		}
+		self::decode($input['installation_public_key'], 32);
+		if (strlen($input['license_key']) > 256) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+	}
+
+	/** Mensaje que firma la instalación para probar que tiene su llave (contrato, sección 8.2). */
 	public static function proofMessage(string $action, array $input, string $nonce): string
 	{
 		return implode("\n", [
-			'LIC-V1',
+			'ADELPOS-LIC-V1',
 			$action,
 			$input['challenge_id'],
 			$nonce,
 			$input['product_id'],
-			$input['installation_id'],
+			$input['server_id'],
 			$input['activation_id'] ?? '-',
 		]);
 	}
+
 	public static function utc(?string $sql): ?string
 	{
 		return $sql === null

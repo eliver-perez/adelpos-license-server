@@ -878,7 +878,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 3 — Motor de fechas | **Cerrada.** 258 pruebas, 26 242 aserciones, todas OK. Verificador Go OK. |
 | Repaso de formato (regla del propietario) | **Hecho.** 261 pruebas, 26 248 aserciones, todas OK. Verificador Go OK. Playwright OK. |
 | 4 — Contenido y firma de la licencia | **Cerrada.** 340 pruebas, 26 412 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 7 de las 20 marcas de herencia. |
-| 5 — API en línea | Pendiente |
+| 5 — API en línea | **Cerrada.** 344 pruebas, 26 611 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 6 de las 20 marcas de herencia. |
 | 6 — Archivos sin internet | Pendiente |
 | 7 — Archivos del contrato y verificador de referencia | Pendiente |
 | 8 — Panel: emisión con el modelo nuevo | Pendiente |
@@ -1563,3 +1563,75 @@ Las decisiones técnicas están en `DECISIONS.md`, sección 10, Fase 4. Una va m
 - **Fase 6:** `.licreq` con `server_id` y `app_version`; `renew` deja de firmar una revisión nueva.
 - **Fase 7:** conectar `license.schema.json` a la validación y publicar los archivos de prueba nuevos.
 - **Fase 8:** mostrar en el panel el motivo de cierre de cada revisión, y el plan y los cupos en el detalle.
+
+---
+
+## Etapa 2 · Fase 5 — API en línea (contrato §8)
+
+La API en línea habla el protocolo del contrato y ya no acepta el anterior.
+
+### E2-5.1 Qué cambió
+
+| Tema | Antes | Ahora |
+| --- | --- | --- |
+| Identidad de la instalación | `installation_id`, en cualquier caja | `server_id`, UUID versión 4 en minúsculas |
+| Prueba de posesión | Prefijo `LIC-V1` | `ADELPOS-LIC-V1`, con `server_id` |
+| Activar | 10 campos, con huella | Los 8 campos de la sección 8.3; la huella se rechaza |
+| La misma computadora vuelve a activar | `409 ACTIVATION_LIMIT` | `200` con su revisión vigente; sin otra activación ni otras fechas |
+| Otra computadora | `409 ACTIVATION_LIMIT` sin detalles | `409 ACTIVATION_LIMIT` con `details.transfer_available: false` |
+| Desactivar | Respuesta de 3 campos | `activation_id`, `deactivated_at`, `status`, `license_jws` (revisión de cierre), `server_time` y `request_id` |
+| Desactivar una activación terminada | `403 REVOKED` si estaba revocada | `200` con su revisión de cierre, sea cual sea el motivo |
+| Formato de error | Sin `details`; `request_id` inventado | `{ "error": { "code", "message", "request_id", "details" } }`; `request_id` del cliente o `null`; `details` siempre objeto |
+| `request_id` reutilizado con otro contenido | `409 INVALID_REQUEST` | `409 REQUEST_CONFLICT`, también entre la API y una solicitud sin internet |
+| Códigos | Faltaban `TRANSFER_LIMIT` y `REQUEST_CONFLICT` | Los 10 de la tabla del contrato, con su HTTP (`ApiProblem::STATUS`) |
+| `app_version` | No se guardaba | Se guarda en la activación en cada operación autenticada |
+| `transfer` | — | Rechazado con `INVALID_REQUEST` hasta la etapa 4 |
+
+**Se conserva sin cambios:** el máximo de 16 KiB, los reintentos por `product_id` y `request_id` con la respuesta exacta, los límites de intentos, el desafío de 5 minutos y un solo uso, que una negativa comercial autenticada consume el desafío, y que el código comercial nunca se guarda ni se registra.
+
+### E2-5.2 Marcas
+
+- **Herencia:** quedan **6 de 20**. Se resolvió la de `Protocol` (huella en la API). Quedan `OfflineRequest` (Fase 6), `generate-fixtures.php` ×4 (Fase 7) y `templates/license-detail.php` (Fase 8).
+- **`PENDIENTE etapa 4`** (nuevas, 3): la acción `transfer` del desafío (`Protocol`), la ruta `/v1/activations/transfer` (`ApiKernel`) y el cálculo de `transfer_available` (`ActivationService`).
+- **`PENDIENTE etapa 3`** (2, sin cambio): renovación en `LicenseService` y en `OfflineService`.
+
+### E2-5.3 Pruebas
+
+**Resultado:** PHPUnit **344 pruebas, 26 611 aserciones, todas OK**. Verificador Go y `generate-fixtures.php --check` OK (archivos heredados). Playwright OK.
+
+| Lo que pide la especificación | Prueba |
+| --- | --- |
+| Cada ruta, con éxito y con sus errores | `ActivationsTest`, y por HTTP real `HttpApiTest::testOnlineLifecycleThroughRealHttpDoesNotCreatePanelSessions` y `testHttpValidationTlsAndRateLimitsUseStableJsonErrors` |
+| Reintento idéntico y `request_id` reutilizado con otro contenido | `testIdenticalReplaySurvivesChallengeCleanupAndCredentialRetirement` (`REQUEST_CONFLICT`) y `OfflineTest::testOnlineAndOfflineShareRequestIdNamespaceInBothDirections` |
+| Desafío vencido, ya usado, de otra acción y de otra instalación | `testChallengeExpiresAtExactBoundaryAndInvalidProofDoesNotConsumeIt`, `testCommercialRefusalIsPersistedAndDoesNotConsumeAnotherRequest` y `testBoundKeyAndChallengeActionCannotBeSubstituted` |
+| Prueba de posesión de otra llave | `testBoundKeyAndChallengeActionCannotBeSubstituted` |
+| Reactivación desde la misma instalación | `testTheSameInstallationActivatesAgainAndReceivesItsCurrentRevision`: mismos bytes firmados, una activación, una revisión, mismas fechas; con derechos cambiados recibe la revisión vigente |
+| Una segunda instalación recibe `ACTIVATION_LIMIT` | La misma prueba (otra llave con la misma identidad, y la misma llave con otra identidad) y `testCommercialRefusalIsPersisted…` (cuerpo exacto del error) |
+| Desactivar y volver a activar en otra instalación | `testDeactivationReleasesSlotAndOldIdentityKeepsTerminalRevision` |
+| Consulta y desactivación de una activación terminada | La anterior y `testEndedActivationsReceiveTheirClosingRevisionAndOnlyActivateAnswersRevoked` (transferida, revocada y desactivada) |
+| Concurrencia | `testTwoProcessesWithDistinctRequestsCannotOccupyTwoSlots` (dos computadoras, exactamente una activación), `testTwoProcessesWithIdenticalRequestReturnIdenticalBytes` y `OfflineTest::testOnlineAndOfflineRaceCannotOccupyTwoSlots` |
+| Ni respuestas ni registros contienen el código comercial | `testIdenticalReplaySurvives…`, `testUnknownKeyIsUniformAndArchivedWithoutTheSecret` y `HttpApiTest` (registro del servidor) |
+| El protocolo anterior ya no se acepta | `testThePreviousProtocolIsNoLongerAccepted` y `ProtocolTest::testRequestsHaveExactlyTheFieldsOfTheContract` (27 peticiones inválidas) |
+
+**Pruebas nuevas (6):** 3 en `ActivationsTest` y 3 en `ProtocolTest` (mensaje exacto de la prueba de posesión, campos exactos de cada petición, y códigos, HTTP y formato de los errores).
+
+**Pruebas sustituidas (2):**
+
+- `ActivationsTest::testUppercaseUuidBytesAreUsedInProofWithoutNormalization` aceptaba la identidad en mayúsculas. Ahora `testServerIdMustBeLowercaseAndOtherUuidsKeepTheirReceivedBytesInTheProof` comprueba que se rechaza y que los demás UUID conservan sus bytes.
+- `ProtocolTest::testProofMessageMatchesTheSharedFixtures` y `testSchemaDoesNotCoerceOrAllowUnknownFields` comparaban con los archivos heredados y con el protocolo anterior. La comparación con archivos vuelve en la Fase 7.
+
+**Ajustes en pruebas existentes:** las peticiones en línea de `ActivationsTest`, `HttpApiTest`, `ContractDataModelTest`, `OfflineTest` y `prepare-panel.php` usan `server_id` y ya no envían huella. Dos pruebas de `OfflineTest` usaban la misma computadora por las dos vías y esperaban un rechazo; ahora usan otra computadora, porque la misma recibe su revisión vigente. `panel.cjs` y `ProductionHttpTest` esperan `request_id: null`.
+
+**Comprobación de las reglas:** se quitaron una a la vez **19 reglas**. La primera corrida detectó 16. Las otras tres llevaron a mejorar las pruebas o el código:
+
+- *Aceptar la acción `transfer`:* seguía rechazada por otra regla (falta de `activation_id`). Se agregó el caso con `activation_id`.
+- *La misma llave con otra identidad recibe la licencia:* faltaba ese caso en la prueba.
+- *Límite de 16 KiB:* estaba escrito dos veces, en `ApiKernel` y en `StrictJson`. Ahora `ApiKernel::MAX_BODY_BYTES` es el único valor.
+
+Las 19 quedan detectadas.
+
+### E2-5.4 Pendientes que deja la fase
+
+- **Fase 6:** `.licreq` con `server_id` y `app_version`, sin huella y con `ADELPOS-LICREQ-V1`; `renew` y la reactivación sin internet entregan la revisión vigente sin firmar otra.
+- **Fase 7:** `openapi.yaml` con estas rutas, peticiones, respuestas y errores, y la prueba que lo compara con `ApiKernel::ROUTES`.
+- **Etapa 4:** `transfer`, `TRANSFER_LIMIT` y `transfer_available`.

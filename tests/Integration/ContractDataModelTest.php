@@ -392,7 +392,7 @@ final class ContractDataModelTest extends TestCase
 			$app->activations->challenge([
 				'action' => 'activate',
 				'product_id' => 'adel_pos',
-				'installation_id' => $server,
+				'server_id' => $server,
 				'activation_id' => null,
 			])->body,
 			true,
@@ -400,13 +400,11 @@ final class ContractDataModelTest extends TestCase
 		$input = [
 			'request_id' => Uuid::create(),
 			'product_id' => 'adel_pos',
-			'installation_id' => $server,
+			'server_id' => $server,
 			'challenge_id' => $challenge['challenge_id'],
 			'app_version' => '0.12.0',
 			'license_key' => $issued['secret'],
 			'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
-			'fingerprint_version' => '1',
-			'fingerprint_hash' => 'sha256:' . str_repeat('a', 64),
 		];
 		$input['proof'] = Protocol::encode(
 			sodium_crypto_sign_detached(

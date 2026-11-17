@@ -157,7 +157,7 @@ final class OfflineTest extends TestCase
 			$this->app->activations->challenge([
 				'action' => $action,
 				'product_id' => 'adel_pos',
-				'installation_id' => $this->device['id'],
+				'server_id' => $this->device['id'],
 				'activation_id' => $activationId,
 			])->body,
 			true,
@@ -165,7 +165,7 @@ final class OfflineTest extends TestCase
 		$input = [
 			'request_id' => $requestId ?? Uuid::create(),
 			'product_id' => 'adel_pos',
-			'installation_id' => $this->device['id'],
+			'server_id' => $this->device['id'],
 			'challenge_id' => $challenge['challenge_id'],
 			'app_version' => 'test',
 		];
@@ -173,8 +173,6 @@ final class OfflineTest extends TestCase
 			$input += [
 				'license_key' => $this->license['secret'],
 				'installation_public_key' => $this->device['public'],
-				'fingerprint_version' => '1',
-				'fingerprint_hash' => 'sha256:' . str_repeat('b', 64),
 			];
 		} else {
 			$input['activation_id'] = $activationId;
@@ -584,11 +582,13 @@ final class OfflineTest extends TestCase
 				$this->app->activations->execute('activate', $this->onlineRequest($requestId));
 				self::fail('Cross-channel ID accepted');
 			} catch (ApiProblem $error) {
-				self::assertSame(409, $error->status);
+				self::assertSame(['REQUEST_CONFLICT', 409], [$error->errorCode, $error->status]);
 			}
 		}
+		// Otra computadora intenta activar en línea la licencia ocupada: negativa que queda guardada.
+		$this->device = $this->device();
 		$input = $this->onlineRequest();
-		self::assertSame(409, $this->app->activations->execute('activate', $input)->status); // Occupied license, persisted refusal.
+		self::assertSame(409, $this->app->activations->execute('activate', $input)->status);
 		try {
 			$this->import($this->envelope(changes: ['request_id' => $input['request_id']]));
 			self::fail('Online ID imported');
@@ -711,6 +711,10 @@ final class OfflineTest extends TestCase
 			'id' => $id,
 			'input' => $this->input(),
 		];
+		if ($online) {
+			// La activación en línea llega desde otra computadora: solo una de las dos puede quedarse con la licencia.
+			$this->device = $this->device();
+		}
 		$jobs = [
 			$job,
 			$online
