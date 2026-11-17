@@ -402,3 +402,15 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 4 | La lectura del tipo y su condición (`LicenseTerms::fromInput`) es la misma en la emisión y en el periodo inicial: un dato de otro tipo de licencia se rechaza, nunca se ignora. | Una sola regla en el dominio. |
 | 5 | La renovación y el mantenimiento dejaron de ser cambios genéricos de `LicenseService::change()`: sus rutas van a `CommercialService` y las etiquetas del motor anterior se retiraron. En el panel ya no queda «Disponible próximamente». | Especificación, Fase 6, punto 3. Con esto no queda ninguna marca `PENDIENTE etapa 3` en el código. |
 | 6 | Sin dependencias nuevas. | — |
+
+### Fase 7 — Tarea programada de reducciones
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `bin/apply-scheduled-changes.php` aplica los cambios pendientes con `effective_at <= ahora`, cada uno en su propia transacción y con el mismo orden de bloqueo que el resto (producto, licencia, cambio). Un cambio ya aplicado o cancelado por otra ejecución se omite. Va en la tarea diaria, después de la limpieza y antes del anclaje de auditoría y el respaldo. | Especificación, Fase 7, puntos 1 y 4: idempotente y seguro ante dos ejecuciones simultáneas. Así el respaldo del día ya incluye lo aplicado. |
+| 2 | La renovación aplica antes el cambio vencido que la tarea no aplicó, **sin firmarlo aparte**: una sola revisión trae el periodo renovado y los números nuevos. Si se renueva antes del instante, firma los números mayores y la tarea firma la reducción después. | Especificación, Fase 7, punto 2. |
+| 3 | La renovación sugiere el precio del plan de destino de un cambio pendiente, aunque todavía no se aplique. | Especificación, Fase 5.2, punto 1: «la siguiente renovación sugiere el precio del plan nuevo». El periodo renovado empieza, a más tardar, en el instante del cambio. |
+| 4 | Una licencia vencida sin renovarse recibe su cambio igual (sin revisión si no tiene activación vigente). | Especificación, Fase 7, punto 3. |
+| 5 | La auditoría del cambio aplicado por la tarea es del sistema (`actor_id` nulo); el historial de la licencia lo atribuye a quien lo programó. Cada ejecución deja un evento `maintenance.scheduled_changes` con lo aplicado, lo firmado y lo omitido. | Quién decidió y quién ejecutó quedan separados. |
+| 6 | La limitación sin internet se documenta en `SECURITY.md`, sección 8. | Especificación, Fase 7, punto 5. |
+| 7 | Sin dependencias nuevas. | — |

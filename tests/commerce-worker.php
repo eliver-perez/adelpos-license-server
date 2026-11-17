@@ -13,7 +13,10 @@ $clock = new AdelPos\License\Tests\FrozenClock(new DateTimeImmutable($data['now'
 $app = new AdelPos\License\App($config, AdelPos\License\Infrastructure\Database::connect($config), $clock);
 $actor = new AdelPos\License\Application\Actor($data['actor'], 'superadmin');
 try {
-	$result = $app->{$data['service']}->{$data['method']}($actor, $data['operation'], ...$data['arguments']);
+	// Una operación del panel recibe el administrador y su identificador de operación; la tarea
+	// programada no recibe ninguno de los dos.
+	$arguments = $data['operation'] === null ? $data['arguments'] : [$actor, $data['operation'], ...$data['arguments']];
+	$result = $app->{$data['service']}->{$data['method']}(...$arguments);
 	echo json_encode(['result' => $result], JSON_THROW_ON_ERROR);
 } catch (AdelPos\License\Domain\Problem $problem) {
 	echo json_encode(['status' => $problem->status, 'message' => $problem->getMessage()], JSON_THROW_ON_ERROR);

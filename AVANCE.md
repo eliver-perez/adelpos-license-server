@@ -2398,3 +2398,36 @@ Se quitaron **18 reglas**, todas detectadas: base posterior entre pago y fin vig
 ### E3-6.5 Pendientes que deja la fase
 
 - El recorrido de mantenimiento con Playwright es de la Fase 9.
+
+---
+
+## Etapa 3 · Fase 7 — Tarea programada de reducciones
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-7.1 Qué cambió
+
+- **`bin/apply-scheduled-changes.php`** y **`ScheduledChanges::applyAllDue()`:** aplican los cambios programados cuyo instante ya llegó; cambian plan y cupos, firman una revisión para la activación vigente y registran la auditoría. Idempotente y seguro ante dos ejecuciones a la vez.
+- **Tarea diaria:** `deploy/adelpos-license-maintenance.sh` ejecuta el comando después de la limpieza (`OPERATIONS.md`, sección 7).
+- **Renovación:** después del instante aplica la reducción en su misma revisión; antes, firma los números mayores y la tarea firma la reducción al llegar el instante. Sugiere el precio del plan de destino del cambio pendiente.
+- **`SECURITY.md`:** limitación aceptada para las computadoras sin internet.
+
+### E3-7.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/ScheduledChangesTest.php` (nueva) | 6 | Con reloj congelado: un microsegundo antes, justo en el instante y después; auditoría del sistema e historial de quien programó; **dos ejecuciones simultáneas** en procesos reales que aplican el cambio una sola vez; renovación antes del instante (números mayores, y la tarea firma la reducción después); renovación después del instante (una sola revisión con la reducción); licencia vencida que recibe el cambio y cuya renovación sugiere el precio del plan nuevo; cambio cancelado que ya no se aplica; y el comando real, con su archivo de configuración y el reloj real, ejecutado dos veces, y su presencia en la tarea diaria |
+
+### E3-7.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **12 reglas**, todas detectadas: instante incluido en la tarea y al aplicar, nada antes del instante, una sola vez, firma de la reducción, la renovación tardía aplica la reducción y en la misma revisión, precio del plan nuevo al renovar, se aplica aunque haya vencido, auditoría del sistema, evento de cada ejecución y el comando en la tarea diaria.
+
+### E3-7.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 430 pruebas, 28 041 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 430 pruebas, 28 041 aserciones, todas OK |
+| Playwright | Panel, sin internet y dispositivos de confianza OK |
+
+Las corridas de esta fase coincidieron con dos emuladores de Android del equipo (carga promedio de hasta 250): la suite tardó cerca de una hora por versión en lugar de dos minutos y medio, y pasó completa. La falla intermitente de E3-6.4 no se repitió.

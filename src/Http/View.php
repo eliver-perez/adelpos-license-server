@@ -186,6 +186,7 @@ final class View
 			'signing_key.generated' => 'Llave de firma generada',
 			'signing_key.activated' => 'Llave de firma activada',
 			'maintenance.cleanup' => 'Limpieza de mantenimiento',
+			'maintenance.scheduled_changes' => 'Cambios programados aplicados por la tarea diaria',
 			'admin.recovered_via_cli' => 'Acceso de administrador recuperado desde la terminal',
 		][$action] ?? $action;
 	}

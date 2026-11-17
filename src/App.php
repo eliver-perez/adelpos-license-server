@@ -58,6 +58,7 @@ final class App
 	public readonly Payments $payments;
 	public readonly PlanService $plans;
 	public readonly CommercialService $commercial;
+	public readonly ScheduledChanges $scheduledChanges;
 
 	public function __construct(public readonly Config $config, public readonly Database $db, ?Clock $clock = null)
 	{
@@ -106,6 +107,7 @@ final class App
 			$history,
 		);
 		$this->plans = new PlanService($db, $operations, $this->audit, $this->clock, $this->publisher, $history);
+		$this->scheduledChanges = new ScheduledChanges($db, $this->clock, $this->publisher, $history, $this->audit);
 		$this->commercial = new CommercialService(
 			$db,
 			$operations,
@@ -113,7 +115,7 @@ final class App
 			$this->publisher,
 			$this->payments,
 			$history,
-			new ScheduledChanges($db, $this->clock, $this->publisher, $history),
+			$this->scheduledChanges,
 		);
 		$this->offline = new OfflineService(
 			$db,

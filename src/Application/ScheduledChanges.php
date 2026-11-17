@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace AdelPos\License\Application;
 
 use AdelPos\License\Domain\{CalendarPeriod, Uuid};
-use AdelPos\License\Infrastructure\{Clock, Database};
+use AdelPos\License\Infrastructure\{Audit, Clock, Database};
 
 /**
  * Cambios de plan programados (etapa 3, fases 5 y 7; decisiones 7 y 8 del propietario).
@@ -23,6 +23,7 @@ final class ScheduledChanges
 		private Clock $clock,
 		private RevisionPublisher $publisher,
 		private LicenseHistory $history,
+		private Audit $audit,
 	) {}
 
 	/** Cambio pendiente de la licencia, bloqueado, o null. La licencia ya está bloqueada. */
@@ -90,13 +91,63 @@ final class ScheduledChanges
 	}
 
 	/**
+	 * Aplica todos los cambios cuyo instante ya llegó, cada uno en su propia transacción: un cambio
+	 * que falla no impide los demás. Si otra ejecución ya aplicó un cambio, o se canceló mientras
+	 * tanto, se omite: cada uno se aplica una sola vez. Lo usa bin/apply-scheduled-changes.php.
+	 *
+	 * Una licencia vencida sin renovarse también recibe su cambio, sin efecto práctico, para que una
+	 * renovación posterior parta del plan nuevo.
+	 *
+	 * @return array{applied: int, revisions_signed: int, skipped: int}
+	 */
+	public function applyAllDue(): array
+	{
+		$due = $this->db->all(
+			"SELECT change_id,license_id
+				FROM license_scheduled_changes
+				WHERE state='pending' AND effective_at<=?
+				ORDER BY effective_at,change_id",
+			[$this->clock->sql()],
+		);
+		$result = ['applied' => 0, 'revisions_signed' => 0, 'skipped' => 0];
+		foreach ($due as $change) {
+			$signed = $this->db->transaction(function () use ($change): ?int {
+				// Mismo orden de bloqueo que las demás operaciones: producto, licencia y el cambio.
+				$productId = $this->db
+					->execute('SELECT product_id FROM licenses WHERE license_id=?', [$change['license_id']])
+					->fetchColumn();
+				$this->db->one('SELECT product_id FROM products WHERE product_id=? FOR SHARE', [$productId]);
+				$license = $this->db->one('SELECT * FROM licenses WHERE license_id=? FOR UPDATE', [
+					$change['license_id'],
+				]);
+				$applied = $this->applyDue($license, null);
+				if ($applied['applied'] === null) {
+					return null;
+				}
+				return $applied['revisions_signed'];
+			}, 3);
+			if ($signed === null) {
+				++$result['skipped'];
+				continue;
+			}
+			++$result['applied'];
+			$result['revisions_signed'] += $signed;
+		}
+		$this->db->transaction(
+			fn() => $this->audit->append(null, 'maintenance.scheduled_changes', 'system', null, $result),
+		);
+		return $result;
+	}
+
+	/**
 	 * Aplica el cambio pendiente si ya llegó su instante. Quien llama tiene bloqueados el producto y
 	 * la licencia. Devuelve la licencia tal como quedó y el cambio aplicado, o null si no había.
-	 * Sin $actor, el cambio lo aplica el sistema (la tarea programada).
+	 * Sin $actor, el cambio lo aplica el sistema (la tarea programada). Con $sign en false no firma:
+	 * una renovación que llega después del instante aplica la reducción en su misma revisión.
 	 *
 	 * @return array{license: array, applied: ?array, revisions_signed: int}
 	 */
-	public function applyDue(array $license, ?Actor $actor): array
+	public function applyDue(array $license, ?Actor $actor, bool $sign = true): array
 	{
 		$change = $this->pending($license['license_id']);
 		if ($change === null || $change['effective_at'] > $this->clock->sql()) {
@@ -125,7 +176,7 @@ final class ScheduledChanges
 			"UPDATE license_scheduled_changes SET state='applied',resolved_at=?,resolved_by=? WHERE change_id=?",
 			[$this->clock->sql(), $actor === null ? null : Uuid::bytes($actor->id), $change['change_id']],
 		);
-		$signed = $this->publisher->commercialChange($license['license_id'], false);
+		$signed = $sign ? $this->publisher->commercialChange($license['license_id'], false) : 0;
 		// El historial lo atribuye a quien programó el cambio; la auditoría, a quien lo aplicó.
 		$this->history->record(
 			Uuid::text($license['license_id']),

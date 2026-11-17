@@ -170,6 +170,7 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 - **Liberación y transferencia forzadas.** Exigen superadministrador, confirmación de identidad, motivo y aceptar explícitamente el límite: una solicitud firmada prueba posesión de la llave, no que se borraron las copias desconectadas. Si falla una firma o escritura, la instalación anterior sigue activa.
 
 - **Revisiones de cierre.** Una activación terminada o una licencia revocada solo pueden recibir su revisión de cierre: nunca vuelven a quedar activas por una solicitud `renew` o `deactivate`.
+- **Limitación aceptada: reducciones programadas sin internet** (etapa 3, Fase 7). Cuando un cambio de plan programado reduce cupos, la tarea diaria firma la revisión reducida al llegar su instante. Una computadora sin internet la recibe solo en su siguiente consulta, `renew` o descarga del `.lic`; mientras tanto conserva los números mayores que ya tenía firmados. El servidor no puede retirar a distancia una revisión que la computadora ya aceptó, igual que con una revocación (contrato §9.2).
 
 > **Pendiente (etapa 4).** Alertas por transferencias repetidas y su relación con el autoservicio.
 

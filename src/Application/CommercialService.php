@@ -86,6 +86,10 @@ final class CommercialService
 	 */
 	public function applyRenewal(Actor $actor, string $operationId, array $license, array $request): array
 	{
+		// Si ya llegó el instante de un cambio programado y la tarea todavía no corrió, la renovación lo
+		// aplica en su misma revisión: no se firma aparte (etapa 3, Fase 7).
+		$due = $this->scheduled->applyDue($license, $actor, false);
+		$license = $due['license'];
 		$plan = $this->planRenewal($license, $request);
 		if ($request['amount'] === null) {
 			throw new Problem('Escribe el monto cobrado.');
@@ -132,6 +136,7 @@ final class CommercialService
 			'expires_at' => CalendarPeriod::utc($dates['expires_at']),
 			'billing_period' => $plan['billing_period'],
 			'in_time' => $dates['in_time'],
+			'scheduled_change_applied' => $due['applied'] === null ? null : Uuid::text($due['applied']['change_id']),
 			'revisions_signed' => $signed,
 		]);
 		return [
@@ -177,10 +182,17 @@ final class CommercialService
 			(int) $license['anchor_day'],
 			$license['anchor_local_time'],
 		);
-		// Se sugiere el precio del plan para la duración elegida. Una licencia personalizada no tiene precio.
+		// Se sugiere el precio del plan para la duración elegida. Si hay un cambio programado, el periodo
+		// renovado ya es del plan nuevo: se sugiere su precio. Una licencia personalizada no tiene precio.
+		$pending = $this->db->one(
+			"SELECT plan_id,plan_custom FROM license_scheduled_changes WHERE license_id=? AND state='pending'",
+			[$license['license_id']],
+		);
+		$pricedPlan = $pending['plan_id'] ?? $license['plan_id'];
+		$pricedCustom = (bool) ($pending['plan_custom'] ?? $license['plan_custom']);
 		$catalog = null;
-		if (!$license['plan_custom']) {
-			$catalog = LicenseTerms::catalogPrice($this->plan($license['plan_id']), $period);
+		if (!$pricedCustom) {
+			$catalog = LicenseTerms::catalogPrice($this->plan($pricedPlan), $period);
 		}
 		return [
 			'license' => $license,

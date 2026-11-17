@@ -130,11 +130,12 @@ La API en línea solo atiende `POST` a `/v1/activations/challenge`, `/v1/activat
 
 ## 7. Mantenimiento diario
 
-`deploy/adelpos-license-maintenance.sh` se instala como `/usr/local/sbin/adelpos-license-maintenance` y lo ejecuta el servicio y temporizador `adelpos-license-maintenance` (03:15 UTC, con `flock`). Hace tres cosas:
+`deploy/adelpos-license-maintenance.sh` se instala como `/usr/local/sbin/adelpos-license-maintenance` y lo ejecuta el servicio y temporizador `adelpos-license-maintenance` (03:15 UTC, con `flock`). Hace cuatro cosas:
 
 1. `bin/cleanup.php`: borra sesiones, contadores de intentos y desafíos vencidos. Conserva la historia comercial y la idempotencia.
-2. `bin/audit-verify.php`: verifica la cadena de auditoría y escribe un anclaje (`.anchor.json`).
-3. `bin/backup.php --action=create`: crea el respaldo cifrado (`.adelposbackup`) y su recibo (`.receipt.json`).
+2. `bin/apply-scheduled-changes.php`: aplica los cambios de plan programados cuyo instante ya llegó (reducciones al vencer lo pagado). Firma una revisión nueva para cada activación vigente y deja el cambio en el historial y en la auditoría, atribuido al sistema. Cada cambio se aplica una sola vez, aunque dos ejecuciones coincidan; se puede ejecutar a mano en cualquier momento.
+3. `bin/audit-verify.php`: verifica la cadena de auditoría y escribe un anclaje (`.anchor.json`).
+4. `bin/backup.php --action=create`: crea el respaldo cifrado (`.adelposbackup`) y su recibo (`.receipt.json`).
 
 La tarea no borra respaldos antiguos. La retención y la copia externa las define el operador.
 
