@@ -29,7 +29,7 @@ module.exports = async function offlinePanel({
 			action,
 			request_id: crypto.randomUUID(),
 			created_at: '2000-01-01T00:00:00Z',
-			product_id: 'producto_prueba',
+			product_id: 'adel_pos',
 			installation_id: installation.id,
 			installation_public_key: installation.public,
 			fingerprint_version: '1',
@@ -138,7 +138,9 @@ module.exports = async function offlinePanel({
 	await screenshot('offline-review-mobile');
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	const activated = await approve();
-	assert.equal(activated.payload.installation_id, oldDevice.id);
+	assert.equal(activated.payload.server_id, oldDevice.id);
+	assert.equal(activated.payload.license_status, 'active');
+	assert.equal(activated.payload.status_reason, null);
 	assert.equal(activated.payload.license_revision, 1);
 	await screenshot('offline-approved-desktop');
 	const approvedDownload = activated.url;
@@ -159,11 +161,16 @@ module.exports = async function offlinePanel({
 	const transferred = await approve();
 	assert.equal(transferred.payload.license_revision, 3);
 	assert.notEqual(transferred.payload.activation_id, activated.payload.activation_id);
-	assert.equal(transferred.payload.installation_id, newDevice.id);
+	assert.equal(transferred.payload.server_id, newDevice.id);
+	// El detalle de la licencia nombra el estado en que quedó la computadora anterior.
+	const detail = await (await context.request.get(licenseURL)).text();
+	assert.match(detail, /Transferida/);
+	assert.doesNotMatch(detail, /Undefined array key|Warning/);
 
 	await upload(request(newDevice, 'deactivate', transferred.payload));
 	const deactivated = await approve();
 	assert.equal(deactivated.payload.license_status, 'revoked');
+	assert.equal(deactivated.payload.status_reason, 'deactivated');
 	assert.equal(deactivated.payload.license_revision, 4);
 
 	const subDevice = device();

@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace AdelPos\License\Application;
 
 use AdelPos\License\Config;
-use AdelPos\License\Domain\{Input, Problem, Protocol, Uuid};
+use AdelPos\License\Domain\{Input, LicenseTerms, Problem, Protocol, Uuid};
 use AdelPos\License\Infrastructure\{Audit, CertificatePdf, Clock, Crypto, Database};
 
 final class DocumentService
@@ -75,10 +75,10 @@ final class DocumentService
 					'product' => $license['product'],
 					'license_type' => $license['license_type'],
 				];
-				// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (lista de límites en las constancias)
-				$limits = $this->db->one('SELECT max_installations,max_users FROM license_limits WHERE license_id=?', [
-					$license['license_id'],
-				]);
+				$limits = [];
+				foreach (array_keys(LicenseTerms::LIMITS) as $name) {
+					$limits[$name] = (int) $license[$name];
+				}
 				$features = array_column(
 					$this->db->all(
 						'SELECT c.display_name
@@ -98,6 +98,7 @@ final class DocumentService
 					'issued_at' => $license['created_at'],
 					'expires_at' => $license['expires_at'],
 					'grace_days' => (int) $license['grace_days'],
+					'plan' => ['name' => $license['plan_name'], 'custom' => (bool) $license['plan_custom']],
 					'limits' => $limits,
 					'features' => $features,
 					'reference' => $license['commercial_reference'],

@@ -61,7 +61,34 @@ final class ProtocolTest extends TestCase
 			}
 		}
 	}
-	public function testJwsPublisherMatchesAllSharedFixturesByteForByte(): void
+	public function testJwsHasTheExactContractHeaderAndAVerifiableSignature(): void
+	{
+		$pair = sodium_crypto_sign_keypair();
+		$jws = Jws::sign(
+			['licensee_name' => 'Café Ñandú / Centro', 'features' => new \stdClass()],
+			'adelpos-test-202611-1',
+			sodium_crypto_sign_secretkey($pair),
+		);
+		[$header, $payload, $signature] = explode('.', $jws);
+		self::assertSame(
+			'{"alg":"EdDSA","kid":"adelpos-test-202611-1","typ":"adelpos-lic+jws"}',
+			sodium_base642bin($header, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
+		);
+		// Sin secuencias de escape para diagonales ni acentos, y «features» como objeto.
+		self::assertSame(
+			'{"licensee_name":"Café Ñandú / Centro","features":{}}',
+			sodium_base642bin($payload, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
+		);
+		self::assertTrue(
+			sodium_crypto_sign_verify_detached(
+				Protocol::decode($signature, 64),
+				$header . '.' . $payload,
+				sodium_crypto_sign_publickey($pair),
+			),
+		);
+	}
+
+	public function testProofMessageMatchesTheSharedFixtures(): void
 	{
 		$vectors = json_decode(
 			file_get_contents(dirname(__DIR__, 2) . '/contracts/v1/fixtures/vectors.json'),
@@ -69,18 +96,6 @@ final class ProtocolTest extends TestCase
 			512,
 			JSON_THROW_ON_ERROR,
 		);
-		$keys = array_column($vectors['keys'], null, 'name');
-		foreach ($vectors['licenses'] as $vector) {
-			$pair = sodium_crypto_sign_seed_keypair(hex2bin($keys[$vector['key_name']]['seed_hex']));
-			self::assertSame(
-				$vector['jws'],
-				Jws::sign(
-					json_decode($vector['payload_json'], true, 512, JSON_THROW_ON_ERROR),
-					$vector['key_name'],
-					sodium_crypto_sign_secretkey($pair),
-				),
-			);
-		}
 		foreach ($vectors['proofs'] as $vector) {
 			self::assertSame(
 				$vector['message_utf8'],
@@ -92,7 +107,7 @@ final class ProtocolTest extends TestCase
 	{
 		$valid = [
 			'action' => 'activate',
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => '22222222-2222-4222-8222-222222222222',
 			'activation_id' => null,
 		];

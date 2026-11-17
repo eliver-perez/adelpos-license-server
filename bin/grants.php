@@ -28,7 +28,6 @@ consoleRun(function (): void {
 		'plans' => 'SELECT',
 		'licenses' => 'SELECT,INSERT,UPDATE',
 		'license_features' => 'SELECT,INSERT,UPDATE',
-		'license_limits' => 'SELECT,INSERT,UPDATE',
 		'license_credentials' => 'SELECT,INSERT,UPDATE',
 		'license_changes' => 'SELECT,INSERT',
 		'subscription_periods' => 'SELECT,INSERT',

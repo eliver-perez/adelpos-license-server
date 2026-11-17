@@ -4,7 +4,7 @@ namespace AdelPos\License\Tests\Integration;
 
 use AdelPos\License\App;
 use AdelPos\License\Application\{Actor, LicenseService};
-use AdelPos\License\Domain\{ApiProblem, ApiResponse, Problem, Protocol, Uuid};
+use AdelPos\License\Domain\{ApiProblem, ApiResponse, LicenseContent, Problem, Protocol, Uuid};
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
@@ -39,21 +39,32 @@ final class ActivationsTest extends TestCase
 			$this->fixture->destroy();
 		}
 	}
-	private function issue(string $type = 'perpetual'): array
+	/** Emite una licencia; $license y $customer sustituyen los datos por omisión del caso. */
+	private function issue(string $type = 'perpetual', array $license = [], array $customer = []): array
 	{
-		$customer = $this->app->catalog->saveCustomer($this->actor, Uuid::create(), null, [
-			'name' => 'API test',
-			'contact_name' => 'Test',
-			'email' => 'api@example.test',
-			'state' => 'active',
-		]);
-		return $this->app->licenses->issue($this->actor, Uuid::create(), [
-			'customer_id' => $customer['id'],
-			'product_id' => 'producto_prueba',
-			...MySqlFixture::terms($type),
-			'features' => ['prueba_b', 'prueba_a', 'prueba_e'],
-			'reason' => 'Protocol test',
-		]);
+		$customer = $this->app->catalog->saveCustomer(
+			$this->actor,
+			Uuid::create(),
+			null,
+			array_replace(
+				['name' => 'API test', 'contact_name' => 'Test', 'email' => 'api@example.test', 'state' => 'active'],
+				$customer,
+			),
+		);
+		return $this->app->licenses->issue(
+			$this->actor,
+			Uuid::create(),
+			array_replace(
+				[
+					'customer_id' => $customer['id'],
+					'product_id' => 'adel_pos',
+					...MySqlFixture::terms($type),
+					'features' => ['prueba_b', 'prueba_a', 'prueba_e'],
+					'reason' => 'Protocol test',
+				],
+				$license,
+			),
+		);
 	}
 	private function device(): array
 	{
@@ -70,7 +81,7 @@ final class ActivationsTest extends TestCase
 		$challenge = json_decode(
 			$this->app->activations->challenge([
 				'action' => $action,
-				'product_id' => 'producto_prueba',
+				'product_id' => 'adel_pos',
 				'installation_id' => $device['id'],
 				'activation_id' => $activation,
 			])->body,
@@ -78,7 +89,7 @@ final class ActivationsTest extends TestCase
 		);
 		$input = [
 			'request_id' => Uuid::create(),
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => $device['id'],
 			'challenge_id' => $challenge['challenge_id'],
 			'app_version' => '1.0.0',
@@ -106,21 +117,29 @@ final class ActivationsTest extends TestCase
 		self::assertSame(200, $response->status, $response->body);
 		$jws = json_decode($response->body, true, 512, JSON_THROW_ON_ERROR)['license_jws'];
 		[$header, $body, $signature] = explode('.', $jws);
-		$decoded = json_decode(sodium_base642bin($header, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING), true);
-		self::assertSame('EdDSA', $decoded['alg']);
-		self::assertSame('lic+jws', $decoded['typ']);
-		$public = $this->app->db
-			->execute('SELECT public_key FROM signing_keys WHERE kid=?', [$decoded['kid']])
-			->fetchColumn();
+		$headerJson = sodium_base642bin($header, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+		$decoded = json_decode($headerJson, true);
+		// Encabezado exacto del contrato, sección 3: mismos campos, mismo orden y nada más.
+		self::assertSame('{"alg":"EdDSA","kid":"' . $decoded['kid'] . '","typ":"adelpos-lic+jws"}', $headerJson);
+		$key = $this->app->db->one('SELECT public_key,environment FROM signing_keys WHERE kid=?', [$decoded['kid']]);
 		self::assertTrue(
-			sodium_crypto_sign_verify_detached(Protocol::decode($signature, 64), $header . '.' . $body, $public),
+			sodium_crypto_sign_verify_detached(
+				Protocol::decode($signature, 64),
+				$header . '.' . $body,
+				$key['public_key'],
+			),
 		);
-		return json_decode(
-			sodium_base642bin($body, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
-			true,
-			512,
-			JSON_THROW_ON_ERROR,
-		);
+		$content = json_decode($this->contentJson($response), true, 512, JSON_THROW_ON_ERROR);
+		self::assertSame(LicenseContent::FIELDS, array_keys($content));
+		// El entorno firmado es el de la llave que firma.
+		self::assertSame($key['environment'], $content['environment']);
+		return $content;
+	}
+	/** JSON firmado, tal como viaja dentro del JWS. */
+	private function contentJson(ApiResponse $response): string
+	{
+		$jws = json_decode($response->body, true, 512, JSON_THROW_ON_ERROR)['license_jws'];
+		return sodium_base642bin(explode('.', $jws)[1], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
 	}
 	private function activate(): array
 	{
@@ -158,22 +177,50 @@ final class ActivationsTest extends TestCase
 		}
 	}
 
-	public function testActivationHasExactRightsAndRefreshReusesSignedBytes(): void
+	public function testPerpetualContentMatchesTheContractExactlyAndRefreshReusesSignedBytes(): void
 	{
 		$response = $this->app->activations->execute('activate', $this->request());
 		$payload = $this->payload($response);
-		self::assertSame($this->issued['id'], $payload['license_id']);
-		self::assertSame($this->device['id'], $payload['installation_id']);
-		self::assertSame(1, $payload['license_revision']);
-		self::assertNull($payload['expires_at']);
-		self::assertNull($payload['maintenance_until']);
-		self::assertSame(0, $payload['grace_days']);
-		self::assertFalse($payload['features']['prueba_c']);
+		// 12:00 UTC son las 06:00 en America/Monterrey: seis meses de calendario a la misma hora local.
 		self::assertSame(
-			['max_installations' => 1, 'max_users' => null, 'max_libraries' => null, 'max_documents' => null],
-			$payload['limits'],
+			[
+				'schema_version' => '1.0',
+				'product_id' => 'adel_pos',
+				'environment' => 'test',
+				'license_id' => $this->issued['id'],
+				'activation_id' => $payload['activation_id'],
+				'server_id' => $this->device['id'],
+				'installation_public_key' => $this->device['public'],
+				'licensee_name' => 'API test',
+				'license_type' => 'perpetual',
+				'billing_period' => null,
+				'license_status' => 'active',
+				'status_reason' => null,
+				'license_revision' => 1,
+				'issued_at' => '2026-09-25T12:00:00.000000Z',
+				'period_starts_at' => '2026-09-25T12:00:00.000000Z',
+				'expires_at' => null,
+				'grace_days' => 0,
+				'updates_until' => '2027-03-25T12:00:00.000000Z',
+				'plan' => ['plan_id' => 'elemental', 'name' => 'Plan elemental', 'custom' => false],
+				'limits' => ['cash_registers' => 3, 'order_takers' => 3, 'kitchen_displays' => 3],
+				// Solo los módulos habilitados, como «clave → true».
+				'features' => ['prueba_a' => true, 'prueba_b' => true, 'prueba_e' => true],
+			],
+			$payload,
 		);
-		self::assertCount(18, $payload);
+		self::assertMatchesRegularExpression(
+			'/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/',
+			$payload['activation_id'],
+		);
+		// La licencia guarda su periodo y su ancla: día 25, 06:00 hora local.
+		$license = $this->app->db->one('SELECT * FROM licenses');
+		self::assertSame('2026-09-25 12:00:00.000000', $license['period_starts_at']);
+		self::assertNull($license['expires_at']);
+		self::assertSame('2027-03-25 12:00:00.000000', $license['updates_until']);
+		self::assertSame(25, (int) $license['anchor_day']);
+		self::assertSame('06:00:00.000000', $license['anchor_local_time']);
+		self::assertSame('1.0.0', $this->app->db->one('SELECT app_version FROM activations')['app_version']);
 		$this->clock->instant = $this->clock->instant->modify('+1 day');
 		$refreshed = $this->app->activations->execute(
 			'refresh',
@@ -185,6 +232,202 @@ final class ActivationsTest extends TestCase
 		);
 		self::assertSame(1, (int) $this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
 	}
+	public function testSubscriptionTrialAndCustomContentMatchTheContractExactly(): void
+	{
+		$common = [
+			'schema_version' => '1.0',
+			'product_id' => 'adel_pos',
+			'environment' => 'test',
+		];
+		$activated = [
+			'license_status' => 'active',
+			'status_reason' => null,
+			'license_revision' => 1,
+		];
+
+		// Suscripción mensual: vence un mes de calendario después, con 5 días de tolerancia.
+		$this->issued = $this->issue('subscription');
+		$this->device = $this->device();
+		$subscription = $this->activate();
+		self::assertSame(
+			[
+				...$common,
+				'license_id' => $this->issued['id'],
+				'activation_id' => $subscription['activation_id'],
+				'server_id' => $this->device['id'],
+				'installation_public_key' => $this->device['public'],
+				'licensee_name' => 'API test',
+				'license_type' => 'subscription',
+				'billing_period' => 'monthly',
+				...$activated,
+				'issued_at' => '2026-09-25T12:00:00.000000Z',
+				'period_starts_at' => '2026-09-25T12:00:00.000000Z',
+				'expires_at' => '2026-10-25T12:00:00.000000Z',
+				'grace_days' => 5,
+				'updates_until' => '2026-10-25T12:00:00.000000Z',
+				'plan' => ['plan_id' => 'elemental', 'name' => 'Plan elemental', 'custom' => false],
+				'limits' => ['cash_registers' => 3, 'order_takers' => 3, 'kitchen_displays' => 3],
+				'features' => ['prueba_a' => true, 'prueba_b' => true, 'prueba_e' => true],
+			],
+			$subscription,
+		);
+
+		// Prueba de 15 días: 15 días de calendario, sin tolerancia y sin periodo de cobro.
+		$this->issued = $this->issue('trial', ['plan_id' => 'premium']);
+		$this->device = $this->device();
+		$trial = $this->activate();
+		self::assertSame(
+			[
+				...$common,
+				'license_id' => $this->issued['id'],
+				'activation_id' => $trial['activation_id'],
+				'server_id' => $this->device['id'],
+				'installation_public_key' => $this->device['public'],
+				'licensee_name' => 'API test',
+				'license_type' => 'trial',
+				'billing_period' => null,
+				...$activated,
+				'issued_at' => '2026-09-25T12:00:00.000000Z',
+				'period_starts_at' => '2026-09-25T12:00:00.000000Z',
+				'expires_at' => '2026-10-10T12:00:00.000000Z',
+				'grace_days' => 0,
+				'updates_until' => '2026-10-10T12:00:00.000000Z',
+				'plan' => ['plan_id' => 'premium', 'name' => 'Plan premium', 'custom' => false],
+				'limits' => ['cash_registers' => 5, 'order_takers' => 10, 'kitchen_displays' => 5],
+				'features' => ['prueba_a' => true, 'prueba_b' => true, 'prueba_e' => true],
+			],
+			$trial,
+		);
+
+		// Personalizada, con razón social, sin módulos y en otra zona horaria. En America/Tijuana el
+		// 31 de octubre a las 12:00 UTC son las 05:00; un mes después ya terminó el horario de verano
+		// y noviembre no tiene día 31: vence el 30 a las 05:00 locales, que son las 13:00 UTC.
+		$this->clock->instant = new \DateTimeImmutable('2026-10-31T12:00:00.123456Z');
+		$this->issued = $this->issue(
+			'subscription',
+			['plan_id' => 'basico', 'cash_registers' => '2', 'features' => []],
+			['legal_name' => 'Razón Social de Pruebas, S.A. de C.V.', 'time_zone' => 'America/Tijuana'],
+		);
+		$this->device = $this->device();
+		$response = $this->app->activations->execute('activate', $this->request());
+		$custom = $this->payload($response);
+		self::assertSame(
+			[
+				...$common,
+				'license_id' => $this->issued['id'],
+				'activation_id' => $custom['activation_id'],
+				'server_id' => $this->device['id'],
+				'installation_public_key' => $this->device['public'],
+				'licensee_name' => 'Razón Social de Pruebas, S.A. de C.V.',
+				'license_type' => 'subscription',
+				'billing_period' => 'monthly',
+				...$activated,
+				'issued_at' => '2026-10-31T12:00:00.123456Z',
+				'period_starts_at' => '2026-10-31T12:00:00.123456Z',
+				'expires_at' => '2026-11-30T13:00:00.123456Z',
+				'grace_days' => 5,
+				'updates_until' => '2026-11-30T13:00:00.123456Z',
+				'plan' => ['plan_id' => 'basico', 'name' => 'Plan básico', 'custom' => true],
+				'limits' => ['cash_registers' => 2, 'order_takers' => 0, 'kitchen_displays' => 0],
+				'features' => [],
+			],
+			$custom,
+		);
+		// Sin módulos, «features» sigue siendo un objeto JSON, y los textos van sin secuencias de escape.
+		$json = $this->contentJson($response);
+		self::assertStringEndsWith(',"features":{}}', $json);
+		self::assertStringContainsString('"licensee_name":"Razón Social de Pruebas, S.A. de C.V."', $json);
+		self::assertStringContainsString('"name":"Plan básico"', $json);
+		self::assertSame(
+			$json,
+			$this->app->db->one('SELECT payload_json FROM license_revisions ORDER BY issued_at DESC LIMIT 1')[
+				'payload_json'
+			],
+		);
+	}
+
+	public function testInvalidContentIsNotSignedAndLeavesNoChanges(): void
+	{
+		// Un nombre con un carácter de control no cumple el contrato. Solo se puede sembrar por fuera del panel.
+		$break = fn() => $this->fixture->owner->execute("UPDATE customers SET display_name=CONCAT('API',CHAR(1))");
+		$repair = fn() => $this->fixture->owner->execute("UPDATE customers SET display_name='API test'");
+		$count = fn(string $table): int => (int) $this->app->db->execute("SELECT COUNT(*) FROM $table")->fetchColumn();
+		$input = $this->request();
+		$break();
+		try {
+			$this->app->activations->execute('activate', $input);
+			self::fail('Invalid content was signed');
+		} catch (\UnexpectedValueException $e) {
+			// El mensaje nombra el campo, nunca su valor.
+			self::assertSame('El contenido de la licencia no cumple el contrato: licensee_name.', $e->getMessage());
+		}
+		foreach (['activations', 'license_revisions', 'license_requests'] as $table) {
+			self::assertSame(0, $count($table));
+		}
+		$license = $this->app->db->one('SELECT * FROM licenses');
+		self::assertSame(0, (int) $license['revision_counter']);
+		// El primer periodo tampoco empezó: se revierte junto con la activación.
+		self::assertNull($license['period_starts_at']);
+		self::assertNull($license['anchor_day']);
+		self::assertNull($this->app->db->one('SELECT consumed_at FROM activation_challenges')['consumed_at']);
+
+		// Con el dato corregido, la misma solicitud activa.
+		$repair();
+		self::assertSame(1, $this->payload($this->app->activations->execute('activate', $input))['license_revision']);
+
+		// Un cambio comercial que no se puede firmar tampoco deja rastro.
+		$break();
+		foreach (['features' => ['features' => ['prueba_d']], 'revoke' => []] as $operation => $data) {
+			try {
+				$this->app->licenses->change(
+					$this->actor,
+					Uuid::create(),
+					$this->issued['id'],
+					$operation,
+					['version' => 1, 'reason' => 'No debe firmarse'] + $data,
+				);
+				self::fail('Invalid content was signed: ' . $operation);
+			} catch (\UnexpectedValueException) {
+			}
+		}
+		$license = $this->app->db->one('SELECT * FROM licenses');
+		self::assertSame(1, (int) $license['row_version']);
+		self::assertSame('issued', $license['commercial_status']);
+		self::assertSame(1, (int) $license['revision_counter']);
+		self::assertSame(1, $count('license_revisions'));
+		self::assertSame('active', $this->app->db->one('SELECT state FROM activations')['state']);
+	}
+
+	public function testARevisionIsActiveOnlyWhileLicenseAndActivationAreBothInForce(): void
+	{
+		$first = $this->activate();
+		$publish = fn(): array => $this->app->db->transaction(
+			fn(): array => $this->app->publisher->publish(
+				Uuid::bytes($this->issued['id']),
+				Uuid::bytes($first['activation_id']),
+			),
+		);
+		$content = fn(array $revision): array => json_decode(
+			sodium_base642bin(explode('.', $revision['jws'])[1], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
+			true,
+			512,
+			JSON_THROW_ON_ERROR,
+		);
+		$second = $content($publish());
+		self::assertSame(
+			['active', null, 2],
+			[$second['license_status'], $second['status_reason'], $second['license_revision']],
+		);
+		// Estado que el panel nunca deja así: la licencia revocada con su activación todavía vigente.
+		// Aun entonces, lo firmado dice «revoked»: basta con que una de las dos no esté vigente.
+		$this->fixture->owner->execute("UPDATE licenses SET commercial_status='revoked'");
+		$third = $content($publish());
+		self::assertSame(
+			['revoked', 'revoked', 3],
+			[$third['license_status'], $third['status_reason'], $third['license_revision']],
+		);
+	}
+
 	public function testIdenticalReplaySurvivesChallengeCleanupAndCredentialRetirement(): void
 	{
 		$input = $this->request();
@@ -312,9 +555,15 @@ final class ActivationsTest extends TestCase
 		self::assertSame('deactivated', $data['status']);
 		self::assertSame('issued', $this->app->read->license($this->issued['id'])['commercial_status']);
 		$other = $this->device();
+		// Días después, en otra computadora.
+		$this->clock->instant = $this->clock->instant->modify('+3 days');
 		$next = $this->payload($this->app->activations->execute('activate', $this->request('activate', $other)));
 		self::assertNotSame($first['activation_id'], $next['activation_id']);
+		// El contador de revisiones es de la licencia, no de la activación: 1, 2 (cierre) y 3.
 		self::assertSame(3, $next['license_revision']);
+		// Las fechas también son de la licencia: la segunda computadora conserva el primer periodo.
+		self::assertSame($first['period_starts_at'], $next['period_starts_at']);
+		self::assertSame($first['updates_until'], $next['updates_until']);
 		self::assertSame($ack->body, $this->app->activations->execute('deactivate', $input)->body);
 		self::assertSame(
 			$ack->body,
@@ -325,10 +574,20 @@ final class ActivationsTest extends TestCase
 			$this->app->activations->execute('refresh', $this->request('refresh', null, $first['activation_id'])),
 		);
 		self::assertSame('revoked', $old['license_status']);
+		self::assertSame('deactivated', $old['status_reason']);
 		self::assertSame(2, $old['license_revision']);
 		self::assertSame(
 			1,
 			(int) $this->app->db->execute("SELECT COUNT(*) FROM activations WHERE state='active'")->fetchColumn(),
+		);
+		self::assertSame(
+			[['1', 'active', null], ['2', 'revoked', 'deactivated'], ['3', 'active', null]],
+			array_map(
+				fn(array $row) => [(string) $row['license_revision'], $row['license_status'], $row['status_reason']],
+				$this->app->db->all(
+					'SELECT license_revision,license_status,status_reason FROM license_revisions ORDER BY license_revision',
+				),
+			),
 		);
 	}
 	public function testAdministrativeRightsAndRevocationPublishAtomically(): void
@@ -344,8 +603,7 @@ final class ActivationsTest extends TestCase
 		);
 		self::assertSame(2, $current['license_revision']);
 		self::assertNull($current['expires_at']);
-		self::assertTrue($current['features']['prueba_a']);
-		self::assertFalse($current['features']['prueba_e']);
+		self::assertSame(['prueba_a' => true, 'prueba_b' => true], $current['features']);
 		$this->app->licenses->change($this->actor, Uuid::create(), $this->issued['id'], 'features', [
 			'version' => 2,
 			'features' => ['prueba_b'],
@@ -359,8 +617,10 @@ final class ActivationsTest extends TestCase
 			$this->app->activations->execute('refresh', $this->request('refresh', null, $first['activation_id'])),
 		);
 		self::assertSame('revoked', $revoked['license_status']);
+		self::assertSame('revoked', $revoked['status_reason']);
 		self::assertSame(4, $revoked['license_revision']);
-		self::assertFalse($revoked['features']['prueba_a']);
+		self::assertSame(['prueba_b' => true], $revoked['features']);
+		self::assertSame('revoked', $this->app->db->one('SELECT state FROM activations')['state']);
 		self::assertSame(
 			403,
 			$this->app->activations->execute('activate', $this->request('activate', $this->device()))->status,
@@ -449,16 +709,14 @@ final class ActivationsTest extends TestCase
 		try {
 			$this->fixture->owner->execute(
 				"INSERT INTO activations(activation_id,license_id,product_id,server_id,installation_public_key,
-						fingerprint_version,fingerprint_hash,state,activated_at)
-					VALUES (?,?,?,?,?,?,?,'active',?)",
+						state,activated_at)
+					VALUES (?,?,?,?,?,'active',?)",
 				[
 					Uuid::bytes(Uuid::create()),
 					$activation['license_id'],
 					$activation['product_id'],
 					$activation['server_id'],
 					$activation['installation_public_key'],
-					'1',
-					$activation['fingerprint_hash'],
 					$this->clock->sql(),
 				],
 			);
@@ -529,7 +787,7 @@ final class ActivationsTest extends TestCase
 		);
 		self::assertSame(
 			strtolower($device['id']),
-			$this->payload($this->app->activations->execute('activate', $input))['installation_id'],
+			$this->payload($this->app->activations->execute('activate', $input))['server_id'],
 		);
 	}
 	public function testAuditFailureAfterSigningRollsBackEveryProtocolEffect(): void

@@ -1,4 +1,5 @@
 <?php
+use AdelPos\License\Domain\LicenseTerms;
 use AdelPos\License\Http\View as V;
 
 $d = $document;
@@ -159,9 +160,15 @@ if ($d['license_type'] === 'perpetual') {
 				<td><?= V::escape($expiry) ?></td>
 			</tr>
 			<tr>
-				<th>Instalaciones autorizadas</th>
-				<td><?= (int) $d['limits']['max_installations'] ?></td>
+				<th>Plan</th>
+				<td><?= V::escape($d['plan']['name']) ?><?= $d['plan']['custom'] ? ' · personalizada' : '' ?></td>
 			</tr>
+			<?php foreach (LicenseTerms::LIMITS as $limit => $label): ?>
+				<tr>
+					<th><?= V::escape($label) ?></th>
+					<td><?= (int) $d['limits'][$limit] ?></td>
+				</tr>
+			<?php endforeach; ?>
 			<?php if ($d['reference'] !== ''): ?>
 				<tr>
 					<th>Referencia comercial</th>

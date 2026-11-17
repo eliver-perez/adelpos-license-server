@@ -39,7 +39,7 @@ final class CommercialDeliveryTest extends TestCase
 		]);
 		$this->license = $app->licenses->issue($this->actor, Uuid::create(), [
 			'customer_id' => $customer['id'],
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			...MySqlFixture::terms(),
 			'features' => ['prueba_d'],
 		]);
@@ -111,7 +111,7 @@ final class CommercialDeliveryTest extends TestCase
 			'action' => 'activate',
 			'request_id' => Uuid::create(),
 			'created_at' => '2026-10-21T12:00:00Z',
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => $installation,
 			'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
 			'fingerprint_version' => '1',

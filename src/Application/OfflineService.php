@@ -14,6 +14,7 @@ final class OfflineService
 		private Clock $clock,
 		private Crypto $crypto,
 		private RevisionPublisher $publisher,
+		private LicenseActivator $activator,
 	) {}
 
 	public function import(Actor $actor, string $operationId, string $envelope): array
@@ -194,30 +195,22 @@ final class OfflineService
 							throw new Problem('El destino debe ser otra instalación.');
 						}
 						$this->retire($license['license_id'], $active['activation_id'], true);
-						// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación activa por licencia)
 					} elseif ($active) {
+						// Una licencia vale para una sola computadora principal a la vez (contrato, sección 1).
 						throw new Problem(
 							'La licencia ya tiene una instalación activa. Desactívala o solicita transferencia.',
 							409,
 						);
 					}
-					$activationId = Uuid::bytes(Uuid::create());
-					$this->db->execute(
-						"INSERT INTO activations(activation_id,license_id,product_id,server_id,
-								installation_public_key,fingerprint_version,fingerprint_hash,
-								state,activated_at)
-							VALUES (?,?,?,?,?,?,?,'active',?)",
-						[
-							$activationId,
-							$license['license_id'],
-							$payload['product_id'],
-							Uuid::bytes($payload['installation_id']),
-							$verified['public'],
-							$payload['fingerprint_version'],
-							$payload['fingerprint_hash'],
-							$this->clock->sql(),
-						],
+					// El primer periodo de la licencia empieza en este momento, el de la aprobación.
+					$activation = $this->activator->activate(
+						$license,
+						Uuid::bytes($payload['installation_id']),
+						$verified['public'],
+						null,
 					);
+					$activationId = $activation['activation_id'];
+					$revision = $activation['revision'];
 				} else {
 					$activationId = $this->boundActivation($payload, $license)['activation_id'];
 					if ($payload['action'] === 'deactivate') {
@@ -226,8 +219,8 @@ final class OfflineService
 							[$this->clock->sql(), $activationId],
 						);
 					}
+					$revision = $this->publisher->publish($license['license_id'], $activationId);
 				}
-				$revision = $this->publisher->publish($license['license_id'], $activationId);
 				if ($outgoing !== '') {
 					$this->transferRecord(
 						$actor,
@@ -348,19 +341,21 @@ final class OfflineService
 			!hash_equals(
 				$activation['installation_public_key'],
 				Protocol::decode($payload['installation_public_key'], 32),
-			) ||
-			$activation['fingerprint_version'] !== $payload['fingerprint_version'] ||
-			$activation['fingerprint_hash'] !== $payload['fingerprint_hash']
+			)
 		) {
 			throw new Problem('La identidad firmada no coincide con una instalación activa de esta licencia.', 409);
 		}
 		return $activation;
 	}
 
+	/**
+	 * Termina una activación y firma su revisión de cierre. «Forzada» es la que el propietario
+	 * retira desde el panel, con o sin computadora de destino: se firma como «transferred».
+	 */
 	private function retire(string $licenseId, string $activationId, bool $forced): array
 	{
 		$this->db->execute('UPDATE activations SET state=?,ended_at=? WHERE activation_id=?', [
-			$forced ? 'revoked' : 'deactivated',
+			$forced ? 'transferred' : 'deactivated',
 			$this->clock->sql(),
 			$activationId,
 		]);

@@ -76,10 +76,10 @@ final class MySqlFixture
 	}
 
 	/**
-	 * The initial schema seeds only adel_pos, without modules. Tests use this synthetic
-	 * product instead: five modules, one dependency (prueba_e requires prueba_a).
+	 * El contrato fija el producto «adel_pos», que el esquema inicial crea sin módulos. Las pruebas
+	 * le agregan cinco módulos sintéticos y una dependencia (prueba_e requiere prueba_a).
 	 */
-	public const PRODUCT = 'producto_prueba';
+	public const PRODUCT = 'adel_pos';
 	public const MODULES = [
 		'prueba_a' => 'Módulo de prueba A',
 		'prueba_b' => 'Módulo de prueba B',
@@ -101,12 +101,6 @@ final class MySqlFixture
 
 	public static function syntheticCatalog(Database $db): void
 	{
-		$db->execute(
-			"INSERT INTO products(product_id,display_name,description,state,created_at,updated_at)
-				VALUES (?,'Producto de prueba','Producto sintético para pruebas automáticas',
-					'active',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
-			[self::PRODUCT],
-		);
 		foreach (self::MODULES as $key => $name) {
 			$db->execute('INSERT INTO product_capabilities(product_id,capability_key,display_name) VALUES (?,?,?)', [
 				self::PRODUCT,

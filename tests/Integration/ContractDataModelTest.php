@@ -443,6 +443,9 @@ final class ContractDataModelTest extends TestCase
 			],
 			[
 				"status_reason='deactivated'",
+				// Una revisión de cierre siempre dice por qué se cerró.
+				"license_status='revoked'",
+				"license_status='revoked',status_reason=NULL",
 				"license_status='revoked',status_reason='expired'",
 				"license_status='revoked',status_reason=''",
 				"environment='production'" => 1452,
@@ -462,6 +465,23 @@ final class ContractDataModelTest extends TestCase
 			["state='transferida',ended_at='2026-11-17 00:00:00'", "state='transferred'"],
 			'activation',
 		);
+
+		// Lo heredado que el contenido firmado dejó de usar ya no existe en el esquema.
+		$columns = fn(string $table): array => array_column(
+			$owner->all(
+				'SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=?',
+				[$this->fixture->database, $table],
+			),
+			'name',
+		);
+		self::assertSame([], $columns('license_limits'));
+		foreach (['fingerprint_version', 'fingerprint_hash'] as $column) {
+			self::assertNotContains($column, $columns('activations'));
+		}
+		foreach (['maintenance_until', 'entitled_release_until'] as $column) {
+			self::assertNotContains($column, $columns('licenses'));
+		}
+		self::assertContains('updates_until', $columns('licenses'));
 
 		// The application account reads the plan catalog, records the application version and cannot touch identity or signed history.
 		$denied = function (string $sql): int {

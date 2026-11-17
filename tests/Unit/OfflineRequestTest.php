@@ -15,7 +15,7 @@ final class OfflineRequestTest extends TestCase
 			'action' => 'activate',
 			'request_id' => Uuid::create(),
 			'created_at' => '2001-02-03T12:34:56.123456789+00:00',
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => Uuid::create(),
 			'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
 			'fingerprint_version' => '1',

@@ -123,7 +123,6 @@ CREATE TABLE license_features (
  CONSTRAINT chk_feature_bool CHECK (enabled IN (0,1))
 ) ENGINE=InnoDB;
 CREATE TABLE license_limits (
- -- HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación por licencia y lista de límites)
  license_id BINARY(16) PRIMARY KEY, max_installations INT NOT NULL DEFAULT 1,
  max_users INT NULL, max_libraries INT NULL, max_documents INT NULL,
  FOREIGN KEY(license_id) REFERENCES licenses(license_id),

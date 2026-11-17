@@ -50,7 +50,7 @@ final class ProductionHttpTest extends TestCase
 		]);
 		$license = $app->licenses->issue($actor, \AdelPos\License\Domain\Uuid::create(), [
 			'customer_id' => $customer['id'],
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			...\AdelPos\License\Tests\MySqlFixture::terms(),
 		]);
 		$token = $app->sessions->create('authenticated', $actor->id);

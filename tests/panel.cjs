@@ -172,7 +172,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await page.goto('/admin/licenses/new');
 		await page.locator('#customer_id').selectOption(customerId);
 		// The initial schema also seeds adel_pos (no modules); the module checks use the synthetic product.
-		await page.locator('#product_id').selectOption('producto_prueba');
+		await page.locator('#product_id').selectOption('adel_pos');
 		await page.locator('[value="prueba_e"]').check();
 		assert.equal(await page.locator('[value="prueba_a"]').isChecked(), true);
 		assert.equal(await page.locator('[value="prueba_c"]').isChecked(), false);
@@ -250,7 +250,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 
 		await page.goto('/admin/licenses/new');
 		await page.locator('#customer_id').selectOption(customerId);
-		await page.locator('#product_id').selectOption('producto_prueba');
+		await page.locator('#product_id').selectOption('adel_pos');
 		await page.locator('[value="trial"]').check();
 		assert.equal(await page.locator('#updates_months').isDisabled(), true);
 		assert.equal(await page.locator('#billing_period').isDisabled(), true);
@@ -263,7 +263,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 
 		await page.goto('/admin/licenses/new');
 		await page.locator('#customer_id').selectOption(customerId);
-		await page.locator('#product_id').selectOption('producto_prueba');
+		await page.locator('#product_id').selectOption('adel_pos');
 		await page.locator('[value="subscription"]').check();
 		assert.equal(await page.locator('#updates_months').isDisabled(), true);
 		assert.equal(await page.locator('#trial_duration').isDisabled(), true);
@@ -291,7 +291,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		for (const route of [
 			'/admin/customers',
 			'/admin/products',
-			'/admin/products/producto_prueba',
+			'/admin/products/adel_pos',
 			'/admin/licenses',
 			'/admin/offline',
 			'/admin/audit',

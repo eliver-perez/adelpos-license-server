@@ -9,6 +9,7 @@ use AdelPos\License\Application\{
 	AuthService,
 	CatalogService,
 	DocumentService,
+	LicenseActivator,
 	LicenseMaterials,
 	LicenseService,
 	OfflineService,
@@ -61,12 +62,14 @@ final class App
 		$this->rate = $rate;
 		$this->signingKeys = new SigningKeys($config, $db, $this->clock, $this->audit);
 		$this->publisher = new RevisionPublisher($db, $this->clock, $this->signingKeys);
+		$activator = new LicenseActivator($db, $this->clock, $this->publisher);
 		$this->activations = new ActivationService(
 			$db,
 			$this->clock,
 			$this->crypto,
 			$this->audit,
 			$this->publisher,
+			$activator,
 			$rate,
 		);
 		$this->trustedDevices = new TrustedDevices($db, $this->clock, $this->audit, $this->sessions);
@@ -97,6 +100,7 @@ final class App
 			$this->clock,
 			$this->crypto,
 			$this->publisher,
+			$activator,
 		);
 		$this->admins = new AdminService(
 			$db,

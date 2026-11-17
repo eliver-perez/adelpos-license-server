@@ -56,7 +56,7 @@ final class BackupTest extends TestCase
 			]);
 			$license = $app->licenses->issue($actor, Uuid::create(), [
 				'customer_id' => $customer['id'],
-				'product_id' => 'producto_prueba',
+				'product_id' => 'adel_pos',
 				...MySqlFixture::terms(),
 				'features' => ['prueba_a'],
 				'reason' => 'Recovery fixture',
@@ -70,7 +70,7 @@ final class BackupTest extends TestCase
 				'action' => 'activate',
 				'request_id' => Uuid::create(),
 				'created_at' => '2026-09-26T12:00:00Z',
-				'product_id' => 'producto_prueba',
+				'product_id' => 'adel_pos',
 				'installation_id' => Uuid::create(),
 				'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
 				'fingerprint_version' => '1',
@@ -211,7 +211,7 @@ final class BackupTest extends TestCase
 				),
 			);
 			self::assertSame(2, (int) $restored->read->license($license['id'])['revision_counter']);
-			self::assertSame('revoked', $restored->db->execute('SELECT state FROM activations')->fetchColumn());
+			self::assertSame('transferred', $restored->db->execute('SELECT state FROM activations')->fetchColumn());
 			self::assertSame('issued', $restored->read->license($license['id'])['commercial_status']);
 			self::assertSame('pending', $restored->read->offline($pending['id'])['status']);
 			self::assertSame('approved', $restored->read->offline($offline['id'])['status']);

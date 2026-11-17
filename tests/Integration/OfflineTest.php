@@ -51,7 +51,7 @@ final class OfflineTest extends TestCase
 		]);
 		return $this->app->licenses->issue($this->actor, Uuid::create(), [
 			'customer_id' => $customer['id'],
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			...MySqlFixture::terms($type),
 			'features' => ['prueba_a', 'prueba_e'],
 			'reason' => 'Offline tests',
@@ -77,7 +77,7 @@ final class OfflineTest extends TestCase
 			'action' => $action,
 			'request_id' => Uuid::create(),
 			'created_at' => '1999-01-01T00:00:00Z',
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => $device['id'],
 			'installation_public_key' => $device['public'],
 			'fingerprint_version' => '1',
@@ -156,7 +156,7 @@ final class OfflineTest extends TestCase
 		$challenge = json_decode(
 			$this->app->activations->challenge([
 				'action' => $action,
-				'product_id' => 'producto_prueba',
+				'product_id' => 'adel_pos',
 				'installation_id' => $this->device['id'],
 				'activation_id' => $activationId,
 			])->body,
@@ -164,7 +164,7 @@ final class OfflineTest extends TestCase
 		);
 		$input = [
 			'request_id' => $requestId ?? Uuid::create(),
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => $this->device['id'],
 			'challenge_id' => $challenge['challenge_id'],
 			'app_version' => 'test',
@@ -220,8 +220,11 @@ final class OfflineTest extends TestCase
 		$result = $this->approve($id);
 		$payload = $this->payload($result);
 		self::assertSame(1, $payload['license_revision']);
-		self::assertNull($payload['maintenance_until']);
 		self::assertSame('active', $payload['license_status']);
+		self::assertNull($payload['status_reason']);
+		// El primer periodo empieza al aprobar la solicitud (contrato, sección 5.2).
+		self::assertSame('2026-09-25T12:00:00.000000Z', $payload['period_starts_at']);
+		self::assertSame('2027-03-25T12:00:00.000000Z', $payload['updates_until']);
 		self::assertSame($id, $this->import($envelope));
 		self::assertSame(1, $this->rowCount('license_revisions'));
 		self::assertSame('approved', $this->app->read->offline($id)['status']);
@@ -306,9 +309,11 @@ final class OfflineTest extends TestCase
 		$renewed = $this->payload($this->approve($id));
 		self::assertSame($active['activation_id'], $renewed['activation_id']);
 		self::assertSame(2, $renewed['license_revision']);
-		self::assertNull($renewed['expires_at']);
+		// «renew» entrega los derechos vigentes: las fechas del primer periodo no cambian.
+		self::assertSame('2026-10-25T12:00:00.000000Z', $renewed['expires_at']);
+		self::assertSame($active['expires_at'], $renewed['expires_at']);
+		self::assertSame($active['period_starts_at'], $renewed['period_starts_at']);
 		self::assertSame(5, $renewed['grace_days']);
-		self::assertNull($renewed['maintenance_until']);
 		self::assertSame(1, (int) $this->app->read->license($this->license['id'])['row_version']);
 		self::assertSame(0, $this->rowCount('subscription_periods'));
 	}
@@ -319,7 +324,7 @@ final class OfflineTest extends TestCase
 		$id = $this->import($this->envelope('renew', $active));
 		$renewed = $this->payload($this->approve($id));
 		self::assertNull($renewed['expires_at']);
-		self::assertNull($renewed['maintenance_until']);
+		self::assertSame($active['updates_until'], $renewed['updates_until']);
 		self::assertSame($active['activation_id'], $renewed['activation_id']);
 		self::assertSame(2, $renewed['license_revision']);
 	}
@@ -336,6 +341,8 @@ final class OfflineTest extends TestCase
 		}
 		$terminal = $this->payload($this->approve($id, ['accept_offline_limit' => '1']));
 		self::assertSame('revoked', $terminal['license_status']);
+		self::assertSame('deactivated', $terminal['status_reason']);
+		self::assertSame(2, $terminal['license_revision']);
 		self::assertSame('issued', $this->app->read->license($this->license['id'])['commercial_status']);
 		$this->device = $this->device();
 		$next = $this->activate();
@@ -363,7 +370,6 @@ final class OfflineTest extends TestCase
 				'installation_id' => Uuid::create(),
 				'license_id' => Uuid::create(),
 				'activation_id' => Uuid::create(),
-				'fingerprint_hash' => 'sha256:' . str_repeat('c', 64),
 			]
 			as $field => $value
 		) {
@@ -413,8 +419,25 @@ final class OfflineTest extends TestCase
 		$new = $this->payload($this->approve($id, $input));
 		self::assertSame(3, $new['license_revision']);
 		self::assertNotSame($old['activation_id'], $new['activation_id']);
+		// La computadora anterior queda como transferida, y su revisión de cierre lo dice.
 		self::assertSame(
-			'revoked',
+			['2', 'revoked', 'transferred'],
+			array_map(
+				'strval',
+				array_values(
+					$this->app->db->one(
+						'SELECT license_revision,license_status,status_reason
+							FROM license_revisions
+							WHERE activation_id=?
+							ORDER BY license_revision DESC LIMIT 1',
+						[Uuid::bytes($old['activation_id'])],
+					),
+				),
+			),
+		);
+		self::assertSame($old['period_starts_at'], $new['period_starts_at']);
+		self::assertSame(
+			'transferred',
 			$this->app->db
 				->execute('SELECT state FROM activations WHERE activation_id=?', [Uuid::bytes($old['activation_id'])])
 				->fetchColumn(),
@@ -601,6 +624,8 @@ final class OfflineTest extends TestCase
 			true,
 		);
 		self::assertSame('revoked', $payload['license_status']);
+		// Retirar la licencia de una computadora desde el panel se firma como transferencia, aunque no haya destino.
+		self::assertSame('transferred', $payload['status_reason']);
 		self::assertSame(2, $payload['license_revision']);
 		self::assertNull(
 			$this->app->db->one('SELECT incoming_activation_id FROM license_transfers')['incoming_activation_id'],

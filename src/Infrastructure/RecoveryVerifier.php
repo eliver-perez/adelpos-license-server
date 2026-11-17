@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace AdelPos\License\Infrastructure;
 
 use AdelPos\License\App;
-use AdelPos\License\Domain\{OfflineRequest, Protocol, StrictJson, Uuid};
+use AdelPos\License\Domain\{LicenseContent, OfflineRequest, Protocol, StrictJson, Uuid};
 
 final class RecoveryVerifier
 {
@@ -54,7 +54,7 @@ final class RecoveryVerifier
 				$payload = StrictJson::object($payloadBytes, 65536);
 				if (
 					($header['alg'] ?? '') !== 'EdDSA' ||
-					($header['typ'] ?? '') !== 'lic+jws' ||
+					($header['typ'] ?? '') !== LicenseContent::JWS_TYPE ||
 					($header['kid'] ?? '') !== $row['kid'] ||
 					$payloadBytes !== $row['payload_json'] ||
 					($payload['license_revision'] ?? null) !== (int) $row['license_revision'] ||

@@ -13,6 +13,7 @@ final class ActivationService
 		private Crypto $crypto,
 		private Audit $audit,
 		private RevisionPublisher $publisher,
+		private LicenseActivator $activator,
 		private RateLimiter $rate,
 	) {}
 
@@ -165,7 +166,7 @@ final class ActivationService
 		if (!$credential || $credential['state'] !== 'active') {
 			return $this->failure('LICENSE_NOT_FOUND', 404, $input);
 		}
-		// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (una instalación activa por licencia)
+		// Una licencia vale para una sola computadora principal a la vez (contrato, sección 1).
 		if (
 			$this->db->one("SELECT activation_id FROM activations WHERE license_id=? AND state='active' FOR UPDATE", [
 				$license['license_id'],
@@ -173,24 +174,13 @@ final class ActivationService
 		) {
 			return $this->failure('ACTIVATION_LIMIT', 409, $input);
 		}
-		$id = Uuid::bytes(Uuid::create());
-		$this->db->execute(
-			"INSERT INTO activations(activation_id,license_id,product_id,server_id,installation_public_key,
-					fingerprint_version,fingerprint_hash,state,activated_at)
-				VALUES (?,?,?,?,?,?,?,'active',?)",
-			[
-				$id,
-				$license['license_id'],
-				$input['product_id'],
-				Uuid::bytes($input['installation_id']),
-				Protocol::decode($input['installation_public_key'], 32),
-				$input['fingerprint_version'],
-				$input['fingerprint_hash'],
-				$this->clock->sql(),
-			],
+		$activation = $this->activator->activate(
+			$license,
+			Uuid::bytes($input['installation_id']),
+			Protocol::decode($input['installation_public_key'], 32),
+			$input['app_version'],
 		);
-		$revision = $this->publisher->publish($license['license_id'], $id);
-		return $this->licenseResponse($revision['jws'], $input);
+		return $this->licenseResponse($activation['revision']['jws'], $input);
 	}
 
 	private function existing(string $action, array $input, string $public): ApiResponse

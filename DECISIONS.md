@@ -199,6 +199,23 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 8 | Límite conocido: el mes de partida se toma de la fecha local del instante de partida. Si un cambio de horario hiciera inexistente la última hora del último día de un mes y el ancla cayera ahí, el periodo siguiente se contaría desde el mes siguiente. | Ninguna zona de México ni de Estados Unidos cambia de horario a medianoche. Se registra para la etapa 3, que encadena periodos al renovar. |
 | 9 | Sin dependencias nuevas de Composer en esta fase. | — |
 
+### Fase 4 — Contenido y firma de la licencia
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `Domain\LicenseContent` reúne los campos del contenido, su orden y sus reglas. `RevisionPublisher` arma el contenido y lo pasa por `LicenseContent::assertValid()` antes de firmar. Si no cumple, lanza una excepción que nombra el campo (nunca su valor) y la transacción se revierte. | Especificación, Fase 4, punto 5: validar en código hasta que exista el esquema JSON. En la Fase 7 una prueba comprueba que este validador y `license.schema.json` dan el mismo resultado. |
+| 2 | El validador comprueba además lo que un esquema JSON no puede expresar: `updates_until = expires_at` en suscripción y prueba, vencimiento posterior al inicio del periodo y actualizaciones de la perpetua no anteriores a la activación. | Contrato, secciones 5.4 y 5.5. |
+| 3 | `Application\LicenseActivator` es el único lugar que crea una activación. Lo usan la API en línea y la aprobación sin internet. Ahí se fija el primer periodo de la licencia, con un solo instante para el inicio del periodo y la fecha de activación. | Contrato, sección 5.2. Así las dos vías firman exactamente lo mismo. |
+| 4 | Las fechas son de la licencia: si ya tiene periodo, una activación posterior en otra computadora no lo recalcula. | Criterio 5 de AVANCE.md, sección E2-0.6. |
+| 5 | El motivo de cierre sale del estado en que terminó la activación: `deactivated`, `transferred` o `revoked`. La transferencia forzada y la liberación forzada del panel dejan la activación en `transferred`. | Especificación, Fase 4, punto 3, y propuesta V1.1 n.º 10. |
+| 6 | La emisión rechaza cualquier producto que no sea `adel_pos`. El catálogo de productos se conserva. | Decisión 3 del propietario: el servidor no firma otro producto. Una licencia de otro producto no podría activarse nunca. **El propietario puede revertirlo:** el validador seguiría impidiendo la firma. |
+| 7 | `features` lleva solo los módulos habilitados, como `clave → true`, y se serializa siempre como objeto. | Contrato, sección 4. |
+| 8 | La migración `004` exige el motivo en toda revisión `revoked` y lo prohíbe en las `active`. | El contenido firmado ya lo incluye siempre. |
+| 9 | La versión de AD-EL POS (`app_version`) se guarda al activar en línea. Las solicitudes sin internet todavía no la traen: llega en la Fase 6. | El alta de la activación se reescribió en esta fase. |
+| 10 | La constancia PDF muestra el plan y los tres cupos en lugar de «instalaciones autorizadas». | La tabla `license_limits` ya no existe. El diseño final de las constancias es de la etapa 5. |
+| 11 | Los archivos de `contracts/v1/` siguen siendo los heredados hasta la Fase 7. La prueba que comparaba el JWS publicado con esos archivos se sustituye por una del encabezado exacto. | Criterio 8 de AVANCE.md, sección E2-0.6. |
+| 12 | Sin dependencias nuevas de Composer en esta fase. | — |
+
 ### Repaso de formato
 
 | # | Decisión | Motivo |

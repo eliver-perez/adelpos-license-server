@@ -19,7 +19,12 @@ final class InitialSchemaTest extends TestCase
 		'column license_credentials.credential_encrypted IS_NULLABLE: YES -> NO',
 	];
 	/** Every migration, in order. Only the first one is compared with the inherited chain. */
-	private const MIGRATIONS = ['001_esquema_inicial.sql', '002_entornos_de_firma.sql', '003_contrato_v1.sql'];
+	private const MIGRATIONS = [
+		'001_esquema_inicial.sql',
+		'002_entornos_de_firma.sql',
+		'003_contrato_v1.sql',
+		'004_retiro_de_lo_heredado.sql',
+	];
 	private \PDO $server;
 	private string $dsn;
 	/** @var list<string> */
@@ -110,7 +115,8 @@ final class InitialSchemaTest extends TestCase
 				),
 			),
 		);
-		self::assertCount(35, $schema['tables']);
+		// 33 tablas del esquema inicial, más «plans» y «schema_migrations», menos «license_limits».
+		self::assertCount(34, $schema['tables']);
 		self::assertSame(1, (int) $db->execute('SELECT COUNT(*) FROM security_state')->fetchColumn());
 		self::assertSame(
 			['admin', 0],

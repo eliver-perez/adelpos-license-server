@@ -21,7 +21,7 @@ foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index
 	]);
 	$issued = $app->licenses->issue($actor, AdelPos\License\Domain\Uuid::create(), [
 		'customer_id' => $customer['id'],
-		'product_id' => 'producto_prueba',
+		'product_id' => 'adel_pos',
 		...AdelPos\License\Tests\MySqlFixture::terms($index === 0 ? 'perpetual' : 'subscription'),
 		'features' => ['prueba_b', 'prueba_c', 'prueba_d'],
 		'reason' => 'Datos sintéticos para verificar el panel',
@@ -33,7 +33,7 @@ foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index
 		$challenge = json_decode(
 			$app->activations->challenge([
 				'action' => 'activate',
-				'product_id' => 'producto_prueba',
+				'product_id' => 'adel_pos',
 				'installation_id' => $installation,
 				'activation_id' => null,
 			])->body,
@@ -41,7 +41,7 @@ foreach (['Restaurante del Norte', 'Cocina Regional', 'Café Central'] as $index
 		);
 		$input = [
 			'request_id' => AdelPos\License\Domain\Uuid::create(),
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => $installation,
 			'license_key' => $issued['secret'],
 			'installation_public_key' => AdelPos\License\Domain\Protocol::encode(sodium_crypto_sign_publickey($pair)),

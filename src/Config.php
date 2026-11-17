@@ -2,12 +2,12 @@
 declare(strict_types=1);
 namespace AdelPos\License;
 
-use AdelPos\License\Domain\Problem;
+use AdelPos\License\Domain\{LicenseContent, Problem};
 
 final class Config
 {
 	/** Entornos de firma del contrato (§3). Son independientes de APP_ENV. */
-	public const LICENSE_ENVIRONMENTS = ['test', 'production'];
+	public const LICENSE_ENVIRONMENTS = LicenseContent::ENVIRONMENTS;
 
 	public function __construct(private array $values = [], private bool $environmentOverrides = true) {}
 

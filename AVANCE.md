@@ -877,7 +877,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 2 — Modelo de datos | **Cerrada.** 186 pruebas, 21 918 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 14 de las 20 marcas de herencia. |
 | 3 — Motor de fechas | **Cerrada.** 258 pruebas, 26 242 aserciones, todas OK. Verificador Go OK. |
 | Repaso de formato (regla del propietario) | **Hecho.** 261 pruebas, 26 248 aserciones, todas OK. Verificador Go OK. Playwright OK. |
-| 4 — Contenido y firma de la licencia | Pendiente |
+| 4 — Contenido y firma de la licencia | **Cerrada.** 340 pruebas, 26 412 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 7 de las 20 marcas de herencia. |
 | 5 — API en línea | Pendiente |
 | 6 — Archivos sin internet | Pendiente |
 | 7 — Archivos del contrato y verificador de referencia | Pendiente |
@@ -1474,3 +1474,92 @@ Este repaso no cambia el comportamiento: solo cambia espacios, saltos de línea 
 - PHPUnit: **261 pruebas, 26 248 aserciones, todas OK** (258 anteriores + 3 de estilo).
 - Verificador Go y `generate-fixtures.php --check`: OK.
 - Playwright (`php tests/run-panel-tests.php all`): OK, datos sintéticos eliminados.
+
+---
+
+## Etapa 2 · Fase 4 — Contenido y firma de la licencia (contrato §4)
+
+Desde esta fase, todo lo que el servidor firma tiene el contenido exacto del contrato. La API y los archivos sin internet todavía **reciben** el protocolo heredado (fases 5 y 6).
+
+### E2-4.1 Qué cambió
+
+| Tema | Antes | Ahora |
+| --- | --- | --- |
+| Encabezado del JWS | `typ: lic+jws` | `{"alg":"EdDSA","kid":"<kid>","typ":"adelpos-lic+jws"}`, exacto |
+| Contenido | 18 campos heredados: `installation_id`, huella, `maintenance_until`, `entitled_release_until`, límites anteriores | Los 21 campos de la sección 4, en el orden del contrato (`Domain\LicenseContent::FIELDS`) |
+| `environment` | No existía | El entorno configurado, que además debe coincidir con el de la llave que firma |
+| `licensee_name` | No existía | Razón social del cliente; si no está capturada, el nombre comercial |
+| `plan` y `limits` | Límites heredados | Copia del plan de la licencia (`plan_id`, `name`, `custom`) y los tres cupos |
+| `features` | Todos los módulos, con `true` o `false` | Solo los habilitados, como `clave → true`; siempre un objeto JSON (`{}` si no hay) |
+| `license_status` y `status_reason` | `active` o `revoked`, sin motivo | `active` solo si la licencia y la activación están vigentes. Si no, `revoked` con su motivo: `deactivated`, `transferred` o `revoked` |
+| Fechas | Vacías hasta esta fase | El primer periodo se calcula al activar (en línea) o al aprobar (sin internet), con el motor de la Fase 3 y en la zona horaria del cliente |
+| Validación antes de firmar | No existía | `LicenseContent::assertValid()`: si el contenido no cumple, no se firma y la transacción se revierte |
+| Producto | Cualquiera del catálogo | Solo `adel_pos`: la emisión rechaza otro producto y el validador impide firmarlo |
+
+**Archivos nuevos:** `src/Domain/LicenseContent.php`, `src/Application/LicenseActivator.php`, `database/migrations/004_retiro_de_lo_heredado.sql` y `tests/Unit/LicenseContentTest.php`.
+
+### E2-4.2 Migración `004_retiro_de_lo_heredado.sql`
+
+- Elimina `activations.fingerprint_version` y `fingerprint_hash`.
+- Elimina la tabla `license_limits`. El esquema queda en 33 tablas, más `schema_migrations`.
+- Elimina `licenses.maintenance_until` y `entitled_release_until`. Las sustituye `updates_until`, que ya existía.
+- `chk_revision_reason`: el motivo es obligatorio en las revisiones `revoked` y queda vacío en las `active`.
+- De `001_esquema_inicial.sql` se quitó solo la línea del comentario de herencia de `license_limits` (decisión 1 del propietario). `InitialSchemaTest` sigue comparando el esquema.
+- `bin/grants.php` ya no concede permisos sobre `license_limits`.
+
+### E2-4.3 Estados de una activación y motivo de cierre
+
+| Qué ocurre | Estado de la activación | `status_reason` firmado |
+| --- | --- | --- |
+| La computadora libera la licencia, en línea o sin internet | `deactivated` | `deactivated` |
+| El propietario la transfiere a otra computadora desde el panel | `transferred` | `transferred` |
+| El propietario la retira sin destino («Recuperar plaza por equipo averiado») | `transferred` | `transferred` |
+| El propietario revoca la licencia | `revoked` | `revoked` |
+
+El panel ya muestra «Transferida» en el detalle de la licencia.
+
+### E2-4.4 Marcas de herencia
+
+Quedan **7 de 20**. Se resolvieron 7 en esta fase:
+
+| Archivo | Regla | Cómo quedó |
+| --- | --- | --- |
+| `RevisionPublisher` (2) | Huella y lista de límites en el contenido | Contenido del contrato |
+| `LicenseService` | Fila de `license_limits` al emitir | Eliminada con la tabla |
+| `001_esquema_inicial.sql` | Comentario de `license_limits` | Línea quitada; la migración `004` elimina la tabla |
+| `DocumentService` | Lista de límites en las constancias | Plan y cupos |
+| `ActivationService`, `OfflineService` | Una instalación activa por licencia | Es la regla del contrato (sección 1): una sola computadora principal. La respuesta cuando vuelve a activar la misma computadora cambia en las fases 5 y 6 |
+
+Las 7 que quedan: `Protocol` (Fase 5), `OfflineRequest` (Fase 6), `contracts/v1/generate-fixtures.php` ×4 (Fase 7) y `templates/license-detail.php` (Fase 8).
+
+### E2-4.5 Pruebas
+
+**Resultado:** PHPUnit **340 pruebas, 26 412 aserciones, todas OK**. Verificador Go y `generate-fixtures.php --check` OK (archivos heredados). Playwright OK.
+
+| Lo que pide la especificación | Prueba |
+| --- | --- |
+| El contenido de cada tipo coincide campo por campo y en orden | `ActivationsTest::testPerpetualContentMatchesTheContractExactlyAndRefreshReusesSignedBytes` y `testSubscriptionTrialAndCustomContentMatchTheContractExactly`: perpetua, suscripción, prueba de 15 días y personalizada con razón social, sin módulos y en `America/Tijuana` (cruza el fin del horario de verano y un mes sin día 31) |
+| Revocación, desactivación y transferencia forzada firman `revoked` con su motivo | `ActivationsTest` (desactivación y revocación), `OfflineTest` (desactivación sin internet, transferencia forzada y liberación forzada) y `offline-panel.cjs` |
+| Las revisiones aumentan de forma global entre activaciones | `ActivationsTest::testDeactivationReleasesSlotAndOldIdentityKeepsTerminalRevision`: 1, 2 (cierre) y 3 en otra computadora, días después y con las mismas fechas |
+| Un contenido inválido no se firma y no deja cambios | `ActivationsTest::testInvalidContentIsNotSignedAndLeavesNoChanges`: ni activación, ni revisión, ni periodo, ni desafío consumido; tampoco en un cambio de módulos ni en una revocación. `LicenseContentTest`: 70 reglas rotas, una por caso |
+
+**Pruebas nuevas (79):** `LicenseContentTest` (74 casos), 3 en `ActivationsTest`, `AdministrationTest::testOnlyAdelPosLicensesCanBeIssued` y `ProtocolTest::testJwsHasTheExactContractHeaderAndAVerifiableSignature`.
+
+**Pruebas sustituidas:**
+
+- `ActivationsTest::testActivationHasExactRightsAndRefreshReusesSignedBytes` comprobaba 18 campos heredados; ahora compara el contenido completo del contrato.
+- `ProtocolTest::testJwsPublisherMatchesAllSharedFixturesByteForByte` comparaba el JWS con los archivos heredados. Queda `testProofMessageMatchesTheSharedFixtures` hasta la Fase 5; la comparación byte a byte vuelve en la Fase 7 con los archivos nuevos.
+- En `OfflineTest` la huella ya no forma parte de la identidad de una instalación: la identidad es `server_id` más la llave pública.
+
+**Las pruebas pasan a `adel_pos`:** `MySqlFixture` ya no crea `producto_prueba`; agrega a `adel_pos` los módulos sintéticos `prueba_a` a `prueba_e`.
+
+**Comprobación de las reglas:** se quitaron una a la vez **24 reglas** de esta fase (encabezado, validación previa, motivo de cierre, razón social, módulos deshabilitados, contador global, primer periodo, zona del cliente, producto fijo, restricciones de la migración `004` y siete reglas del validador). Las 24 hicieron fallar alguna prueba. La primera corrida dejó una sin detectar: «la revisión es `active` aunque la licencia esté revocada». Se agregó `testARevisionIsActiveOnlyWhileLicenseAndActivationAreBothInForce`.
+
+### E2-4.6 Decisiones y pendientes
+
+Las decisiones técnicas están en `DECISIONS.md`, sección 10, Fase 4. Una va más allá de la especificación y el propietario puede revertirla: **la emisión rechaza productos distintos de `adel_pos`**.
+
+- **Fase 5:** `server_id` y `ADELPOS-LIC-V1` en la API; la API deja de recibir la huella; la misma computadora que vuelve a activar recibe su revisión vigente.
+- **Fase 6:** `.licreq` con `server_id` y `app_version`; `renew` deja de firmar una revisión nueva.
+- **Fase 7:** conectar `license.schema.json` a la validación y publicar los archivos de prueba nuevos.
+- **Fase 8:** mostrar en el panel el motivo de cierre de cada revisión, y el plan y los cupos en el detalle.

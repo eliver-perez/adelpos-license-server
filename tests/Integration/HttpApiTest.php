@@ -116,7 +116,7 @@ final class HttpApiTest extends TestCase
 			'/v1/activations/challenge',
 			Protocol::json([
 				'action' => $action,
-				'product_id' => 'producto_prueba',
+				'product_id' => 'adel_pos',
 				'installation_id' => $device['id'],
 				'activation_id' => $activation,
 			]),
@@ -124,7 +124,7 @@ final class HttpApiTest extends TestCase
 		self::assertSame(200, $challenge['status'], $challenge['body']);
 		$input = [
 			'request_id' => Uuid::create(),
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => $device['id'],
 			'challenge_id' => $challenge['json']['challenge_id'],
 			'app_version' => 'HTTP-test',
@@ -178,7 +178,7 @@ final class HttpApiTest extends TestCase
 		]);
 		$license = $app->licenses->issue($actor, Uuid::create(), [
 			'customer_id' => $customer['id'],
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			...MySqlFixture::terms(),
 			'features' => ['prueba_d'],
 			'reason' => 'HTTP flow',
@@ -205,7 +205,7 @@ final class HttpApiTest extends TestCase
 			),
 		);
 		self::assertSame(2, $fresh['license_revision']);
-		self::assertFalse($fresh['features']['prueba_d']);
+		self::assertArrayNotHasKey('prueba_d', $fresh['features']);
 		$deactivation = $this->signed('deactivate', $device, '', $payload['activation_id']);
 		$ack = $this->http('/v1/activations/deactivate', Protocol::json($deactivation));
 		self::assertSame(200, $ack['status']);
@@ -248,7 +248,7 @@ final class HttpApiTest extends TestCase
 		$path = '/v1/activations/challenge';
 		$body = Protocol::json([
 			'action' => 'activate',
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => Uuid::create(),
 			'activation_id' => null,
 		]);
@@ -312,7 +312,7 @@ final class HttpApiTest extends TestCase
 		$this->fixture->owner->execute('DELETE FROM rate_limit_buckets');
 		$body = Protocol::json([
 			'action' => 'activate',
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			'installation_id' => Uuid::create(),
 			'activation_id' => null,
 		]);

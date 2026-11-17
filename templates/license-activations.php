@@ -1,7 +1,12 @@
 <?php
 use AdelPos\License\Http\View as V;
 
-$activationStates = ['active' => 'Activa', 'deactivated' => 'Desactivada', 'revoked' => 'Revocada'];
+$activationStates = [
+	'active' => 'Activa',
+	'deactivated' => 'Desactivada',
+	'transferred' => 'Transferida',
+	'revoked' => 'Revocada',
+];
 $revisionsUrl = '/admin/licenses/' . V::escape($licenseId) . '/revisions/';
 $pageUrl = '/admin/licenses/' . V::escape($licenseId) . '?revision_page=';
 ?>

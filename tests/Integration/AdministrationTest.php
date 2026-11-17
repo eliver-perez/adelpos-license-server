@@ -52,7 +52,7 @@ final class AdministrationTest extends TestCase
 	{
 		return [
 			'customer_id' => $this->customer(),
-			'product_id' => 'producto_prueba',
+			'product_id' => 'adel_pos',
 			...MySqlFixture::terms($type),
 			'features' => ['prueba_b', 'prueba_c', 'prueba_a', 'prueba_e'],
 			'reason' => 'Compra de prueba',
@@ -67,9 +67,31 @@ final class AdministrationTest extends TestCase
 			(new Migrator($this->fixture->owner, dirname(__DIR__, 2) . '/database/migrations'))->migrate(),
 		);
 		self::assertSame('AD-EL POS', $this->fixture->app->read->product('adel_pos')['display_name']);
-		self::assertSame([], $this->fixture->app->read->capabilities('adel_pos'));
 		$this->expectException(Problem::class);
 		$this->fixture->app->auth->bootstrap('other@example.test', 'Otro', 'Fixture-Password-Only-2026!');
+	}
+
+	public function testOnlyAdelPosLicensesCanBeIssued(): void
+	{
+		$app = $this->fixture->app;
+		// El catálogo admite otros productos, pero el contrato fija el producto de la licencia firmada.
+		$app->catalog->saveProduct($this->actor, Uuid::create(), null, [
+			'product_id' => 'otro_producto',
+			'name' => 'Otro producto',
+			'description' => 'Producto sintético',
+			'state' => 'active',
+		]);
+		try {
+			$app->licenses->issue(
+				$this->actor,
+				Uuid::create(),
+				array_replace($this->issueInput(), ['product_id' => 'otro_producto', 'features' => []]),
+			);
+			self::fail('Issued a license of another product');
+		} catch (Problem $error) {
+			self::assertSame('Este servidor solo emite licencias de AD-EL POS.', $error->getMessage());
+		}
+		self::assertSame(0, (int) $app->db->execute('SELECT COUNT(*) FROM licenses')->fetchColumn());
 	}
 
 	public function testPerpetualIsIssuedWithoutDatesAndKeyIsNeverArchived(): void

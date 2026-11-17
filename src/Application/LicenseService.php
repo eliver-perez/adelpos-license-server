@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Application;
 
-use AdelPos\License\Domain\{ActivationCode, Capabilities, Input, LicenseTerms, Problem, Uuid};
+use AdelPos\License\Domain\{ActivationCode, Capabilities, Input, LicenseContent, LicenseTerms, Problem, Uuid};
 use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class LicenseService
@@ -68,6 +68,10 @@ final class LicenseService
 				if (!$customer || $customer['state'] !== 'active' || !$product || $product['state'] !== 'active') {
 					throw new Problem('Selecciona un cliente y un producto activos.');
 				}
+				// El contrato fija el producto de la licencia firmada: una licencia de otro no podría activarse.
+				if ($productId !== LicenseContent::PRODUCT_ID) {
+					throw new Problem('Este servidor solo emite licencias de AD-EL POS.');
+				}
 				$plan = $this->db->one('SELECT * FROM plans WHERE plan_id=? FOR SHARE', [$planId]);
 				if (!$plan) {
 					throw new Problem('El plan elegido no existe en el catálogo.');
@@ -106,14 +110,6 @@ final class LicenseService
 						$this->clock->sql(),
 						$this->clock->sql(),
 					],
-				);
-				// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md
-				// (una instalación por licencia y lista de límites).
-				$this->db->execute(
-					'INSERT INTO license_limits(license_id,max_installations,max_users,max_libraries,
-							max_documents)
-						VALUES (?,1,NULL,NULL,NULL)',
-					[$bytes],
 				);
 				$this->writeFeatures($bytes, $productId, $catalog, $features);
 				$secret = $this->credential($bytes);

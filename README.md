@@ -108,7 +108,7 @@ npm run format:check   # solo comprueba; es lo que ejecuta la prueba CodeStyleTe
 Las plantillas de `templates/` se cuidan a mano: una sentencia por etiqueta PHP y los datos en variables al inicio del archivo.
 
 - **Bases de prueba:** cada prueba crea su propia base y su propio usuario `adelpos_license_test_*` con los permisos reales de la aplicación, y los elimina al terminar. No las apuntes a una base real.
-- **Producto de prueba:** las pruebas usan el producto sintético `producto_prueba`, con módulos `prueba_a` a `prueba_e`.
+- **Producto de prueba:** el contrato fija el producto `adel_pos`, así que las pruebas lo usan y le agregan los módulos sintéticos `prueba_a` a `prueba_e`.
 - **Variables `TEST_*_BIN`:** solo hacen falta si esas herramientas no están en el `PATH`.
 - **Sin `TEST_MYSQL_DSN`** se omite la integración, y esa corrida no valida MySQL.
 - **Detalle:** ver [TEST_PLAN.md](TEST_PLAN.md).
