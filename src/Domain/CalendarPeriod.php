@@ -114,6 +114,50 @@ final class CalendarPeriod
 		];
 	}
 
+	/**
+	 * Compra de mantenimiento de una perpetua (sección 5.5 y decisión 4 del propietario para la
+	 * etapa 3: solo por 12 meses):
+	 *
+	 *     nuevo updates_until = máximo(fecha_pago, updates_until vigente) + 12 meses
+	 *
+	 * Si la base es el fin vigente, se conserva su día y su hora ancla; si es la fecha de pago, el
+	 * ancla pasa a ser la del pago, igual que en una renovación tardía.
+	 *
+	 * @return array{
+	 *     updates_from: \DateTimeImmutable,
+	 *     updates_until: \DateTimeImmutable,
+	 *     anchor_day: int,
+	 *     anchor_local_time: string,
+	 *     from_payment: bool
+	 * }
+	 */
+	public static function maintenance(
+		\DateTimeImmutable $updatesUntil,
+		\DateTimeImmutable $paidAt,
+		string $zone,
+		int $anchorDay,
+		string $anchorTime,
+	): array {
+		$utc = new \DateTimeZone('UTC');
+		$updatesUntil = $updatesUntil->setTimezone($utc);
+		$paidAt = $paidAt->setTimezone($utc);
+		$fromPayment = $paidAt > $updatesUntil;
+		$base = $updatesUntil;
+		if ($fromPayment) {
+			$base = $paidAt;
+			$anchor = self::anchor($paidAt, $zone);
+			$anchorDay = $anchor['day'];
+			$anchorTime = $anchor['time'];
+		}
+		return [
+			'updates_from' => $base,
+			'updates_until' => self::addMonths($base, LicenseTerms::MAINTENANCE_MONTHS, $zone, $anchorDay, $anchorTime),
+			'anchor_day' => $anchorDay,
+			'anchor_local_time' => $anchorTime,
+			'from_payment' => $fromPayment,
+		];
+	}
+
 	/** Instante del día y la hora ancla en el mes número $index (año × 12 + mes − 1), en la zona. */
 	private static function anchoredIn(
 		\DateTimeZone $zone,

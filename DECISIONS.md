@@ -391,3 +391,14 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 10 | La pantalla de revisión muestra los días restantes, el monto pagado (o el precio del catálogo que lo sustituye), la bonificación, el precio nuevo y el monto sugerido, y cuándo entran en vigor las reducciones. | Especificación, Fase 5.1, punto 2, y Fase 9. |
 | 11 | `AuditLabelsTest` revisa también las operaciones del historial comercial (`LicenseHistory::record`), hasta el final de la sentencia. | Las operaciones nuevas se registran ahí; antes la prueba no las veía. |
 | 12 | Sin dependencias nuevas. | — |
+
+### Fase 6 — Mantenimiento de la perpetua y periodo inicial
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `CalendarPeriod::maintenance()`: nuevo `updates_until` = máximo(fecha de pago, fin vigente) + 12 meses. Si la base es el fin vigente, conserva el ancla; si es la fecha de pago, el ancla pasa a ser la del pago y se guarda en la licencia. Un pago justo en el fin vigente cuenta desde el fin. | Contrato §5.5 y decisión 4 del propietario. Guardar el ancla nueva permite encadenar compras sin que el día se recorra. |
+| 2 | Solo para perpetuas activadas y no revocadas. Sugiere el precio de mantenimiento anual del plan; una personalizada pide el monto a mano. El pago (`maintenance`) cubre los 12 meses comprados y no cambia el pago del periodo de la licencia. Firma una revisión nueva. | Especificación, Fase 6, punto 1. |
+| 3 | **Editar el periodo inicial no registra un pago.** Cambia tipo, condición, plan y cupos de una licencia sin activar y no revocada; no hay fechas que mover ni revisiones que firmar. La auditoría guarda cada campo con su valor anterior y nuevo. | La especificación no prevé un cobro en esta operación: es una corrección antes de activar. **Propuesta V1.1 n.º 32**, con la alternativa de registrar un pago de ajuste. |
+| 4 | La lectura del tipo y su condición (`LicenseTerms::fromInput`) es la misma en la emisión y en el periodo inicial: un dato de otro tipo de licencia se rechaza, nunca se ignora. | Una sola regla en el dominio. |
+| 5 | La renovación y el mantenimiento dejaron de ser cambios genéricos de `LicenseService::change()`: sus rutas van a `CommercialService` y las etiquetas del motor anterior se retiraron. En el panel ya no queda «Disponible próximamente». | Especificación, Fase 6, punto 3. Con esto no queda ninguna marca `PENDIENTE etapa 3` en el código. |
+| 6 | Sin dependencias nuevas. | — |

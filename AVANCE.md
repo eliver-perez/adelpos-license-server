@@ -2356,3 +2356,45 @@ Se quitaron **28 reglas**, todas detectadas a la primera: redondeo, límites y s
 
 - La tarea programada que aplica los cambios al llegar su instante, y su relación con la renovación, son de la Fase 7.
 - El recorrido de subir de plan con bonificación y de programar y cancelar una reducción con Playwright es de la Fase 9.
+
+---
+
+## Etapa 3 · Fase 6 — Mantenimiento de la perpetua y periodo inicial
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-6.1 Qué cambió
+
+- **`CalendarPeriod::maintenance()`** y **`CommercialService::buyMaintenance()` / `quoteMaintenance()`:** 12 meses de actualizaciones desde la fecha posterior entre el pago y el fin vigente, con el precio de mantenimiento anual del plan, el pago `maintenance` y una revisión nueva.
+- **`CommercialService::editInitialTerms()`:** tipo, periodo o duración, meses de actualizaciones, plan y cupos de una licencia sin activar (propuesta V1.1 n.º 11). Sin pago y sin firma.
+- **`LicenseTerms::fromInput()`:** la lectura del tipo y su condición, compartida con la emisión.
+- **Panel:** tarjetas «Comprar 12 meses de actualizaciones» (perpetua activada) y «Editar antes de activar» (licencia sin activar); pantallas «Comprar mantenimiento» y «Editar el periodo inicial». Se retiró «Disponible próximamente» y la nota equivalente del formulario de emisión.
+- **Marcas:** ya no queda ninguna `PENDIENTE etapa 3` en `src`, `bin` ni `templates`; `StageClosureTest` lo comprueba.
+
+### E3-6.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/MaintenanceTest.php` (nueva) | 5 | Mantenimiento antes de que terminen las actualizaciones y encadenado dos veces, con su pago y la misma activación; después de que terminaron (perpetua de 0 meses), desde la fecha de pago con su ancla; personalizada sin precio; rechazos en suscripción, prueba, perpetua sin activar, revocada y sin monto; edición del periodo inicial (a perpetua personalizada y a prueba), con la auditoría de cada campo, sin pagos, con las fechas al activar, y rechazos (ya activada, sin cambios, dato de otro tipo, plan archivado, revocada); y el motor de fechas del mantenimiento, con el pago justo en el fin y el 29 de febrero |
+| `AdministrationTest` | 1 sustituida | La renovación y el mantenimiento ya no son cambios genéricos: responden 404 |
+| `AuditLabelsTest` | — | Etiquetas de las operaciones nuevas; se retiran las dos del motor anterior |
+| `StageClosureTest` | — | Solo quedan marcas de las etapas 4 y 5 |
+| `tests/panel.cjs` | — | Una licencia sin activar ofrece editar su periodo inicial y no ofrece renovar ni mantenimiento; el servidor rechaza el mantenimiento de una perpetua sin activar |
+
+### E3-6.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **18 reglas**, todas detectadas: base posterior entre pago y fin vigente, el pago justo en el fin, el ancla del pago y que se guarde, solo 12 meses, solo perpetuas, activadas y no revocadas, precio de mantenimiento del plan y personalizada sin precio, firma de la revisión, plazo que cubre el pago, monto obligatorio; y en el periodo inicial: solo sin activar, no revocada, algo debe cambiar, tolerancia del tipo nuevo y auditoría con valores anteriores y nuevos. El script de mutaciones aprendió a buscar a partir de un ancla, porque la conversión y el mantenimiento comparten fragmentos idénticos.
+
+### E3-6.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 424 pruebas, 27 997 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 424 pruebas, 27 997 aserciones, todas OK |
+| Playwright | Panel, sin internet y dispositivos de confianza OK |
+
+**Falla intermitente observada.** En la primera corrida de esta fase, `TrustedDevicesHttpTest` falló una vez en cada versión de PHP: en 8.5 al iniciar sesión con TOTP (línea 99) y en 8.3 al levantar Nginx y PHP-FPM (línea 24). Es una prueba de la etapa 1 que no cambió, con Nginx, PHP-FPM y TLS reales. La siguiente corrida completa pasó en las dos versiones, y la prueba sola también. Queda vigilada en las fases siguientes (ver E3-9).
+
+### E3-6.5 Pendientes que deja la fase
+
+- El recorrido de mantenimiento con Playwright es de la Fase 9.

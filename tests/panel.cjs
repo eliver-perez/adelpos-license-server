@@ -226,9 +226,11 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
 		const licenseURL = page.url();
 		assert.match(await page.locator('main').innerText(), /Sin vencimiento/);
-		// No dates until the license is activated, and the operations of the previous engine are not offered.
+		// No dates until the license is activated: its initial period can still be edited.
 		assert.match(await page.locator('main').innerText(), /Empieza al activar/);
-		assert.match(await page.locator('main').innerText(), /Disponible próximamente/);
+		assert.equal(await page.locator('#initial-terms').isVisible(), true);
+		assert.equal(await page.locator('#renew-form').count(), 0);
+		assert.equal(await page.locator('#maintenance-form').count(), 0);
 		// Detalle con el modelo del contrato: tipo, plan, cupos y la zona horaria del cliente.
 		const rights = async () => {
 			const entries = await page
@@ -281,8 +283,8 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			reason: 'Compra separada de mantenimiento',
 		};
 		for (const [operation, message] of [
-			['maintenance', /La compra de mantenimiento estará disponible próximamente/],
-			// La renovación ya existe, pero una perpetua no se renueva: no vence.
+			// Una perpetua sin activar no necesita mantenimiento todavía, y no se renueva porque no vence.
+			['maintenance', /Una perpetua sin activar todavía no necesita mantenimiento/],
 			['renew', /Una licencia perpetua no se renueva porque no vence/],
 		]) {
 			const pending = await context.request.post(licenseURL + '/' + operation, {

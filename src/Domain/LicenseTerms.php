@@ -75,6 +75,54 @@ final class LicenseTerms
 		return Money::fromSql($plan[$column] ?? null);
 	}
 
+	/** Tipo de licencia con su único dato propio: periodo, duración de la prueba o meses de actualizaciones. */
+	public static function fromInput(array $input): array
+	{
+		$type = Input::choice($input, 'license_type', self::TYPES);
+		$sent = [];
+		foreach (['billing_period', 'trial_duration', 'updates_months'] as $field) {
+			$value = $input[$field] ?? '';
+			if (!is_string($value) && !is_int($value)) {
+				throw new Problem('Revisa las condiciones de la licencia.');
+			}
+			$sent[$field] = trim((string) $value);
+		}
+		$terms = [
+			'license_type' => $type,
+			'billing_period' => null,
+			'trial_duration' => null,
+			'updates_months' => null,
+		];
+		if ($type === 'subscription') {
+			if (!in_array($sent['billing_period'], self::BILLING_PERIODS, true)) {
+				throw new Problem('Elige el periodo de la suscripción: mensual, trimestral, semestral o anual.');
+			}
+			$terms['billing_period'] = $sent['billing_period'];
+		} elseif ($type === 'trial') {
+			if (!in_array($sent['trial_duration'], self::TRIAL_DURATIONS, true)) {
+				throw new Problem('Elige la duración de la prueba: 15 días, 1 mes o 3 meses.');
+			}
+			$terms['trial_duration'] = $sent['trial_duration'];
+		} else {
+			$months = $sent['updates_months'] === '' ? (string) self::DEFAULT_UPDATES_MONTHS : $sent['updates_months'];
+			if (!in_array($months, array_map('strval', self::UPDATES_MONTHS), true)) {
+				throw new Problem('Elige los meses de actualizaciones de la licencia perpetua: 0, 6 o 12.');
+			}
+			$terms['updates_months'] = (int) $months;
+		}
+		// Un dato de otro tipo de licencia nunca se ignora en silencio.
+		if ($type !== 'subscription' && $sent['billing_period'] !== '') {
+			throw new Problem('El periodo de cobro solo aplica a las suscripciones.');
+		}
+		if ($type !== 'trial' && $sent['trial_duration'] !== '') {
+			throw new Problem('La duración de prueba solo aplica a las licencias de prueba.');
+		}
+		if ($type !== 'perpetual' && $sent['updates_months'] !== '') {
+			throw new Problem('Los meses de actualizaciones solo aplican a las licencias perpetuas.');
+		}
+		return $terms;
+	}
+
 	/** Tolerancia después del vencimiento: solo las suscripciones la tienen. */
 	public static function graceDays(string $type): int
 	{

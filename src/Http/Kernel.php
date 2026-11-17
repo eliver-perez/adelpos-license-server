@@ -484,7 +484,7 @@ final class Kernel
 		}
 		if (
 			preg_match(
-				'~^/admin/licenses/([a-f0-9-]{36})/(renew|convert|plan|scheduled-cancel)$~',
+				'~^/admin/licenses/([a-f0-9-]{36})/(renew|convert|plan|scheduled-cancel|maintenance|terms)$~',
 				$this->path,
 				$matches,
 			)
@@ -492,19 +492,11 @@ final class Kernel
 			$this->commercial($method, $operationId, $matches[1], $matches[2]);
 			return;
 		}
-		if (
-			preg_match(
-				'~^/admin/licenses/([a-f0-9-]{36})(?:/(features|maintenance|reissue|revoke))?$~',
-				$this->path,
-				$matches,
-			)
-		) {
+		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})(?:/(features|reissue|revoke))?$~', $this->path, $matches)) {
 			if ($method === 'POST' && isset($matches[2])) {
 				if (in_array($matches[2], ['revoke', 'reissue'], true)) {
 					$this->confirmIdentity();
 				}
-				// PENDIENTE etapa 3: compra de mantenimiento. Su ruta sigue existiendo para que el servicio
-				// responda que todavía no está disponible.
 				$this->licenseResult(
 					$this->app->licenses->change($this->actor, $operationId, $matches[1], $matches[2], $_POST),
 				);
@@ -649,6 +641,8 @@ final class Kernel
 				'renew' => $this->app->commercial->renew($this->actor, $operationId, $licenseId, $_POST),
 				'convert' => $this->app->commercial->convert($this->actor, $operationId, $licenseId, $_POST),
 				'plan' => $this->app->commercial->changePlan($this->actor, $operationId, $licenseId, $_POST),
+				'maintenance' => $this->app->commercial->buyMaintenance($this->actor, $operationId, $licenseId, $_POST),
+				'terms' => $this->app->commercial->editInitialTerms($this->actor, $operationId, $licenseId, $_POST),
 				'scheduled-cancel' => $this->app->commercial->cancelScheduledChange(
 					$this->actor,
 					$operationId,
@@ -664,12 +658,16 @@ final class Kernel
 			'renew' => $this->app->commercial->quoteRenewal($licenseId, $_GET),
 			'convert' => $this->app->commercial->quoteConversion($licenseId, $_GET),
 			'plan' => $this->app->commercial->quotePlanChange($licenseId, $_GET),
+			'maintenance' => $this->app->commercial->quoteMaintenance($licenseId, $_GET),
+			'terms' => ['plans' => $this->app->read->plans()],
 			default => throw new Problem('La página solicitada no existe.', 404),
 		};
 		$titles = [
 			'renew' => 'Revisar renovación',
 			'convert' => 'Revisar conversión',
 			'plan' => 'Revisar cambio de plan',
+			'maintenance' => 'Revisar mantenimiento',
+			'terms' => 'Editar el periodo inicial',
 		];
 		$this->render('license-' . $operation, [
 			'title' => $titles[$operation],

@@ -7,12 +7,8 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class LicenseService
 {
-	// PENDIENTE etapa 3: compra de mantenimiento y edición del periodo inicial de una licencia sin
-	// activar (contrato, secciones 5.2 y 5.5). El editor de planes está en PlanService; la renovación
-	// y la conversión de una prueba, en CommercialService.
-	public const PENDING = [
-		'maintenance' => 'La compra de mantenimiento estará disponible próximamente.',
-	];
+	// El ciclo comercial después de emitir (renovación, conversión, cambio de plan, mantenimiento y
+	// periodo inicial) está en CommercialService, y el editor de planes en PlanService.
 
 	public function __construct(
 		private Database $db,
@@ -36,7 +32,7 @@ final class LicenseService
 	{
 		$customerId = Input::text($input, 'customer_id');
 		$productId = Input::text($input, 'product_id', 64);
-		$terms = $this->termsInput($input);
+		$terms = LicenseTerms::fromInput($input);
 		$planId = Input::text($input, 'plan_id', 64, false);
 		if ($planId === '') {
 			throw new Problem('Elige el plan de la licencia.');
@@ -150,63 +146,8 @@ final class LicenseService
 		);
 	}
 
-	/** Tipo de licencia con su único dato propio: periodo, duración de la prueba o meses de actualizaciones. */
-	private function termsInput(array $input): array
-	{
-		$type = Input::choice($input, 'license_type', LicenseTerms::TYPES);
-		$sent = [];
-		foreach (['billing_period', 'trial_duration', 'updates_months'] as $field) {
-			$value = $input[$field] ?? '';
-			if (!is_string($value) && !is_int($value)) {
-				throw new Problem('Revisa las condiciones de la licencia.');
-			}
-			$sent[$field] = trim((string) $value);
-		}
-		$terms = [
-			'license_type' => $type,
-			'billing_period' => null,
-			'trial_duration' => null,
-			'updates_months' => null,
-		];
-		if ($type === 'subscription') {
-			if (!in_array($sent['billing_period'], LicenseTerms::BILLING_PERIODS, true)) {
-				throw new Problem('Elige el periodo de la suscripción: mensual, trimestral, semestral o anual.');
-			}
-			$terms['billing_period'] = $sent['billing_period'];
-		} elseif ($type === 'trial') {
-			if (!in_array($sent['trial_duration'], LicenseTerms::TRIAL_DURATIONS, true)) {
-				throw new Problem('Elige la duración de la prueba: 15 días, 1 mes o 3 meses.');
-			}
-			$terms['trial_duration'] = $sent['trial_duration'];
-		} else {
-			$months =
-				$sent['updates_months'] === ''
-					? (string) LicenseTerms::DEFAULT_UPDATES_MONTHS
-					: $sent['updates_months'];
-			if (!in_array($months, array_map('strval', LicenseTerms::UPDATES_MONTHS), true)) {
-				throw new Problem('Elige los meses de actualizaciones de la licencia perpetua: 0, 6 o 12.');
-			}
-			$terms['updates_months'] = (int) $months;
-		}
-		// Un dato de otro tipo de licencia nunca se ignora en silencio.
-		if ($type !== 'subscription' && $sent['billing_period'] !== '') {
-			throw new Problem('El periodo de cobro solo aplica a las suscripciones.');
-		}
-		if ($type !== 'trial' && $sent['trial_duration'] !== '') {
-			throw new Problem('La duración de prueba solo aplica a las licencias de prueba.');
-		}
-		if ($type !== 'perpetual' && $sent['updates_months'] !== '') {
-			throw new Problem('Los meses de actualizaciones solo aplican a las licencias perpetuas.');
-		}
-		return $terms;
-	}
-
 	public function change(Actor $actor, string $operationId, string $id, string $action, array $input): array
 	{
-		// Estas dos operaciones del motor anterior no siguen funcionando con sus reglas viejas: se rechazan siempre.
-		if (isset(self::PENDING[$action])) {
-			throw new Problem(self::PENDING[$action]);
-		}
 		if (!in_array($action, ['features', 'reissue', 'revoke'], true)) {
 			throw new Problem('La operación no existe.', 404);
 		}

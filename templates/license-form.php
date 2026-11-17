@@ -299,7 +299,8 @@ $priceAttributes = function (array $plan): string {
 						<li>El pago de alta queda en el historial de la licencia, en MXN</li>
 					</ul>
 					<div class="note-box">
-						La renovación de suscripciones y la compra de mantenimiento estarán disponibles próximamente.
+						Después de emitirla, el detalle de la licencia permite renovarla, convertir una prueba, cambiar de
+						plan, comprar mantenimiento o editar su periodo inicial mientras no se active.
 					</div>
 					<p class="small text-secondary mt-4 mb-0">
 						El código 3-4-4-4 solo se muestra a cuentas con permiso especial. Su consulta posterior requiere

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
-use AdelPos\License\Application\{Actor, LicenseService};
+use AdelPos\License\Application\Actor;
 use AdelPos\License\Domain\{Problem, Uuid};
 use AdelPos\License\Infrastructure\Migrator;
 use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
@@ -461,22 +461,16 @@ final class AdministrationTest extends TestCase
 		$app->auth->verifyMfa($pending3, $recovery, '127.0.0.1');
 	}
 
-	public function testMaintenanceIsRejectedUntilItsPhaseAndRenewalLeftTheGenericChange(): void
+	public function testTheCommercialCycleLeftTheGenericChangeOfTheLicense(): void
 	{
 		$app = $this->fixture->app;
 		$subscription = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput('subscription'));
 		$perpetual = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput());
 		$trial = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput('trial'));
-		// La compra de mantenimiento del motor anterior se rechaza con cualquier tipo de licencia (llega en la
-		// Fase 6). La renovación ya no es un cambio genérico: la registra CommercialService (Fase 3).
+		// La renovación y el mantenimiento del motor anterior ya no son cambios genéricos de la licencia: los
+		// registra CommercialService, con su pago y sus fechas (etapa 3, fases 3 y 6).
 		foreach ([$subscription, $perpetual, $trial] as $issued) {
-			try {
-				$app->licenses->change($this->actor, Uuid::create(), $issued['id'], 'renew', ['version' => 1]);
-				self::fail('The generic change accepted a renewal');
-			} catch (Problem $error) {
-				self::assertSame(404, $error->status);
-			}
-			foreach (['maintenance'] as $action) {
+			foreach (['renew', 'maintenance'] as $action) {
 				try {
 					$app->licenses->change($this->actor, Uuid::create(), $issued['id'], $action, [
 						'version' => 1,
@@ -484,10 +478,9 @@ final class AdministrationTest extends TestCase
 						'reason' => 'Compra',
 						'reference' => 'TEST-002',
 					]);
-					self::fail('Accepted: ' . $action);
+					self::fail('The generic change accepted: ' . $action);
 				} catch (Problem $error) {
-					self::assertSame(LicenseService::PENDING[$action], $error->getMessage());
-					self::assertStringContainsString('próximamente', $error->getMessage());
+					self::assertSame(404, $error->status, $action);
 				}
 			}
 			$license = $app->read->license($issued['id']);

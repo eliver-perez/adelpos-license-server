@@ -12,6 +12,8 @@ $notices = [
 	'convert' => 'Conversión registrada con su pago. Si la prueba estaba activada, la computadora recibe una revisión nueva.',
 	'plan' => 'Cambio de plan registrado. Si se programó una reducción, se muestra en «Cambio programado».',
 	'scheduled-cancel' => 'Cambio programado cancelado. La licencia conserva su plan y sus cupos.',
+	'maintenance' => 'Mantenimiento registrado con su pago. Se firmó una revisión nueva para la computadora activa.',
+	'terms' => 'Periodo inicial actualizado. Las fechas se fijan al activar la licencia.',
 ];
 $scheduled = $license['scheduled'];
 $activated = $license['period_starts_at'] !== null;
@@ -339,16 +341,36 @@ $termNotes = [
 					<button class="btn btn-primary">Revisar cambio de plan</button>
 				</form>
 			<?php endif; ?>
-			<?php
-			// PENDIENTE etapa 3: formularios de mantenimiento y de edición del periodo inicial.
-			?>
-			<?php if ($license['license_type'] === 'perpetual' || !$activated): ?>
-				<section class="panel form-panel mb-4">
-					<span class="eyebrow">CICLO COMERCIAL</span>
-					<h2 class="mt-3">Disponible próximamente</h2>
+			<?php if ($license['license_type'] === 'perpetual' && $activated): ?>
+				<form
+					class="panel form-panel stack-form mb-4"
+					id="maintenance-form"
+					method="get"
+					action="/admin/licenses/<?= V::escape($licenseId) ?>/maintenance"
+				>
+					<span class="eyebrow">MANTENIMIENTO</span>
+					<h2>Comprar 12 meses de actualizaciones</h2>
 					<p class="text-secondary small mb-0">
-						La compra de mantenimiento y la edición del periodo inicial todavía no están disponibles.
+						Se cuentan desde la fecha posterior entre la fecha de pago y el fin actual de las actualizaciones.
 					</p>
+					<label>
+						Fecha de pago <span class="optional">vacía: este momento</span>
+						<input class="form-control mt-2" type="datetime-local" name="paid_at">
+					</label>
+					<button class="btn btn-primary">Revisar mantenimiento</button>
+				</form>
+			<?php endif; ?>
+			<?php if (!$activated): ?>
+				<section class="panel form-panel mb-4" id="initial-terms">
+					<span class="eyebrow">PERIODO INICIAL</span>
+					<h2>Editar antes de activar</h2>
+					<p class="text-secondary small">
+						Cambia el tipo, el periodo o la duración, los meses de actualizaciones, el plan y los cupos. Las
+						fechas se fijan al activarla.
+					</p>
+					<a class="btn btn-outline-primary" href="/admin/licenses/<?= V::escape($licenseId) ?>/terms">
+						Editar el periodo inicial
+					</a>
 				</section>
 			<?php endif; ?>
 			<section class="panel form-panel mt-4">

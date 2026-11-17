@@ -742,6 +742,223 @@ final class CommercialService
 		];
 	}
 
+	/** Datos de una compra de mantenimiento: la versión, la fecha de pago, el monto y las notas. */
+	public static function maintenanceInput(array $input): array
+	{
+		return [
+			'version' => (int) ($input['version'] ?? 0),
+			'reference' => Input::text($input, 'reference', 190, false),
+			'note' => Input::text($input, 'reason', 500, false),
+		] + Payments::input($input);
+	}
+
+	/**
+	 * Compra de mantenimiento de una perpetua activada (contrato §5.5 y decisión 4 del propietario):
+	 * 12 meses más de actualizaciones, desde la fecha posterior entre la fecha de pago y el fin
+	 * vigente. Sugiere el precio de mantenimiento anual del plan y firma una revisión nueva.
+	 */
+	public function buyMaintenance(Actor $actor, string $operationId, string $licenseId, array $input): array
+	{
+		$request = self::maintenanceInput($input);
+		return $this->operations->run(
+			$actor,
+			self::ROLES,
+			$operationId,
+			'license.maintenance',
+			[$licenseId, $request],
+			function () use ($actor, $operationId, $licenseId, $request): array {
+				$license = $this->lock($licenseId, $request['version']);
+				$plan = $this->planMaintenance($license, $request);
+				if ($request['amount'] === null) {
+					throw new Problem('Escribe el monto cobrado.');
+				}
+				$dates = $plan['dates'];
+				$this->db->execute(
+					'UPDATE licenses
+						SET updates_until=?,anchor_day=?,anchor_local_time=?,row_version=row_version+1,updated_at=?
+						WHERE license_id=?',
+					[
+						CalendarPeriod::sql($dates['updates_until']),
+						$dates['anchor_day'],
+						$dates['anchor_local_time'],
+						$this->clock->sql(),
+						$license['license_id'],
+					],
+				);
+				$this->payments->record($actor, $operationId, $license['license_id'], [
+					'concept' => 'maintenance',
+					'term' => 'maintenance',
+					'plan_id' => $license['plan_id'],
+					'paid_at' => $plan['paid_at'],
+					'amount' => $request['amount'],
+					'catalog' => $plan['catalog'],
+					'credit' => 0,
+					'reason' => $request['reason'],
+					'reference' => $request['reference'],
+					'covers' => [$dates['updates_from'], $dates['updates_until']],
+				]);
+				$signed = $this->publisher->commercialChange($license['license_id'], false);
+				$id = Uuid::text($license['license_id']);
+				$this->history->record(
+					$id,
+					$actor->id,
+					'license.maintenance_bought',
+					$request['note'],
+					$request['reference'],
+					[
+						'paid_at' => CalendarPeriod::utc($plan['paid_at']),
+						'previous_updates_until' => CalendarPeriod::utc(
+							new \DateTimeImmutable($license['updates_until'], self::utc()),
+						),
+						'updates_until' => CalendarPeriod::utc($dates['updates_until']),
+						'from_payment' => $dates['from_payment'],
+						'revisions_signed' => $signed,
+					],
+				);
+				return [
+					'id' => $id,
+					'updates_until' => CalendarPeriod::utc($dates['updates_until']),
+					'revisions_signed' => $signed,
+				];
+			},
+		);
+	}
+
+	/** Vista previa de buyMaintenance(): el fin nuevo de las actualizaciones y el monto sugerido. */
+	public function quoteMaintenance(string $licenseId, array $input): array
+	{
+		return $this->planMaintenance($this->read($licenseId), self::maintenanceInput($input));
+	}
+
+	private function planMaintenance(array $license, array $request): array
+	{
+		if ($license['commercial_status'] !== 'issued') {
+			throw new Problem('Una licencia revocada no puede comprar mantenimiento.');
+		}
+		if ($license['license_type'] !== 'perpetual') {
+			throw new Problem(
+				'El mantenimiento es solo de las licencias perpetuas: en una suscripción o una prueba, las ' .
+					'actualizaciones terminan con su vencimiento.',
+			);
+		}
+		if ($license['period_starts_at'] === null) {
+			throw new Problem(
+				'Una perpetua sin activar todavía no necesita mantenimiento: sus actualizaciones cuentan desde la activación.',
+			);
+		}
+		$zone = $this->zone($license);
+		$paidAt = $this->payments->paidAt($request['paid_at'], $zone, $license['license_id']);
+		$dates = CalendarPeriod::maintenance(
+			new \DateTimeImmutable($license['updates_until'], self::utc()),
+			$paidAt,
+			$zone,
+			(int) $license['anchor_day'],
+			$license['anchor_local_time'],
+		);
+		$catalog = null;
+		if (!$license['plan_custom']) {
+			$catalog = LicenseTerms::catalogPrice($this->plan($license['plan_id']), 'maintenance');
+		}
+		return [
+			'license' => $license,
+			'time_zone' => $zone,
+			'paid_at' => $paidAt,
+			'dates' => $dates,
+			'catalog' => $catalog,
+			'suggested' => $catalog,
+		];
+	}
+
+	/** Condiciones nuevas del periodo inicial: tipo con su condición, y plan y cupos. */
+	public static function initialTermsInput(array $input): array
+	{
+		return [
+			'version' => (int) ($input['version'] ?? 0),
+			'terms' => LicenseTerms::fromInput($input),
+			'target' => self::targetInput($input),
+			'note' => Input::text($input, 'reason', 500, false),
+		];
+	}
+
+	/**
+	 * Edita el periodo inicial de una licencia sin activar (contrato §5.2 y propuesta V1.1 n.º 11):
+	 * el tipo, el periodo o la duración, los meses de actualizaciones, el plan y los cupos. No hay
+	 * fechas que mover ni revisiones que firmar: todo se fija al activarla. No registra un pago.
+	 */
+	public function editInitialTerms(Actor $actor, string $operationId, string $licenseId, array $input): array
+	{
+		$request = self::initialTermsInput($input);
+		return $this->operations->run(
+			$actor,
+			self::ROLES,
+			$operationId,
+			'license.initial_terms',
+			[$licenseId, $request],
+			function () use ($actor, $licenseId, $request): array {
+				$license = $this->lock($licenseId, $request['version'], $request['target']['plan_id'], $plan);
+				if ($license['commercial_status'] !== 'issued') {
+					throw new Problem('Una licencia revocada no se puede editar.');
+				}
+				if ($license['period_starts_at'] !== null) {
+					throw new Problem(
+						'La licencia ya está activada: su periodo inicial ya empezó. Usa la renovación, la conversión ' .
+							'o el cambio de plan.',
+					);
+				}
+				$terms = $request['terms'];
+				$target = $this->target($request['target'], $plan);
+				$before = [
+					'license_type' => $license['license_type'],
+					'billing_period' => $license['billing_period'],
+					'trial_duration' => $license['trial_duration'],
+					'updates_months' => $license['updates_months'] === null ? null : (int) $license['updates_months'],
+					'plan_id' => $license['plan_id'],
+					'plan_custom' => (bool) $license['plan_custom'],
+				];
+				$after = $terms + ['plan_id' => $target['plan']['plan_id'], 'plan_custom' => $target['custom']];
+				foreach (array_keys(LicenseTerms::LIMITS) as $limit) {
+					$before[$limit] = (int) $license[$limit];
+					$after[$limit] = $target['limits'][$limit];
+				}
+				if ($before === $after) {
+					throw new Problem('El periodo inicial no cambió.');
+				}
+				$this->db->execute(
+					'UPDATE licenses
+						SET license_type=?,billing_period=?,trial_duration=?,updates_months=?,grace_days=?,plan_id=?,
+							plan_name=?,plan_custom=?,cash_registers=?,order_takers=?,kitchen_displays=?,
+							row_version=row_version+1,updated_at=?
+						WHERE license_id=?',
+					[
+						$terms['license_type'],
+						$terms['billing_period'],
+						$terms['trial_duration'],
+						$terms['updates_months'],
+						LicenseTerms::graceDays($terms['license_type']),
+						$target['plan']['plan_id'],
+						$target['plan']['display_name'],
+						$target['custom'] ? 1 : 0,
+						$target['limits']['cash_registers'],
+						$target['limits']['order_takers'],
+						$target['limits']['kitchen_displays'],
+						$this->clock->sql(),
+						$license['license_id'],
+					],
+				);
+				$changes = [];
+				foreach ($after as $field => $value) {
+					if ($before[$field] !== $value) {
+						$changes[$field] = ['before' => $before[$field], 'after' => $value];
+					}
+				}
+				$this->history->record($licenseId, $actor->id, 'license.initial_terms_edited', $request['note'], '', [
+					'changes' => $changes,
+				]);
+				return ['id' => $licenseId];
+			},
+		);
+	}
+
 	/**
 	 * Bloquea la licencia para un cambio comercial: primero su producto, después el plan de destino
 	 * si lo hay y por último la licencia, en el mismo orden que la emisión y el editor de planes.
