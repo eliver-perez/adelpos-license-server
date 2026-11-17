@@ -33,6 +33,7 @@
 						'/admin/offline' => ['Solicitudes sin internet', '⇄'],
 						'/admin/customers' => ['Clientes', '◎'],
 						'/admin/products' => ['Productos', '◇'],
+						'/admin/plans' => ['Planes', '▤'],
 						'/admin/audit' => ['Auditoría', '≡'],
 					];
 					?>

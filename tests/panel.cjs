@@ -412,6 +412,9 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			'/admin/customers',
 			'/admin/products',
 			'/admin/products/adel_pos',
+			'/admin/plans',
+			'/admin/plans/elemental',
+			'/admin/plans/new',
 			'/admin/licenses',
 			'/admin/offline',
 			'/admin/audit',
@@ -476,6 +479,11 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		});
 		assert.equal(response.status(), 403);
 		response = await viewer.request.get('/admin/users');
+		assert.equal(response.status(), 403);
+		// El catálogo de planes se consulta con cualquier cuenta, pero solo el superadministrador lo edita.
+		response = await viewer.request.get('/admin/plans');
+		assert.equal(response.status(), 200);
+		response = await viewer.request.get('/admin/plans/new');
 		assert.equal(response.status(), 403);
 		response = await viewer.request.get(signedDownload);
 		assert.equal(response.status(), 403);

@@ -25,7 +25,7 @@ consoleRun(function (): void {
 		'products' => 'SELECT,INSERT,UPDATE',
 		'product_capabilities' => 'SELECT,INSERT,UPDATE',
 		'capability_dependencies' => 'SELECT,INSERT,DELETE',
-		'plans' => 'SELECT',
+		'plans' => 'SELECT,INSERT,UPDATE',
 		'licenses' => 'SELECT,INSERT,UPDATE',
 		'license_features' => 'SELECT,INSERT,UPDATE',
 		'license_credentials' => 'SELECT,INSERT,UPDATE',

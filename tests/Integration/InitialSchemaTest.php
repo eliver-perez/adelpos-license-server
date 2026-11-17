@@ -25,6 +25,7 @@ final class InitialSchemaTest extends TestCase
 		'003_contrato_v1.sql',
 		'004_retiro_de_lo_heredado.sql',
 		'005_precios_y_pagos.sql',
+		'006_editor_de_planes.sql',
 	];
 	private \PDO $server;
 	private string $dsn;

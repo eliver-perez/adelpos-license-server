@@ -154,15 +154,27 @@ final class ReadRepository
 		) ?? throw new Problem('No se encontró el cliente.', 404);
 	}
 
-	/** Catálogo de planes con sus precios opcionales, del más pequeño al más grande. */
-	public function plans(): array
+	/**
+	 * Catálogo de planes con sus precios opcionales, del más pequeño al más grande. Por omisión solo
+	 * los que se ofrecen; con $archived también los archivados, que ya no se ofrecen al emitir.
+	 */
+	public function plans(bool $archived = false): array
 	{
 		return $this->db->all(
-			'SELECT plan_id,display_name,cash_registers,order_takers,kitchen_displays,
-					price_monthly,price_quarterly,price_semiannual,price_annual,price_perpetual,price_maintenance
-				FROM plans
-				ORDER BY cash_registers,order_takers,kitchen_displays,plan_id',
+			'SELECT p.plan_id,p.display_name,p.cash_registers,p.order_takers,p.kitchen_displays,
+					p.price_monthly,p.price_quarterly,p.price_semiannual,p.price_annual,p.price_perpetual,
+					p.price_maintenance,p.state,p.row_version,
+					(SELECT COUNT(*) FROM licenses l WHERE l.plan_id=p.plan_id) AS license_count
+				FROM plans p' .
+				($archived ? '' : " WHERE p.state='active'") .
+				' ORDER BY p.cash_registers,p.order_takers,p.kitchen_displays,p.plan_id',
 		);
+	}
+
+	public function plan(string $id): array
+	{
+		return $this->db->one('SELECT * FROM plans WHERE plan_id=?', [$id]) ??
+			throw new Problem('No se encontró el plan.', 404);
 	}
 
 	public function products(): array

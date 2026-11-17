@@ -1,6 +1,6 @@
 # Modelo de datos
 
-Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
+Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`, y [`006_editor_de_planes.sql`](database/migrations/006_editor_de_planes.sql), con el estado y la versión de cada plan. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
 Al cerrar la etapa 2, el esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0 y ya no tiene nada del contenido firmado anterior. La sección 9 enumera lo que cambia en las etapas siguientes.
 
@@ -43,7 +43,7 @@ El esquema tiene **32 tablas**, más `schema_migrations`, que crea el migrador.
 | `customers` | Clientes (nombre, razón social, RFC opcional en `tax_id`) y su zona horaria IANA en `time_zone`, con la que se calculan las fechas de sus licencias | `state` en `active`, `archived`; `row_version` para formularios obsoletos; `time_zone` no vacía, `America/Monterrey` por omisión (el servicio la valida contra la lista de zonas de PHP) | `CatalogService` |
 | `customer_contacts` | Contacto principal | Uno por cliente | `CatalogService` |
 | `products` | Productos que se licencian | `state` en `active`, `archived` | `CatalogService` |
-| `plans` | Catálogo de planes del contrato (sección 11): nombre, cupos de cajas, comanderos y KDS, y precios opcionales en MXN: mensual, trimestral, semestral, anual, perpetua y mantenimiento anual | Cupos de 0 a 999 (`chk_plan_limits`); nombre no vacío; precios vacíos o no negativos, `DECIMAL(10,2)` (`chk_plan_prices`). Un plan usado por una licencia o un pago no se puede borrar | Solo lectura para la aplicación; su editor llega en la Fase 2 de la etapa 3 |
+| `plans` | Catálogo de planes del contrato (sección 11): nombre, cupos de cajas, comanderos y KDS, y precios opcionales en MXN: mensual, trimestral, semestral, anual, perpetua y mantenimiento anual | Cupos de 0 a 999 (`chk_plan_limits`); nombre no vacío; precios vacíos o no negativos, `DECIMAL(10,2)` (`chk_plan_prices`); `state` en `active`, `archived` (`chk_plan_state`); identificador con el formato que se firma, `^[a-z][a-z0-9_]{1,63}$` (`chk_plan_identifier`); `row_version` para formularios obsoletos. Un plan usado por una licencia o un pago no se puede borrar; la aplicación tampoco tiene permiso de borrar | `PlanService`, solo el superadministrador |
 | `product_capabilities` | Módulos de cada producto | PK producto y clave | `CatalogService` |
 | `capability_dependencies` | Dependencias entre módulos del mismo producto | Llaves foráneas al mismo catálogo; un módulo no puede requerirse a sí mismo. El servicio impide los ciclos. | `CatalogService` |
 
@@ -139,10 +139,10 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 
 | Permiso | Tablas |
 | --- | --- |
-| Solo `SELECT` | `schema_migrations`, `signing_keys`, `signing_scopes`, `plans` |
+| Solo `SELECT` | `schema_migrations`, `signing_keys`, `signing_scopes` |
 | `SELECT, INSERT` | `audit_events`, `license_changes`, `license_payments`, `license_revisions`, `offline_requests`, `offline_decisions`, `license_transfers`, `license_administrative_changes`, `license_documents` |
 | `SELECT, UPDATE` | `security_state`, `audit_heads` |
-| `SELECT, INSERT, UPDATE` | `admin_users`, `admin_recovery_codes`, `admin_trusted_devices`, `admin_operations`, `customers`, `customer_contacts`, `products`, `product_capabilities`, `licenses`, `license_features`, `license_credentials`, `license_requests` |
+| `SELECT, INSERT, UPDATE` | `admin_users`, `admin_recovery_codes`, `admin_trusted_devices`, `admin_operations`, `customers`, `customer_contacts`, `products`, `plans`, `product_capabilities`, `licenses`, `license_features`, `license_credentials`, `license_requests` |
 | `SELECT, INSERT, DELETE` | `capability_dependencies`, `admin_permission_grants` |
 | `SELECT, INSERT, UPDATE, DELETE` | `admin_sessions`, `rate_limit_buckets`, `activation_challenges` |
 | `SELECT, INSERT` y `UPDATE` solo de `state`, `ended_at`, `current_revision_id`, `app_version` | `activations` |
@@ -189,7 +189,6 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 
 | Elemento del esquema | Estado al cerrar la etapa 2 | Etapa |
 | --- | --- | --- |
-| `plans` | Catálogo de solo lectura para la aplicación | 3: editor de planes y propagación a las licencias existentes |
 | `activation_challenges.action` (`activate`, `refresh`, `deactivate`) | Sin `transfer` | 4: transferencia por autoservicio |
 | `license_transfers` | Registra las transferencias y retiros que hace el propietario desde el panel | 4: transferencias por autoservicio, su confirmación y las alertas |
 | `product_capabilities`, `capability_dependencies`, `license_features` | Módulos del producto. Se firman como `features` del contrato, que en V1 va vacío para `adel_pos` | Su uso comercial se define más adelante |

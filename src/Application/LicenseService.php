@@ -8,8 +8,8 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 final class LicenseService
 {
 	// PENDIENTE etapa 3: renovación con fecha de pago y regla de tolerancia, conversión de prueba a pago,
-	// compra de mantenimiento, edición del periodo inicial de una suscripción sin activar, y editor de
-	// planes con su propagación a las licencias existentes (contrato, secciones 5.2 a 5.5 y 11).
+	// compra de mantenimiento y edición del periodo inicial de una suscripción sin activar (contrato,
+	// secciones 5.2 a 5.5). El editor de planes está en PlanService.
 	public const PENDING = [
 		'renew' => 'La renovación de suscripciones estará disponible próximamente.',
 		'maintenance' => 'La compra de mantenimiento estará disponible próximamente.',
@@ -86,6 +86,9 @@ final class LicenseService
 				$plan = $this->db->one('SELECT * FROM plans WHERE plan_id=? FOR SHARE', [$planId]);
 				if (!$plan) {
 					throw new Problem('El plan elegido no existe en el catálogo.');
+				}
+				if ($plan['state'] !== 'active') {
+					throw new Problem('El plan elegido está archivado y ya no se ofrece.');
 				}
 				$custom = false;
 				foreach (array_keys(LicenseTerms::LIMITS) as $key) {

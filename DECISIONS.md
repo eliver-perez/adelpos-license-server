@@ -333,3 +333,18 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 8 | `license_payments.operation_id` es único y llave foránea a `admin_operations`: un pago pertenece a una operación del panel, y una operación registra a lo sumo un pago. | Idempotencia por identificador de operación, también en la base. |
 | 9 | El formulario de emisión pide el monto, lo sugiere a partir de los precios del plan y del plazo, y el detalle de la licencia muestra sus pagos. | Como en la etapa 2 (Fase 2, decisión 3): el panel recibe ya lo que la emisión nueva hace necesario, para que Playwright siga pasando en cada fase. |
 | 10 | Sin dependencias nuevas. | — |
+
+### Fase 2 — Editor de planes y propagación de aumentos
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `Application\PlanService` crea, edita y archiva planes, solo para el superadministrador. La cuenta de la aplicación recibe `INSERT` y `UPDATE` sobre `plans`, pero no `DELETE`: un plan nunca se borra, se archiva. Archivar es reversible («Volver a ofrecer»). | Especificación, Fase 2, punto 1. Un plan que nadie usa tampoco se borra: los pagos y el historial lo nombran. |
+| 2 | La propagación es **de todo o nada**: el plan, las licencias, sus revisiones y la auditoría van en una sola transacción. Si falla a la mitad (por ejemplo, falta la llave de firma), no cambia nada, ni el plan; la misma operación se puede reintentar y se aplica completa. | Especificación, Fase 2, punto 4. Es la opción más simple de razonar; los lotes reanudables solo harían falta con muchos miles de licencias por plan. |
+| 3 | Solo propagan los cupos que **subieron en el catálogo**, y en cada licencia el número nuevo solo se aplica si es mayor que el suyo. Una licencia con un número mayor que el del plan nunca baja. | Decisión 9 del propietario y propuesta V1.1 n.º 21. Las dos comprobaciones se vigilan por separado. |
+| 4 | Siguen el plan: licencias no personalizadas ni revocadas; perpetuas; sin activar; y suscripciones y pruebas con `ahora < expires_at + grace_days × 24 h`. En el límite exacto de la tolerancia ya están vencidas. | Especificación, Fase 2, punto 2, con el límite exclusivo del contrato §5.6. |
+| 5 | El nombre firmado del plan se toma del catálogo **cada vez que se firma**, por el motivo que sea (`RevisionPublisher`). Cambiar el nombre no firma por sí solo. | Especificación, Fase 2, punto 3. |
+| 6 | El orden de bloqueo es producto, plan y licencias (por `license_id`), y la cabeza de auditoría al final, como en el resto de las operaciones. | Evita bloqueos cruzados con la emisión, que bloquea el plan antes de crear la licencia. |
+| 7 | Cada licencia actualizada deja su cambio en `license_changes` («Aumento del catálogo aplicado»). La auditoría del plan guarda cada campo con su valor anterior y el nuevo, los cupos que subieron, a qué licencias se aplicó y cuántas licencias y revisiones cambiaron. | Especificación, Fase 2, puntos 1 y 5. |
+| 8 | El identificador de un plan tiene en la base el formato con que se firma (`chk_plan_identifier`), igual que en el servicio. | El validador del contenido firmado lo exige; un plan con otro identificador dejaría licencias imposibles de firmar. |
+| 9 | Pantallas mínimas: «Planes» en la navegación, con la lista, el formulario del plan, la elección «solo licencias nuevas» o «también las existentes» (por omisión, solo nuevas) y el resultado visible de la propagación. | Especificación, Fase 2, punto 5. Las pantallas definitivas son de la etapa 5. |
+| 10 | Sin dependencias nuevas. | — |

@@ -481,7 +481,8 @@ final class ContractDataModelTest extends TestCase
 		}
 		self::assertContains('updates_until', $columns('licenses'));
 
-		// The application account reads the plan catalog, records the application version and cannot touch identity or signed history.
+		// The application account edits the plan catalog (stage 3) but never deletes a plan, records the application
+		// version and cannot touch identity or signed history.
 		$denied = function (string $sql): int {
 			try {
 				$this->fixture->app->db->execute($sql);
@@ -492,14 +493,19 @@ final class ContractDataModelTest extends TestCase
 		};
 		self::assertSame(3, (int) $app->db->execute('SELECT COUNT(*) FROM plans')->fetchColumn());
 		self::assertSame(0, $denied("UPDATE activations SET app_version='0.13.0' WHERE 1=0"));
+		self::assertSame(0, $denied('UPDATE plans SET cash_registers=9 WHERE 1=0'));
+		self::assertSame(
+			0,
+			$denied(
+				"INSERT INTO plans(plan_id,display_name,cash_registers,order_takers,kitchen_displays,
+						created_at,updated_at)
+					SELECT 'otro','Otro',1,1,1,NOW(6),NOW(6) FROM DUAL WHERE 1=0",
+			),
+		);
 		foreach (
 			[
 				'UPDATE activations SET server_id=server_id WHERE 1=0' => 1143,
-				'UPDATE plans SET cash_registers=9 WHERE 1=0' => 1142,
 				'DELETE FROM plans WHERE 1=0' => 1142,
-				"INSERT INTO plans(plan_id,display_name,cash_registers,order_takers,kitchen_displays,
-						created_at,updated_at)
-					VALUES ('otro','Otro',1,1,1,NOW(6),NOW(6))" => 1142,
 				'UPDATE license_revisions SET status_reason=status_reason WHERE 1=0' => 1142,
 			]
 			as $sql => $code

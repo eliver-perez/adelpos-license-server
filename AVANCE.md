@@ -2174,3 +2174,50 @@ Se quitaron **23 reglas**, una a la vez, con `PaymentsTest`, `MoneyTest` o `Admi
 
 - Los precios todavía no se editan en el panel: el editor de planes es de la Fase 2.
 - La regla «la fecha de pago no es anterior al último pago de la licencia» se ejercita en la Fase 3, cuando una licencia ya tiene un pago anterior.
+
+---
+
+## Etapa 3 · Fase 2 — Editor de planes y propagación de aumentos (contrato §11 y decisión 9)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-2.1 Qué cambió
+
+- **Migración `006_editor_de_planes.sql`:** `plans.state` (`active` o `archived`), `plans.row_version` y el formato del identificador en la base.
+- **`Application\PlanService`**, solo para el superadministrador:
+  - crea un plan con su identificador, nombre, cupos y precios;
+  - edita nombre, cupos y precios, con bloqueo optimista por `row_version`;
+  - archiva un plan o lo vuelve a ofrecer. Un plan nunca se borra: la cuenta de la aplicación no tiene `DELETE` sobre `plans`.
+- **Propagación:** al guardar se elige «solo licencias nuevas» o «también las existentes que siguen este plan». Con la segunda, solo suben los cupos que subieron en el catálogo, y solo en licencias no personalizadas ni revocadas: perpetuas, sin activar, y suscripciones y pruebas vigentes o en tolerancia. Se firma una revisión para cada activación vigente. Todo va en una transacción: si algo falla a la mitad, no cambia nada.
+- **Nombre del plan:** `RevisionPublisher` toma el nombre del catálogo cada vez que firma, por cualquier motivo. Renombrar un plan no firma por sí solo.
+- **Emisión:** un plan archivado ya no se ofrece ni se acepta.
+- **Panel:** «Planes» en la navegación, con la lista de planes (cupos, precios y estado), el formulario del plan, la elección de a qué licencias aplica y el resultado: «Licencias actualizadas: N. Revisiones firmadas: M.».
+- **Auditoría:** `plan.created`, `plan.updated` (cada campo con su valor anterior y nuevo, los cupos que subieron y el resultado), `plan.archived`, `plan.restored`, y en el historial de cada licencia, «Aumento del catálogo aplicado».
+
+### E3-2.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/PlanCatalogTest.php` (nueva) | 8 | Crear, editar y archivar, y que un plan archivado no se ofrece; formato del identificador y estado en la base; permisos (operador y consulta reciben 403); propagación solo a nuevas y también a existentes, con la licencia sin activar que firma los números nuevos al activarse; cambio mixto (sube cajas y baja comanderos); una licencia con un número mayor que el del plan no baja; personalizadas, revocadas y vencidas sin tolerancia no cambian, con el límite exacto de la tolerancia; reintento idéntico; fallo a la mitad sin la llave de firma y reintento completo; nombre firmado al volver a firmar |
+| `tests/Installation.php` (nuevo) | — | Instalación sintética que activa en línea y lee el contenido firmado; la usan las pruebas de esta etapa |
+| `ContractDataModelTest` | — (cambia 1 aserción) | La cuenta de la aplicación ya inserta y actualiza planes; borrar sigue prohibido |
+| `tests/panel.cjs` | — | Las páginas del catálogo responden, y la cuenta de consulta las ve pero no puede crear planes |
+
+### E3-2.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **24 reglas** con `PlanCatalogTest`: permisos de crear, editar y archivar; propagar solo si se elige; solo aumentos del catálogo; nunca bajar una licencia; excluir personalizadas, revocadas y vencidas; límite exclusivo de la tolerancia; incluir sin activar y perpetuas; firmar al propagar; historial por licencia; formulario obsoleto; auditoría con valores anteriores y nuevos; plan archivado al emitir y en la lista; nombre firmado al volver a firmar; identificador en el servicio y en la base; estado en la base; sin permiso de borrar; y todo o nada al fallar.
+
+**23 se detectaron.** «Solo aumentos del catálogo» no: la comprobación de cada licencia la cubría, y al revés. Se agregaron dos aserciones que las distinguen: la auditoría registra solo los cupos que subieron, y una licencia con un número mayor que el del plan no baja. Ahora se detectan las dos.
+
+### E3-2.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 393 pruebas, 27 697 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 393 pruebas, 27 697 aserciones, todas OK |
+| Playwright | Panel y dispositivos de confianza OK |
+
+### E3-2.5 Pendientes que deja la fase
+
+- Los cambios de plan programados (Fase 5) que apunten a un plan con un aumento también deben subir sus números: se agrega en la Fase 5, cuando existan.
+- El recorrido completo del editor con Playwright (editar y propagar) es de la Fase 9.

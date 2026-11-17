@@ -436,6 +436,10 @@ final class Kernel
 				return;
 			}
 		}
+		if (str_starts_with($this->path, '/admin/plans')) {
+			$this->plans($method, $operationId);
+			return;
+		}
 		if ($this->path === '/admin/licenses' && $method === 'GET') {
 			$this->listing('licenses', 'Licencias');
 			return;
@@ -619,6 +623,55 @@ final class Kernel
 			'qr' => $qr,
 			'error' => $error,
 		]);
+	}
+
+	/**
+	 * Catálogo de planes (etapa 3, Fase 2). Cualquier cuenta lo consulta; solo el superadministrador
+	 * lo edita, y el servicio vuelve a comprobarlo.
+	 */
+	private function plans(string $method, string $operationId): void
+	{
+		if ($this->path === '/admin/plans' && $method === 'GET') {
+			$this->render('plans', ['title' => 'Planes', 'plans' => $this->app->read->plans(true)]);
+			return;
+		}
+		if ($this->path === '/admin/plans/new' && $method === 'GET') {
+			$this->actor->requireRole(['superadmin']);
+			$this->render('plan-form', ['title' => 'Nuevo plan', 'plan' => null]);
+			return;
+		}
+		if ($this->path === '/admin/plans/create' && $method === 'POST') {
+			$result = $this->app->plans->create($this->actor, $operationId, $_POST);
+			$this->redirect('/admin/plans/' . $result['id'] . '?notice=created');
+			return;
+		}
+		if (!preg_match('~^/admin/plans/([a-z][a-z0-9_]{1,63})(/state)?$~', $this->path, $matches)) {
+			throw new Problem('La página solicitada no existe.', 404);
+		}
+		if ($method === 'GET' && !isset($matches[2])) {
+			$this->render('plan-form', ['title' => 'Detalle del plan', 'plan' => $this->app->read->plan($matches[1])]);
+			return;
+		}
+		if ($method !== 'POST') {
+			throw new Problem('La página solicitada no existe.', 404);
+		}
+		if (isset($matches[2])) {
+			$state = Input::choice($_POST, 'state', ['active', 'archived']);
+			$this->app->plans->setState($this->actor, $operationId, $matches[1], $_POST);
+			$this->redirect(
+				'/admin/plans/' . $matches[1] . '?notice=' . ($state === 'archived' ? 'archived' : 'restored'),
+			);
+			return;
+		}
+		$result = $this->app->plans->update($this->actor, $operationId, $matches[1], $_POST);
+		$this->redirect(
+			'/admin/plans/' .
+				$matches[1] .
+				'?notice=saved&updated=' .
+				(int) $result['licenses_updated'] .
+				'&signed=' .
+				(int) $result['revisions_signed'],
+		);
 	}
 
 	private function listing(string $kind, string $title): void

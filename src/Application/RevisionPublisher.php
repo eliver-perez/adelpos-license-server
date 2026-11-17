@@ -28,6 +28,15 @@ final class RevisionPublisher
 		if (!$license || !$activation || (int) $license['revision_counter'] >= PHP_INT_MAX - 1) {
 			throw new \RuntimeException('Invalid publication state.');
 		}
+		// El nombre firmado del plan se actualiza cada vez que se firma, por el motivo que sea. Cambiar
+		// el nombre en el catálogo no firma por sí solo (etapa 3, Fase 2).
+		$catalogName = $this->db
+			->execute('SELECT display_name FROM plans WHERE plan_id=?', [$license['plan_id']])
+			->fetchColumn();
+		if (is_string($catalogName) && $catalogName !== $license['plan_name']) {
+			$this->db->execute('UPDATE licenses SET plan_name=? WHERE license_id=?', [$catalogName, $licenseId]);
+			$license['plan_name'] = $catalogName;
+		}
 		// El contador es global por licencia: cada firma lo aumenta y ningún número se reutiliza.
 		$revision = (int) $license['revision_counter'] + 1;
 		$now = $this->clock->sql();
@@ -65,8 +74,11 @@ final class RevisionPublisher
 		return ['revision' => $revision, 'revision_id' => Uuid::text($revisionId), 'jws' => $signed['jws']];
 	}
 
-	/** Vuelve a firmar las activaciones vigentes después de un cambio comercial o de una revocación. */
-	public function commercialChange(string $licenseId, bool $revoke): void
+	/**
+	 * Vuelve a firmar las activaciones vigentes después de un cambio comercial o de una revocación.
+	 * Devuelve cuántas revisiones firmó: una licencia sin activar no firma ninguna.
+	 */
+	public function commercialChange(string $licenseId, bool $revoke): int
 	{
 		$activations = $this->db->all(
 			"SELECT activation_id
@@ -86,6 +98,7 @@ final class RevisionPublisher
 		}
 		// Una activación terminada conserva para siempre su revisión de cierre: un cambio
 		// posterior nunca vuelve a autorizar a una computadora que ya salió.
+		return count($activations);
 	}
 
 	/** Contenido de la licencia, con los campos en el orden del contrato. */
