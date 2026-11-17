@@ -12,13 +12,6 @@ if ($actor->role === 'superadmin' && $canChange) {
 		}
 	}
 }
-// Las transferencias que hizo el propietario desde el panel. Las de autoservicio no son sin internet.
-$ownerTransfers = [];
-foreach ($license['transfers'] as $transfer) {
-	if ($transfer['via'] === 'owner') {
-		$ownerTransfers[] = $transfer;
-	}
-}
 ?>
 <section class="panel form-panel mt-4">
 	<h2>Solicitudes y recuperaciones sin internet</h2>
@@ -30,28 +23,16 @@ foreach ($license['transfers'] as $transfer) {
 			<small class="cell-sub"><?= V::escape(V::date($request['imported_at'])) ?></small>
 		</div>
 	<?php endforeach; ?>
-	<?php foreach ($ownerTransfers as $transfer): ?>
-		<div class="note-box mt-3">
-			<strong>Recuperación autorizada</strong>
-			<p class="mt-2 mb-1"><?= V::escape($transfer['reason']) ?></p>
-			<small>
-				<?= V::escape($transfer['actor_name']) ?> · <?= V::escape(V::date($transfer['created_at'])) ?>
-			</small>
-			<div class="small mono mt-2">
-				Origen: <?= V::escape($transfer['outgoing_text']) ?><br>
-				Destino: <?= V::escape($transfer['incoming_text'] ?? 'Plaza liberada para una activación posterior') ?>
-			</div>
-		</div>
-	<?php endforeach; ?>
-	<?php if (!$license['offline'] && !$ownerTransfers): ?>
-		<p class="text-secondary small">No hay operaciones sin internet registradas.</p>
+	<?php if (!$license['offline']): ?>
+		<p class="text-secondary small">No hay solicitudes sin internet registradas.</p>
 	<?php endif; ?>
 	<?php foreach ($releasable as $activation): ?>
 		<details class="mt-4">
 			<summary>Recuperar plaza por equipo averiado</summary>
 			<p class="small text-secondary mt-3">
 				Retira la activación actual y deja disponible la licencia para un nuevo equipo. Para transferir
-				directamente, importa y revisa la solicitud del destino.
+				directamente, importa y revisa la solicitud del destino. Queda en «Transferencias» como una
+				transferencia del propietario.
 			</p>
 			<form class="stack-form" method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/release">
 				<?php V::fields($csrf); ?>

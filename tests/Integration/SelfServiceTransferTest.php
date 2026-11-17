@@ -2,10 +2,8 @@
 declare(strict_types=1);
 namespace AdelPos\License\Tests\Integration;
 
-use AdelPos\License\App;
-use AdelPos\License\Application\Actor;
-use AdelPos\License\Domain\{ApiProblem, ApiResponse, CalendarPeriod, Problem, Protocol, Uuid};
-use AdelPos\License\Tests\{ApiRace, ContractSchemas, FrozenClock, MySqlFixture};
+use AdelPos\License\Domain\{ApiProblem, ApiResponse, Problem, Uuid};
+use AdelPos\License\Tests\{ApiRace, MySqlFixture, TransferScenario};
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -15,148 +13,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class SelfServiceTransferTest extends TestCase
 {
-	/** Las licencias se activan a las 06:00:00.123456 de Monterrey: los microsegundos deben sobrevivir. */
-	private const START = '2026-09-25T12:00:00.123456Z';
-
-	private MySqlFixture $fixture;
-	private App $app;
-	private FrozenClock $clock;
-	private Actor $actor;
-	private string $customer;
-
-	protected function setUp(): void
-	{
-		if (!getenv('TEST_MYSQL_DSN')) {
-			self::markTestSkipped('Requires isolated MySQL 8.');
-		}
-		$this->clock = new FrozenClock(new \DateTimeImmutable(self::START));
-		$this->fixture = new MySqlFixture($this->clock);
-		$this->app = $this->fixture->app;
-		$keys = $this->fixture->signingKeys($this->clock);
-		$keys->generate('transfer-test-key', 'license');
-		$keys->activate('transfer-test-key', 'Isolated test setup');
-		$this->actor = new Actor(
-			$this->app->auth->bootstrap('admin@example.test', 'Admin', 'Fixture-Password-Only-2026!'),
-			'superadmin',
-		);
-		$this->customer = $this->app->catalog->saveCustomer($this->actor, Uuid::create(), null, [
-			'name' => 'Restaurante sintético',
-			'contact_name' => 'Prueba',
-			'email' => '',
-			'state' => 'active',
-		])['id'];
-	}
-
-	protected function tearDown(): void
-	{
-		if (isset($this->fixture)) {
-			$this->fixture->destroy();
-		}
-	}
-
-	/** @return array{id: string, secret: string} */
-	private function issue(string $type = 'perpetual'): array
-	{
-		return $this->app->licenses->issue($this->actor, Uuid::create(), [
-			'customer_id' => $this->customer,
-			'product_id' => 'adel_pos',
-			...MySqlFixture::terms($type),
-		]);
-	}
-
-	/** Una computadora principal sintética: su identidad y su llave de licencias. */
-	private function computer(): array
-	{
-		$pair = sodium_crypto_sign_keypair();
-		return [
-			'id' => Uuid::create(),
-			'public' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
-			'secret' => sodium_crypto_sign_secretkey($pair),
-		];
-	}
-
-	/** Petición firmada de la API: activar o transferir con el código, o consultar y desactivar una activación. */
-	private function request(
-		string $action,
-		array $computer,
-		?string $licenseKey = null,
-		?string $activation = null,
-		string $product = 'adel_pos',
-	): array {
-		$challenge = json_decode(
-			$this->app->activations->challenge([
-				'action' => $action,
-				'product_id' => $product,
-				'server_id' => $computer['id'],
-				'activation_id' => $activation,
-			])->body,
-			true,
-			512,
-			JSON_THROW_ON_ERROR,
-		);
-		$input = [
-			'request_id' => Uuid::create(),
-			'product_id' => $product,
-			'server_id' => $computer['id'],
-			'challenge_id' => $challenge['challenge_id'],
-			'app_version' => '1.4.0',
-		];
-		if (in_array($action, Protocol::CLAIMS, true)) {
-			$input += ['license_key' => $licenseKey, 'installation_public_key' => $computer['public']];
-		} else {
-			$input['activation_id'] = $activation;
-		}
-		$input['proof'] = Protocol::encode(
-			sodium_crypto_sign_detached(
-				Protocol::proofMessage($action, $input, $challenge['nonce']),
-				$computer['secret'],
-			),
-		);
-		return $input;
-	}
-
-	private function call(string $action, array $computer, ?string $key = null, ?string $activation = null): ApiResponse
-	{
-		return $this->app->activations->execute($action, $this->request($action, $computer, $key, $activation));
-	}
-
-	/** Contenido firmado de una respuesta exitosa, comprobado contra los archivos publicados del contrato. */
-	private static function content(ApiResponse $response): array
-	{
-		self::assertSame(200, $response->status, $response->body);
-		$shape = isset(json_decode($response->body, true)['status']) ? 'DeactivationResponse' : 'LicenseResponse';
-		self::assertNull(ContractSchemas::componentErrors($shape, $response->body));
-		$jws = json_decode($response->body, true, 512, JSON_THROW_ON_ERROR)['license_jws'];
-		$json = sodium_base642bin(explode('.', $jws)[1], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
-		self::assertNull(ContractSchemas::licenseErrors($json));
-		return json_decode($json, true, 512, JSON_THROW_ON_ERROR);
-	}
-
-	private static function error(ApiResponse $response): array
-	{
-		self::assertNull(ContractSchemas::componentErrors('Error', $response->body));
-		return json_decode($response->body, true, 512, JSON_THROW_ON_ERROR)['error'];
-	}
-
-	/** Fechas y derechos de la licencia tal como están guardados. */
-	private function rights(string $licenseId): array
-	{
-		return $this->fixture->owner->one(
-			'SELECT license_type,billing_period,trial_duration,updates_months,grace_days,plan_id,plan_name,plan_custom,
-					cash_registers,order_takers,kitchen_displays,period_starts_at,expires_at,updates_until,anchor_day,
-					anchor_local_time,period_payment_id,row_version,commercial_status
-				FROM licenses
-				WHERE license_id=?',
-			[Uuid::bytes($licenseId)],
-		);
-	}
-
-	private function rows(string $table, string $where = '1=1', array $parameters = []): int
-	{
-		return (int) $this->fixture->owner
-			->execute('SELECT COUNT(*) FROM ' . $table . ' WHERE ' . $where, $parameters)
-			->fetchColumn();
-	}
+	use TransferScenario;
 
 	public function testEveryKindOfLicenseTransfersKeepingItsDatesToTheMicrosecond(): void
 	{
@@ -196,7 +53,29 @@ final class SelfServiceTransferTest extends TestCase
 				[$moved['license_status'], $moved['status_reason'], $moved['server_id']],
 			);
 			self::assertNotSame($first['activation_id'], $moved['activation_id'], $case);
-			// La anterior recibe su cierre al consultar, con las mismas fechas.
+			// Queda registrada como de autoservicio, pendiente de confirmar.
+			$transfer = fn(): array => $this->fixture->owner->one(
+				'SELECT * FROM license_transfers WHERE license_id=?',
+				[Uuid::bytes($license['id'])],
+			);
+			self::assertSame(
+				[
+					'self_service',
+					'pending',
+					Uuid::bytes($first['activation_id']),
+					Uuid::bytes($moved['activation_id']),
+					null,
+				],
+				[
+					$transfer()['via'],
+					$transfer()['state'],
+					$transfer()['outgoing_activation_id'],
+					$transfer()['incoming_activation_id'],
+					$transfer()['admin_id'],
+				],
+				$case,
+			);
+			// La anterior recibe su cierre al consultar, con las mismas fechas, y eso confirma la transferencia.
 			$closing = self::content($this->call('refresh', $old, null, $first['activation_id']));
 			self::assertSame(
 				['revoked', 'transferred'],
@@ -208,27 +87,7 @@ final class SelfServiceTransferTest extends TestCase
 				array_intersect_key($closing, array_flip($dates)),
 				$case,
 			);
-			// Queda registrada como de autoservicio, pendiente de confirmar.
-			$transfer = $this->fixture->owner->one('SELECT * FROM license_transfers WHERE license_id=?', [
-				Uuid::bytes($license['id']),
-			]);
-			self::assertSame(
-				[
-					'self_service',
-					'pending',
-					Uuid::bytes($first['activation_id']),
-					Uuid::bytes($moved['activation_id']),
-					null,
-				],
-				[
-					$transfer['via'],
-					$transfer['state'],
-					$transfer['outgoing_activation_id'],
-					$transfer['incoming_activation_id'],
-					$transfer['admin_id'],
-				],
-				$case,
-			);
+			self::assertSame(['confirmed', 'refresh'], [$transfer()['state'], $transfer()['confirmation']], $case);
 		}
 	}
 

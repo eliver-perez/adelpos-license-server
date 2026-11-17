@@ -283,10 +283,24 @@ final class ActivationService
 			throw new ApiProblem('INVALID_PROOF');
 		}
 		$this->recordVersion($activation, $input);
+		// La computadora anterior se autenticó con su llave y recibe su cierre: si salió por una transferencia
+		// por autoservicio pendiente, la confirma y el contador vuelve a 0 (contrato §8.4, regla 4).
+		$confirmed = $this->transfers->confirm($activation, $action);
 		if ($action === 'refresh') {
 			// La revisión vigente de la activación. Si ya terminó, es su revisión de cierre.
-			return $this->licenseResponse($this->currentJws($activation), $input);
+			$response = $this->licenseResponse($this->currentJws($activation), $input);
+		} else {
+			$response = $this->deactivate($activation, $input);
 		}
+		if ($confirmed !== null) {
+			$this->transfers->auditConfirmation(null, $confirmed);
+		}
+		return $response;
+	}
+
+	/** Libera la licencia, o entrega el cierre de una activación que ya había terminado. */
+	private function deactivate(array $activation, array $input): ApiResponse
+	{
 		if ($activation['state'] === 'active') {
 			$activation['ended_at'] = $this->clock->sql();
 			$this->db->execute("UPDATE activations SET state='deactivated',ended_at=? WHERE activation_id=?", [

@@ -14,6 +14,8 @@ $notices = [
 	'scheduled-cancel' => 'Cambio programado cancelado. La licencia conserva su plan y sus cupos.',
 	'maintenance' => 'Mantenimiento registrado con su pago. Se firmó una revisión nueva para la computadora activa.',
 	'terms' => 'Periodo inicial actualizado. Las fechas se fijan al activar la licencia.',
+	'transfer-released' =>
+		'Contador de autoservicio liberado. La transferencia quedó confirmada a mano y AD-EL POS puede volver a transferir.',
 ];
 $scheduled = $license['scheduled'];
 $activated = $license['period_starts_at'] !== null;
@@ -159,6 +161,7 @@ $termNotes = [
 		</section>
 		<?php require __DIR__ . '/license-commercial.php'; ?>
 		<?php require __DIR__ . '/license-activations.php'; ?>
+		<?php require __DIR__ . '/license-transfers.php'; ?>
 		<?php require __DIR__ . '/license-offline.php'; ?>
 		<?php require __DIR__ . '/license-payments.php'; ?>
 		<section class="panel mt-4" id="commercial-history">

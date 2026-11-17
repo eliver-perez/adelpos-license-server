@@ -279,9 +279,12 @@ final class ReadRepository
 		);
 		$license['transfers'] = $this->db->all(
 			'SELECT BIN_TO_UUID(t.id) AS id_text,BIN_TO_UUID(t.outgoing_activation_id) AS outgoing_text,
-					BIN_TO_UUID(t.incoming_activation_id) AS incoming_text,t.via,t.state,t.confirmation,t.confirmed_at,
-					t.reason,t.release_reason,t.created_at,u.display_name AS actor_name,r.display_name AS releaser_name
+					BIN_TO_UUID(t.incoming_activation_id) AS incoming_text,BIN_TO_UUID(o.server_id) AS outgoing_server,
+					BIN_TO_UUID(i.server_id) AS incoming_server,t.via,t.state,t.confirmation,t.confirmed_at,t.reason,
+					t.release_reason,t.created_at,u.display_name AS actor_name,r.display_name AS releaser_name
 				FROM license_transfers t
+				JOIN activations o ON o.activation_id=t.outgoing_activation_id
+				LEFT JOIN activations i ON i.activation_id=t.incoming_activation_id
 				LEFT JOIN admin_users u ON u.id=t.admin_id
 				LEFT JOIN admin_users r ON r.id=t.released_by
 				WHERE t.license_id=?

@@ -76,20 +76,6 @@ final class App
 		$this->rate = $rate;
 		$this->signingKeys = new SigningKeys($config, $db, $this->clock, $this->audit);
 		$this->publisher = new RevisionPublisher($db, $this->clock, $this->signingKeys);
-		$activator = new LicenseActivator($db, $this->clock, $this->publisher);
-		$this->alerts = new Alerts($db, $this->clock, $this->audit);
-		$this->transfers = new Transfers($db, $this->clock, $this->audit, $this->publisher, $activator);
-		$this->activations = new ActivationService(
-			$db,
-			$this->clock,
-			$this->crypto,
-			$this->audit,
-			$this->publisher,
-			$activator,
-			$rate,
-			$this->transfers,
-			$this->alerts,
-		);
 		$this->trustedDevices = new TrustedDevices($db, $this->clock, $this->audit, $this->sessions);
 		$this->auth = new AuthService(
 			$db,
@@ -102,6 +88,28 @@ final class App
 			$this->trustedDevices,
 		);
 		$operations = new Operations($db, $this->crypto, $this->clock);
+		$activator = new LicenseActivator($db, $this->clock, $this->publisher);
+		$this->alerts = new Alerts($db, $this->clock, $this->audit);
+		$this->transfers = new Transfers(
+			$db,
+			$this->clock,
+			$this->audit,
+			$this->publisher,
+			$activator,
+			$operations,
+			$this->auth,
+		);
+		$this->activations = new ActivationService(
+			$db,
+			$this->clock,
+			$this->crypto,
+			$this->audit,
+			$this->publisher,
+			$activator,
+			$rate,
+			$this->transfers,
+			$this->alerts,
+		);
 		$this->catalog = new CatalogService($db, $operations, $this->audit, $this->clock);
 		$this->payments = new Payments($db, $this->clock, $this->audit);
 		$history = new LicenseHistory($db, $this->audit, $this->clock);

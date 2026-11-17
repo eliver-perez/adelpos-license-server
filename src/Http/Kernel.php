@@ -380,6 +380,22 @@ final class Kernel
 				}
 			}
 		}
+		if (
+			preg_match('~^/admin/licenses/([a-f0-9-]{36})/transfer-release$~', $this->path, $matches) &&
+			$method === 'POST'
+		) {
+			// Liberación manual del contador de autoservicio: el servicio exige el rol y confirma la identidad.
+			$this->app->transfers->release(
+				$this->actor,
+				$operationId,
+				$matches[1],
+				$_POST,
+				$this->password('password'),
+				Input::text($_POST, 'code', 6),
+			);
+			$this->redirect('/admin/licenses/' . $matches[1] . '?notice=transfer-released');
+			return;
+		}
 		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})/release$~', $this->path, $matches) && $method === 'POST') {
 			$this->actor->requireRole(['superadmin']);
 			$this->confirmIdentity();

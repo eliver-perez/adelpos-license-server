@@ -198,6 +198,7 @@ final class OfflineService
 				if ($renewal !== null && $payload['action'] !== 'renew') {
 					throw new Problem('Solo una solicitud de renovación puede registrar una renovación.');
 				}
+				$confirmed = null;
 				if ($payload['action'] === 'activate') {
 					$active = $this->db->one(
 						"SELECT *
@@ -246,6 +247,9 @@ final class OfflineService
 					$activation = $this->boundActivation($payload, $license);
 					$activationId = $activation['activation_id'];
 					$this->recordVersion($activation, $payload);
+					// La solicitud firmada demuestra que es la computadora anterior, y recibe su cierre: confirma la
+					// transferencia por autoservicio pendiente que salió de ella (propuesta V1.1 n.º 34).
+					$confirmed = $this->transfers->confirm($activation, 'offline_' . $payload['action']);
 					if ($renewal !== null) {
 						// La renovación es de la licencia, pero se entrega a esta computadora: debe seguir activa.
 						if ($activation['state'] !== 'active') {
@@ -285,6 +289,9 @@ final class OfflineService
 					Uuid::bytes($revision['revision_id']),
 				);
 				// Audit head is always the last lock; every earlier effect still rolls back on audit failure.
+				if ($confirmed !== null) {
+					$this->transfers->auditConfirmation($actor->id, $confirmed);
+				}
 				$this->audit->append(
 					$actor->id,
 					$outgoing === '' ? 'offline.approved' : 'offline.transferred',

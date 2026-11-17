@@ -2839,3 +2839,43 @@ Se quitaron **20 reglas**, todas detectadas: la búsqueda compartida del código
 | Playwright | No se corrió: la fase no cambia el panel |
 | `generate-fixtures.php --check` y verificador Go | Sin cambios; OK |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
+---
+
+## Etapa 4 · Fase 3 — Confirmación y liberación manual
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E4-3.1 Qué cambió
+
+- **`Transfers::confirm()`:** la computadora anterior confirma su transferencia pendiente cuando se autentica con su llave y recibe su cierre: `refresh` o `deactivate` en línea (`ActivationService`), o la aprobación de su `.licreq` de `renew` o `deactivate` (`OfflineService`, propuesta n.º 34). El contador vuelve a 0. Es idempotente y se audita.
+- **`Transfers::release()`:** liberación manual por el superadministrador, con motivo y nueva autenticación dentro del servicio (propuesta n.º 35). La transferencia queda `confirmed` / `manual` con quién y por qué, en la auditoría. Ruta del panel `POST /admin/licenses/{id}/transfer-release`.
+- **Panel:** sección «Transferencias» en el detalle de la licencia (pendiente, historial y «Liberar el contador»), y aviso de liberación.
+- **`App`:** la autenticación y las operaciones se arman antes que las transferencias, que ahora las usan.
+
+### E4-3.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/TransferConfirmationTest.php` (nueva) | 5 | **Las cuatro formas de confirmar** (`refresh`, `deactivate`, `renew` y `deactivate` sin internet): la transferencia queda confirmada con su forma y su instante, la anterior recibe su cierre `transferred`, la confirmación se audita y después es posible otra transferencia. **Lo que no confirma:** la consulta de la computadora nueva y una llave ajena; una segunda consulta o desactivación de la anterior no cambia nada. **Liberación manual:** el operador y la cuenta de consulta se rechazan sin gastar su confirmación de identidad; sin motivo, con contraseña o código incorrectos se rechaza; con todo, queda `manual` con quién, motivo y auditoría; repetir la operación no vuelve a liberar y otra operación recibe `409`; AD-EL POS vuelve a transferir. **Las del propietario no consumen el autoservicio.** **Concurrencia:** confirmación contra un intento de transferencia, con resultado coherente en los dos órdenes |
+| `tests/TransferScenario.php` (nuevo) | — | Rasgo con el escenario común de las pruebas de transferencia, que antes estaba dentro de `SelfServiceTransferTest` |
+| `SelfServiceTransferTest` | — | La consulta de la computadora anterior ahora confirma: se comprueba pendiente antes y confirmada con `refresh` después |
+
+### E4-3.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **18 reglas**. **Tres no se detectaban** en la primera pasada:
+
+- «Solo confirma una activación transferida» y «solo la pendiente que sale de esa activación» se cubrían entre sí. Se quitó la primera, que sobraba (decisión 6 de la fase), y la segunda quedó vigilada por la consulta de la computadora nueva.
+- «Solo el superadministrador libera» se comprueba dos veces. La prueba ahora exige que otra cuenta se rechace antes de pedir su identidad (sin evento `session.reauth…`), que es lo que protege la primera comprobación.
+- Una mutación («quién y motivo») no cambiaba nada (`CONCAT(?, '')`); se repitió con tres mutaciones reales: quién la liberó, el motivo y la forma `manual`.
+
+Las 18 se detectan ahora.
+
+### E4-3.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, **PHP 8.3.36** | 456 pruebas, 28 688 aserciones, todas OK |
+| PHPUnit, PHP 8.5.7 | No se corrió (se corre en el cierre, Fase 6) |
+| Playwright | Panel, sin internet y dispositivos de confianza OK (la fase cambia el detalle de la licencia) |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
