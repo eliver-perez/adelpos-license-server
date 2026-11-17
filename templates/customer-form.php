@@ -1,4 +1,9 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Domain\TimeZones;
+use AdelPos\License\Http\View as V;
+
+$selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
+?>
 <div class="page-heading">
 	<div>
 		<a href="/admin/customers" class="text-link">← Clientes</a>
@@ -49,6 +54,20 @@
 					maxlength="190"
 					value="<?= V::escape($customer['legal_name'] ?? '') ?>"
 				>
+			</div>
+			<div class="col-md-6">
+				<label for="time_zone" class="form-label">Zona horaria</label>
+				<select class="form-select" id="time_zone" name="time_zone" required>
+					<?php foreach (TimeZones::all() as $zone): ?>
+						<option value="<?= V::escape($zone) ?>" <?= $zone === $selectedZone ? 'selected' : '' ?>>
+							<?= V::escape($zone) ?>
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<div class="form-text">
+					Las fechas de sus licencias se calculan y se muestran en esta zona. Cambiarla no modifica las
+					fechas que ya están firmadas.
+				</div>
 			</div>
 		</div>
 		<div class="section-heading mt-5">

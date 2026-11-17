@@ -47,7 +47,7 @@ $pageUrl = '/admin/licenses/' . V::escape($licenseId) . '?revision_page=';
 								<?= (int) $revision['license_revision'] ?><small class="cell-sub">Clave:
 									<?= V::escape($revision['kid']) ?></small>
 							</td>
-							<td><?= $revision['license_status'] === 'active' ? 'Activa' : 'Revocada' ?></td>
+							<td><?= V::escape(V::revisionStatus($revision['license_status'], $revision['status_reason'])) ?></td>
 							<td><?= V::escape(V::date($revision['issued_at'])) ?></td>
 							<td>
 								<?php if ($actor->allows('offline.download')): ?>

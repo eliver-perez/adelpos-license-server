@@ -154,6 +154,16 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 						<dd class="mono"><a href="/admin/licenses/<?= $licenseText ?>"><?= $licenseText ?></a></dd>
 					</div>
 					<div>
+						<dt>Tipo</dt>
+						<dd><?= V::escape(V::licenseTerms($license)) ?></dd>
+					</div>
+					<div>
+						<dt>Plan</dt>
+						<dd>
+							<?= V::escape($license['plan_name']) ?><?= $license['plan_custom'] ? ' · personalizada' : '' ?>
+						</dd>
+					</div>
+					<div>
 						<dt>Vencimiento</dt>
 						<dd><?= V::escape(V::expiry($license)) ?></dd>
 					</div>
@@ -163,13 +173,7 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 					</div>
 					<div>
 						<dt>Actualizaciones hasta</dt>
-						<dd>
-							<?php if ($license['updates_until'] === null): ?>
-								Empieza al activar
-							<?php else: ?>
-								<?= V::escape(V::date($license['updates_until'])) ?>
-							<?php endif; ?>
-						</dd>
+						<dd><?= V::escape(V::licenseDate($license, 'updates_until')) ?></dd>
 					</div>
 				</dl>
 				<?php

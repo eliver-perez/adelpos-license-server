@@ -163,9 +163,13 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await page.locator('#legal_name').fill('<script>window.unwantedScript=true</script>');
 		await page.locator('#contact_name').fill('Contacto de pruebas');
 		await page.locator('#email').fill('restaurante@example.test');
+		// La zona horaria del cliente se elige de una lista; por omisión, la de Monterrey.
+		assert.equal(await page.locator('#time_zone').inputValue(), 'America/Monterrey');
+		await page.locator('#time_zone').selectOption('America/Tijuana');
 		await submit(page.getByRole('button', { name: 'Guardar cliente' }));
 		const customerId = new URL(page.url()).pathname.split('/').pop();
 		assert.match(customerId, /^[a-f0-9-]{36}$/);
+		assert.equal(await page.locator('#time_zone').inputValue(), 'America/Tijuana');
 		assert.equal(await page.evaluate(() => window.unwantedScript), undefined);
 		assert.equal(await page.locator('#legal_name').inputValue(), '<script>window.unwantedScript=true</script>');
 
@@ -185,7 +189,28 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			await page.locator('#plan_id option').evaluateAll((options) => options.map((option) => option.value)),
 			['basico', 'elemental', 'premium'],
 		);
+		// El plan llena los tres cupos; mientras no se cambien, la licencia sigue a su plan.
+		const limits = () =>
+			Promise.all(
+				['cash_registers', 'order_takers', 'kitchen_displays'].map((name) =>
+					page.locator('#' + name).inputValue(),
+				),
+			);
+		assert.deepEqual(await limits(), ['1', '0', '0']);
 		await page.locator('#plan_id').selectOption('premium');
+		assert.deepEqual(await limits(), ['5', '10', '5']);
+		assert.equal(await page.locator('#custom-notice').isHidden(), true);
+		// Cambiar un número avisa de inmediato que la licencia queda personalizada, y volver al del plan lo quita.
+		await page.locator('#order_takers').fill('12');
+		assert.equal(await page.locator('#custom-notice').isVisible(), true);
+		assert.match(await page.locator('#custom-notice').innerText(), /Licencia personalizada/);
+		await page.locator('#order_takers').fill('10');
+		assert.equal(await page.locator('#custom-notice').isHidden(), true);
+		// El formulario no deja pasar cupos fuera de 0 a 999.
+		assert.deepEqual(
+			await page.locator('#cash_registers').evaluate((input) => [input.min, input.max, input.required]),
+			['0', '999', true],
+		);
 		await screenshot('license-form-desktop');
 		await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
 		const commercialKey = await page.locator('#commercial-key').inputValue();
@@ -197,6 +222,47 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		// No dates until the license is activated, and the operations of the previous engine are not offered.
 		assert.match(await page.locator('main').innerText(), /Empieza al activar/);
 		assert.match(await page.locator('main').innerText(), /Disponible próximamente/);
+		// Detalle con el modelo del contrato: tipo, plan, cupos y la zona horaria del cliente.
+		const rights = async () => {
+			const entries = await page
+				.locator('.detail-grid')
+				.first()
+				.locator('div')
+				.evaluateAll((items) =>
+					items.map((item) => [
+						item.querySelector('dt').innerText.trim(),
+						item.querySelector('dd').innerText.replace(/\s+/g, ' ').trim(),
+					]),
+				);
+			return Object.fromEntries(entries);
+		};
+		let detail = await rights();
+		assert.equal(detail['Tipo'], 'Perpetua · 6 meses de actualizaciones');
+		assert.equal(detail['Plan'], 'Plan premium');
+		assert.deepEqual(
+			[detail['Cajas'], detail['Comanderos'], detail['Pantallas de cocina (KDS)']],
+			['5', '10', '5'],
+		);
+		assert.equal(detail['Inicio del periodo'], 'Empieza al activar');
+		assert.equal(detail['Actualizaciones hasta'], 'Empieza al activar');
+		assert.match(detail['Zona horaria del cliente'], /^America\/Tijuana/);
+		assert.equal(await page.getByText('Instalaciones', { exact: true }).count(), 0);
+		// El servidor rechaza un cupo fuera de rango aunque el formulario se envíe directamente.
+		const outOfRange = await context.request.post('/admin/licenses/create', {
+			form: {
+				csrf: await page.locator('[name="csrf"]').first().inputValue(),
+				operation_id: crypto.randomUUID(),
+				customer_id: customerId,
+				product_id: 'adel_pos',
+				license_type: 'perpetual',
+				updates_months: '6',
+				plan_id: 'basico',
+				cash_registers: '1000',
+			},
+			maxRedirects: 0,
+		});
+		assert.equal(outOfRange.status(), 422);
+		assert.match(await outOfRange.text(), /Cajas debe ser un número entero entre 0 y 999/);
 		assert.equal(await page.locator('#until').count(), 0);
 		assert.equal((await page.content()).includes(commercialKey), false);
 		// The server refuses them even when the request is sent directly.
@@ -268,6 +334,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
 		assert.match(await page.locator('main').innerText(), /Licencia de prueba/);
 		assert.match(await page.locator('main').innerText(), /0 días/);
+		assert.equal((await rights())['Tipo'], 'Prueba de 1 mes');
 
 		await page.goto('/admin/licenses/new');
 		await page.locator('#customer_id').selectOption(customerId);
@@ -277,11 +344,20 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.equal(await page.locator('#trial_duration').isDisabled(), true);
 		await page.locator('#billing_period').selectOption('quarterly');
 		await page.locator('#reason').fill('Suscripción de prueba');
+		// Plan elemental con una caja más: la licencia queda personalizada.
+		await page.locator('#plan_id').selectOption('elemental');
+		await page.locator('#cash_registers').fill('4');
+		assert.equal(await page.locator('#custom-notice').isVisible(), true);
 		await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
 		await page.getByRole('link', { name: 'Ya la guardé · Ver licencia' }).click();
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
 		assert.match(await page.locator('main').innerText(), /5 días/);
 		assert.match(await page.locator('main').innerText(), /Empieza al activar/);
+		detail = await rights();
+		assert.equal(detail['Tipo'], 'Suscripción trimestral');
+		assert.equal(detail['Plan'], 'Plan elemental Personalizada');
+		assert.deepEqual([detail['Cajas'], detail['Comanderos'], detail['Pantallas de cocina (KDS)']], ['4', '3', '3']);
+		assert.match(await page.locator('main').innerText(), /Licencia personalizada/);
 		assert.equal(await page.locator('tbody tr').count(), 1);
 		const offlineDownload = await require('./offline-panel.cjs')({
 			page,
@@ -295,6 +371,20 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			commercialKey,
 			screenshot,
 		});
+
+		// Después de activarse, la licencia muestra su periodo en la zona horaria del cliente, y cada
+		// revisión de cierre dice por qué se cerró.
+		await page.goto(licenseURL);
+		detail = await rights();
+		assert.match(detail['Inicio del periodo'], /^\d{2}\/\d{2}\/\d{4} · \d{2}:\d{2} America\/Tijuana$/);
+		assert.match(detail['Actualizaciones hasta'], /^\d{2}\/\d{2}\/\d{4} · \d{2}:\d{2} America\/Tijuana$/);
+		assert.equal(detail['Vencimiento'], 'Sin vencimiento');
+		const signedStates = await page.locator('table').first().locator('tbody tr td:nth-child(2)').allInnerTexts();
+		assert.deepEqual(
+			signedStates.map((text) => text.trim()),
+			['Revocada · licencia liberada', 'Activa', 'Revocada · transferida a otra computadora', 'Activa'],
+		);
+		await screenshot('license-detail-activated-desktop');
 
 		for (const route of [
 			'/admin/customers',

@@ -47,7 +47,7 @@ final class DocumentService
 				}
 				$license =
 					$this->db->one(
-						'SELECT l.*,c.display_name AS holder,c.legal_name,c.tax_id,p.display_name AS product
+						'SELECT l.*,c.display_name AS holder,c.legal_name,c.tax_id,c.time_zone,p.display_name AS product
 							FROM licenses l
 							JOIN customers c ON c.id=l.customer_id
 							JOIN products p ON p.product_id=l.product_id
@@ -96,7 +96,13 @@ final class DocumentService
 					'tax_id' => $license['tax_id'],
 					'license_id' => $licenseId,
 					'issued_at' => $license['created_at'],
+					'billing_period' => $license['billing_period'],
+					'trial_duration' => $license['trial_duration'],
+					'updates_months' => $license['updates_months'] === null ? null : (int) $license['updates_months'],
+					'period_starts_at' => $license['period_starts_at'],
 					'expires_at' => $license['expires_at'],
+					'updates_until' => $license['updates_until'],
+					'time_zone' => $license['time_zone'],
 					'grace_days' => (int) $license['grace_days'],
 					'plan' => ['name' => $license['plan_name'], 'custom' => (bool) $license['plan_custom']],
 					'limits' => $limits,

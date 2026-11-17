@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Http;
 
-use AdelPos\License\Domain\Uuid;
+use AdelPos\License\Domain\{TimeZones, Uuid};
 
 final class View
 {
@@ -28,15 +28,63 @@ final class View
 		echo '<input type="hidden" name="operation_id" value="' . Uuid::create() . '">';
 	}
 
-	public static function date(?string $value): string
+	/**
+	 * Fecha y hora con su zona a la vista. Sin zona se usa la del panel; las fechas de una
+	 * licencia se muestran en la zona horaria de su cliente.
+	 */
+	public static function date(?string $value, ?string $zone = null): string
 	{
-		return $value === null || $value === ''
-			? '—'
-			: (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))
-					->setTimezone(new \DateTimeZone(self::TIMEZONE))
-					->format('d/m/Y · H:i') .
-					' ' .
-					self::TIMEZONE;
+		if ($value === null || $value === '') {
+			return '—';
+		}
+		$zone = $zone !== null && TimeZones::valid($zone) ? $zone : self::TIMEZONE;
+		$local = (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone($zone));
+		return $local->format('d/m/Y · H:i') . ' ' . $zone;
+	}
+
+	/**
+	 * Una fecha de la licencia (inicio, vencimiento o fin de actualizaciones) en la zona horaria
+	 * de su cliente. Una licencia emitida no tiene fechas hasta que se activa.
+	 */
+	public static function licenseDate(array $license, string $field): string
+	{
+		return ($license[$field] ?? null) === null
+			? 'Empieza al activar'
+			: self::date($license[$field], $license['time_zone'] ?? null);
+	}
+
+	/** Tipo de licencia con su condición: periodo de cobro, duración de la prueba o meses de actualizaciones. */
+	public static function licenseTerms(array $license): string
+	{
+		$periods = [
+			'monthly' => 'mensual',
+			'quarterly' => 'trimestral',
+			'semiannual' => 'semestral',
+			'annual' => 'anual',
+		];
+		$durations = ['15d' => '15 días', '1m' => '1 mes', '3m' => '3 meses'];
+		if ($license['license_type'] === 'subscription') {
+			return 'Suscripción ' . ($periods[$license['billing_period'] ?? ''] ?? '');
+		}
+		if ($license['license_type'] === 'trial') {
+			return 'Prueba de ' . ($durations[$license['trial_duration'] ?? ''] ?? '');
+		}
+		$months = (int) ($license['updates_months'] ?? 0);
+		return 'Perpetua · ' . ($months === 0 ? 'sin actualizaciones' : $months . ' meses de actualizaciones');
+	}
+
+	/** Estado firmado de una revisión. Una revisión de cierre dice por qué se cerró. */
+	public static function revisionStatus(string $status, ?string $reason): string
+	{
+		if ($status === 'active') {
+			return 'Activa';
+		}
+		$reasons = [
+			'deactivated' => 'licencia liberada',
+			'transferred' => 'transferida a otra computadora',
+			'revoked' => 'revocada por el propietario',
+		];
+		return 'Revocada · ' . ($reasons[$reason ?? ''] ?? 'sin motivo registrado');
 	}
 
 	/** Nombre del tipo de licencia en el panel y en las constancias. */
@@ -51,7 +99,7 @@ final class View
 		if ($license['license_type'] === 'perpetual') {
 			return 'Sin vencimiento';
 		}
-		return $license['expires_at'] === null ? 'Empieza al activar' : self::date($license['expires_at']);
+		return self::licenseDate($license, 'expires_at');
 	}
 
 	public static function role(string $role): string

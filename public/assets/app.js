@@ -58,6 +58,25 @@ function updateLicenseForm() {
 		});
 	});
 }
+// El plan llena los tres cupos. Si alguno se cambia, la licencia queda personalizada y se avisa.
+function updatePlanLimits(fill) {
+	if (!licenseForm) return;
+	const plan = licenseForm.querySelector('[name="plan_id"]').selectedOptions[0];
+	let custom = false;
+	licenseForm.querySelectorAll('[data-plan-limit]').forEach((input) => {
+		const planValue = plan.dataset[input.name];
+		if (fill) {
+			input.value = planValue;
+		}
+		custom = custom || input.value !== planValue;
+	});
+	licenseForm.querySelector('#custom-notice').hidden = !custom;
+}
+licenseForm?.querySelector('[name="plan_id"]').addEventListener('change', () => updatePlanLimits(true));
+licenseForm
+	?.querySelectorAll('[data-plan-limit]')
+	.forEach((input) => input.addEventListener('input', () => updatePlanLimits(false)));
+updatePlanLimits(true);
 licenseForm?.querySelector('[name="product_id"]').addEventListener('change', updateLicenseForm);
 licenseForm
 	?.querySelectorAll('[name="license_type"]')

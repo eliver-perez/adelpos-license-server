@@ -102,9 +102,12 @@ final class CommercialDeliveryTest extends TestCase
 	private function offline(): array
 	{
 		$app = $this->fixture->app;
-		$keys = $this->fixture->signingKeys($this->clock);
-		$keys->generate('commercial-test', 'license');
-		$keys->activate('commercial-test', 'Synthetic');
+		// La llave de firma se prepara una sola vez, aunque la prueba active varias licencias.
+		if (!$app->db->one("SELECT kid FROM signing_keys WHERE kid='commercial-test'")) {
+			$keys = $this->fixture->signingKeys($this->clock);
+			$keys->generate('commercial-test', 'license');
+			$keys->activate('commercial-test', 'Synthetic');
+		}
 		$pair = sodium_crypto_sign_keypair();
 		$installation = Uuid::create();
 		$payload = [
@@ -220,6 +223,78 @@ final class CommercialDeliveryTest extends TestCase
 			$this->license['secret'],
 			json_encode($app->read->license($this->license['id']), JSON_INVALID_UTF8_SUBSTITUTE),
 		);
+	}
+
+	public function testCertificateShowsTermsPlanLimitsAndDatesInTheCustomerTimeZone(): void
+	{
+		$app = $this->fixture->app;
+		$normalize = fn(string $text): string => preg_replace('/\s+/', ' ', $text);
+		// La licencia perpetua de la preparación, todavía sin activar.
+		$text = $normalize(
+			$this->text($app->documents->download($this->actor, $this->publicDocument()['document_id'])['bytes']),
+		);
+		foreach (
+			[
+				'Perpetua · 6 meses de actualizaciones',
+				'Modalidad Perpetua · 6 meses de actualizaciones',
+				'Plan Plan elemental',
+				'Cajas 3',
+				'Comanderos 3',
+				'Pantallas de cocina (KDS) 3',
+				'Inicio del periodo Empieza al activar',
+				'Vencimiento Sin vencimiento (uso perpetuo)',
+				'Actualizaciones hasta Empieza al activar',
+			]
+			as $expected
+		) {
+			self::assertStringContainsString($expected, $text);
+		}
+		// Los datos que el contrato eliminó ya no aparecen.
+		self::assertStringNotContainsString('Instalaciones autorizadas', $text);
+		self::assertStringNotContainsString('personalizada', $text);
+
+		// Después de activar, las fechas se muestran en la zona horaria del cliente.
+		$this->offline();
+		$text = $normalize(
+			$this->text($app->documents->download($this->actor, $this->publicDocument()['document_id'])['bytes']),
+		);
+		// 12:00 UTC del 21 de octubre son las 06:00 en America/Monterrey; seis meses después, la misma hora local.
+		self::assertStringContainsString('Inicio del periodo 21/10/2026 · 06:00 America/Monterrey', $text);
+		self::assertStringContainsString('Actualizaciones hasta 21/04/2027 · 06:00 America/Monterrey', $text);
+
+		// Suscripción personalizada de un cliente en otra zona horaria.
+		$customer = $app->catalog->saveCustomer($this->actor, Uuid::create(), null, [
+			'name' => 'Cliente del Pacífico',
+			'contact_name' => 'Prueba',
+			'email' => '',
+			'state' => 'active',
+			'time_zone' => 'America/Tijuana',
+		]);
+		$this->license = $app->licenses->issue($this->actor, Uuid::create(), [
+			'customer_id' => $customer['id'],
+			'product_id' => 'adel_pos',
+			...MySqlFixture::terms('subscription', 'basico'),
+			'cash_registers' => '2',
+		]);
+		$this->offline();
+		$text = $normalize(
+			$this->text($app->documents->download($this->actor, $this->publicDocument()['document_id'])['bytes']),
+		);
+		foreach (
+			[
+				'Suscripción mensual',
+				'Plan Plan básico · licencia personalizada',
+				'Cajas 2',
+				'Comanderos 0',
+				// 12:00 UTC son las 05:00 en Tijuana; un mes después ya no hay horario de verano.
+				'Inicio del periodo 21/10/2026 · 05:00 America/Tijuana',
+				'Vencimiento 21/11/2026 · 05:00 America/Tijuana',
+				'Actualizaciones hasta 21/11/2026 · 05:00 America/Tijuana',
+			]
+			as $expected
+		) {
+			self::assertStringContainsString($expected, $text);
+		}
 	}
 
 	public function testAdministrativeEditsKeepTechnicalLicenseAndHistoricalDocumentsUnchanged(): void

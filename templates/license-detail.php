@@ -1,4 +1,5 @@
 <?php
+use AdelPos\License\Domain\LicenseTerms;
 use AdelPos\License\Http\View as V;
 
 $licenseId = $license['id_text'];
@@ -46,6 +47,33 @@ $termNotes = [
 					<dd class="mono"><?= V::escape($licenseId) ?></dd>
 				</div>
 				<div>
+					<dt>Tipo</dt>
+					<dd><?= V::escape(V::licenseTerms($license)) ?></dd>
+				</div>
+				<div>
+					<dt>Plan</dt>
+					<dd>
+						<?= V::escape($license['plan_name']) ?>
+						<?php if ($license['plan_custom']): ?>
+							<span class="tag">Personalizada</span>
+						<?php endif; ?>
+					</dd>
+				</div>
+				<?php foreach (LicenseTerms::LIMITS as $limit => $label): ?>
+					<div>
+						<dt><?= V::escape($label) ?></dt>
+						<dd><?= (int) $license[$limit] ?></dd>
+					</div>
+				<?php endforeach; ?>
+				<div>
+					<dt>Computadoras principales</dt>
+					<dd>1 a la vez</dd>
+				</div>
+				<div>
+					<dt>Inicio del periodo</dt>
+					<dd><?= V::escape(V::licenseDate($license, 'period_starts_at')) ?></dd>
+				</div>
+				<div>
 					<dt>Vencimiento</dt>
 					<dd><?= V::escape(V::expiry($license)) ?></dd>
 				</div>
@@ -55,23 +83,19 @@ $termNotes = [
 				</div>
 				<div>
 					<dt>Actualizaciones hasta</dt>
-					<dd>
-						<?php if ($license['updates_until'] === null): ?>
-							Empieza al activar
-						<?php else: ?>
-							<?= V::escape(V::date($license['updates_until'])) ?>
-						<?php endif; ?>
-					</dd>
+					<dd><?= V::escape(V::licenseDate($license, 'updates_until')) ?></dd>
 				</div>
-				<?php
-				// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md
-				// (una instalación por licencia).
-				?>
-				<div>
-					<dt>Instalaciones</dt>
-					<dd>1 autorizada</dd>
+				<div class="wide">
+					<dt>Zona horaria del cliente</dt>
+					<dd><?= V::escape($license['time_zone']) ?> · las fechas de esta licencia se muestran en esta zona</dd>
 				</div>
 			</dl>
+			<?php if ($license['plan_custom']): ?>
+				<div class="alert alert-warning" role="note">
+					<strong>Licencia personalizada.</strong>
+					Sus cupos se ajustaron al emitirla y ya no siguen a su plan.
+				</div>
+			<?php endif; ?>
 			<div class="note-box">
 				<?= V::escape($termNotes[$license['license_type']]) ?>
 			</div>

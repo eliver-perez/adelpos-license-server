@@ -26,7 +26,8 @@ final class ReadRepository
 				->fetchColumn(),
 			'recent' => $this->db->all(
 				'SELECT BIN_TO_UUID(l.license_id) AS id_text,l.license_type,l.commercial_status,
-						l.expires_at,l.created_at,c.display_name AS customer_name,p.display_name AS product_name
+						l.expires_at,l.created_at,c.display_name AS customer_name,c.time_zone,
+						p.display_name AS product_name
 					FROM licenses l
 					JOIN customers c ON c.id=l.customer_id
 					JOIN products p ON p.product_id=l.product_id
@@ -62,7 +63,7 @@ final class ReadRepository
 			}
 		} elseif ($kind === 'licenses') {
 			$from = 'licenses l JOIN customers c ON c.id=l.customer_id JOIN products p ON p.product_id=l.product_id';
-			$select = 'l.*,BIN_TO_UUID(l.license_id) AS id_text,c.display_name AS customer_name,
+			$select = 'l.*,BIN_TO_UUID(l.license_id) AS id_text,c.display_name AS customer_name,c.time_zone,
 						p.display_name AS product_name';
 			$order = 'l.created_at DESC';
 			if ($query !== '') {
@@ -198,7 +199,7 @@ final class ReadRepository
 	{
 		$license =
 			$this->db->one(
-				'SELECT l.*,BIN_TO_UUID(l.license_id) AS id_text,c.display_name AS customer_name,
+				'SELECT l.*,BIN_TO_UUID(l.license_id) AS id_text,c.display_name AS customer_name,c.time_zone,
 						p.display_name AS product_name
 					FROM licenses l
 					JOIN customers c ON c.id=l.customer_id
@@ -244,7 +245,7 @@ final class ReadRepository
 		$license['revision_page'] = min(max(1, $revisionPage), $license['revision_pages']);
 		$license['revisions'] = $this->db->all(
 			'SELECT BIN_TO_UUID(revision_id) AS id_text,BIN_TO_UUID(activation_id) AS activation_text,
-					license_revision,kid,license_status,issued_at
+					license_revision,kid,license_status,status_reason,issued_at
 				FROM license_revisions
 				WHERE license_id=?
 				ORDER BY license_revision DESC
@@ -316,7 +317,8 @@ final class ReadRepository
 	public function offlineCandidates(string $productId, string $query = ''): array
 	{
 		return $this->db->all(
-			"SELECT BIN_TO_UUID(l.license_id) AS id_text,l.license_type,l.expires_at,c.display_name AS customer_name
+			"SELECT BIN_TO_UUID(l.license_id) AS id_text,l.license_type,l.expires_at,c.time_zone,
+					c.display_name AS customer_name
 				FROM licenses l
 				JOIN customers c ON c.id=l.customer_id
 				WHERE l.product_id=? AND l.commercial_status='issued' AND (c.display_name LIKE ?

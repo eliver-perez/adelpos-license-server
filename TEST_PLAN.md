@@ -79,6 +79,7 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 | `ProtocolTest` | JSON estricto, base64url canónico, esquema sin conversiones ni campos desconocidos, encabezado exacto del JWS (`adelpos-lic+jws`) con firma verificable, mensaje exacto de la prueba de posesión (`ADELPOS-LIC-V1`), campos exactos de cada petición de la API (27 peticiones inválidas, entre ellas el protocolo anterior y `transfer`), y códigos, HTTP y formato de los errores del contrato |
 | `ReleasePackageTest` | Paquete de despliegue: contenido exacto con archivos locales sembrados, manifiesto, `.sha256`, y aborto si se versiona una llave |
 | `RulesTest` | UUID, fechas inválidas, dependencias y ciclos de módulos, vector TOTP RFC y repetición, cifrado del secreto de verificación, redes IPv4/IPv6 y HTTP de desarrollo. Del contrato: enteros del formulario dentro de su rango, condiciones de licencia (tipos, periodos, duraciones, meses, cupos y tolerancia) y zonas horarias válidas |
+| `ViewTest` | Textos del panel y de las constancias: fechas con su zona horaria a la vista (las de una licencia, en la zona de su cliente), «Empieza al activar», nombre de cada tipo de licencia con su condición y motivo de cierre de una revisión |
 | `SecretsCheckTest` | `bin/check-secrets.php` en repositorios temporales: cada tipo de hallazgo sin imprimir el valor, contenido del índice, semillas públicas aceptadas y el propio repositorio limpio |
 
 ## 5. Pruebas de integración (`tests/Integration`, MySQL 8)
@@ -104,8 +105,8 @@ Los procesos auxiliares `tests/activation-worker.php`, `tests/offline-worker.php
 
 | Script | Qué recorre |
 | --- | --- |
-| `tests/panel.cjs` | Acceso, verificación en dos pasos, roles, CSRF y origen, emisión de los tres tipos de licencia con su plan, rechazo de renovación y mantenimiento, navegación en móvil y la marca: título «AD-EL POS — Licencias», logo visible y ninguna imagen rota |
-| `tests/offline-panel.cjs` | Flujo sin internet en el panel: importar, revisar, aprobar, rechazar, descargar `.lic`, transferencia forzada con nueva autenticación, desactivación firmada y solicitud de renovación sin registrar una renovación |
+| `tests/panel.cjs` | Acceso, verificación en dos pasos, roles, CSRF y origen, zona horaria del cliente, emisión de los tres tipos de licencia con su plan, cupos que llena el plan y aviso de licencia personalizada, validación de cupos, detalle de la licencia antes y después de activar (fechas en la zona del cliente y motivo de cierre de cada revisión), formato de error de la API, rechazo de renovación y mantenimiento, navegación en móvil y la marca: título «AD-EL POS — Licencias», logo visible y ninguna imagen rota |
+| `tests/offline-panel.cjs` | Flujo sin internet en el panel con el formato del contrato: importar, revisar, aprobar, rechazar, descargar `.lic`, transferencia forzada con nueva autenticación (la computadora anterior queda «Transferida»), desactivación firmada con su motivo y solicitud `renew` que entrega el mismo archivo vigente |
 | `tests/trusted-devices-panel.cjs` | Dispositivos de confianza en escritorio y móvil sobre HTTPS real |
 
 ## 7. Qué se probará en las etapas siguientes

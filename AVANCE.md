@@ -881,7 +881,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 5 — API en línea | **Cerrada.** 344 pruebas, 26 611 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 6 de las 20 marcas de herencia. |
 | 6 — Archivos sin internet | **Cerrada.** 357 pruebas, 26 674 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 5 de las 20 marcas de herencia. |
 | 7 — Archivos del contrato y verificador de referencia | **Cerrada.** 369 pruebas, 27 283 aserciones, todas OK. Verificador de referencia en Go OK. Playwright OK. Queda 1 de las 20 marcas de herencia. |
-| 8 — Panel: emisión con el modelo nuevo | Pendiente |
+| 8 — Panel: emisión con el modelo nuevo | **Cerrada.** 373 pruebas, 27 330 aserciones, todas OK. Verificador Go OK. Playwright OK. **Cero** marcas de herencia. |
 | 9 — Cierre | Pendiente |
 
 ---
@@ -1772,3 +1772,52 @@ Las 24 quedan detectadas.
 - **Fase 9:** incluir `openapi.yaml` y `license.schema.json` en el paquete de despliegue, como documentación.
 - **Etapa 3:** casos de prueba de renovación y cambio de plan.
 - **Etapa 4:** agregar `transfer` a `openapi.yaml`.
+
+---
+
+## Etapa 2 · Fase 8 — Panel: emisión con el modelo nuevo
+
+Es el ajuste mínimo para emitir y consultar con el contrato. Las pantallas definitivas son de la etapa 5.
+
+### E2-8.1 Qué cambió
+
+| Pantalla | Cambio |
+| --- | --- |
+| Ficha del cliente | Selector de **zona horaria**, con `America/Monterrey` por omisión |
+| Emitir licencia | El plan llena los cupos de cajas, comanderos y pantallas de cocina. Se pueden ajustar; al cambiar uno aparece el aviso **«Licencia personalizada»** |
+| Detalle de la licencia | Tipo con su condición («Suscripción trimestral», «Perpetua · 6 meses de actualizaciones», «Prueba de 1 mes»), plan y etiqueta «Personalizada», los tres cupos, inicio del periodo, vencimiento, tolerancia, fin de actualizaciones y zona horaria del cliente. Sin activar: «Empieza al activar» |
+| Revisiones firmadas | Cada revisión de cierre dice su motivo: «Revocada · licencia liberada», «Revocada · transferida a otra computadora» o «Revocada · revocada por el propietario» |
+| Instalaciones | El estado «Transferida» (desde la Fase 4) |
+| Solicitud sin internet | Tipo, plan y fechas de la licencia en la zona del cliente; identidad `server_id` y versión de AD-EL POS (desde la Fase 6) |
+| Constancias PDF | Modalidad, plan (y si es personalizada), cupos, inicio del periodo, vencimiento y fin de actualizaciones, en la zona del cliente |
+| Renovación y mantenimiento | Sin cambio: «Disponible próximamente», y el servidor las rechaza |
+
+Todas las fechas de una licencia se muestran en la zona horaria de su cliente, con el nombre de la zona escrito. Ejemplo real de la prueba: `16/05/2027 · 19:13 America/Tijuana`.
+
+### E2-8.2 Marcas de herencia
+
+**Quedan 0 de 20.** La última, «Instalaciones: 1 autorizada» en `templates/license-detail.php`, se sustituyó por los cupos del contrato y por «Computadoras principales: 1 a la vez».
+
+### E2-8.3 Pruebas
+
+**Resultado:** PHPUnit **373 pruebas, 27 330 aserciones, todas OK**. Verificador en Go OK. Playwright OK (panel y dispositivos de confianza).
+
+| Lo que pide la especificación | Prueba |
+| --- | --- |
+| Emitir los tres tipos | `panel.cjs`: perpetua, prueba de 1 mes y suscripción trimestral, y su tipo en el detalle. `AdministrationTest` (desde la Fase 2) |
+| Personalizar un plan | `panel.cjs`: el plan llena los cupos, cambiar uno muestra el aviso, volver al valor del plan lo quita, y la licencia emitida aparece como «Plan elemental · Personalizada» con 4, 3 y 3. `AdministrationTest` (Fase 2) para la regla del servidor |
+| Validaciones del formulario | `panel.cjs`: mínimo 0, máximo 999 y obligatorio en el formulario; `422` del servidor con «Cajas debe ser un número entero entre 0 y 999» al enviarlo directamente |
+| Rechazo de renovación y mantenimiento | `panel.cjs` y `ActivationsTest`, sin cambio |
+| Detalle antes y después de activar | `panel.cjs`: antes, «Empieza al activar»; después, inicio y fin de actualizaciones con `America/Tijuana`, y los estados firmados de las cuatro revisiones |
+| Playwright: panel y dispositivos de confianza | `php tests/run-panel-tests.php all` |
+
+**Pruebas nuevas (4):** `ViewTest` (3: fechas con su zona, nombre de cada tipo de licencia y motivo de cierre) y `CommercialDeliveryTest::testCertificateShowsTermsPlanLimitsAndDatesInTheCustomerTimeZone`, que lee el texto del PDF antes y después de activar, y con un cliente en `America/Tijuana`.
+
+**Comprobación de las reglas:** se quitaron una a la vez **14 reglas**: 9 con PHPUnit y 5 con Playwright (aviso de personalizada, llenado de cupos, motivo de cierre, selector de zona y etiqueta «Personalizada»). La primera corrida detectó 13. La que faltaba, quitar la fila «Plan» de la constancia, pasaba porque la prueba buscaba el nombre del plan y no su etiqueta; ya comprueba las dos. Las 14 quedan detectadas.
+
+**Corrección encontrada con las pruebas:** `View::revisionStatus` usaba un valor vacío como índice de un arreglo, algo que PHP 8.5 marca como obsoleto. Corregido.
+
+### E2-8.4 Pendientes que deja la fase
+
+- **Etapa 3:** editar el periodo inicial de una suscripción sin activar (propuesta V1.1 n.º 11), renovación, mantenimiento y editor de planes.
+- **Etapa 5:** pantallas definitivas y diseño final de las constancias.

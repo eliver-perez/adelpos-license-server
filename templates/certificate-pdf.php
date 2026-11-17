@@ -5,14 +5,8 @@ use AdelPos\License\Http\View as V;
 $d = $document;
 $licensing = $d['type'] === 'licensing';
 $title = $licensing ? 'Constancia de licenciamiento' : 'Constancia de entrega para activación';
-$typeNames = ['perpetual' => 'Perpetua · Uso sin vencimiento', 'subscription' => 'Suscripción', 'trial' => 'Prueba'];
-if ($d['license_type'] === 'perpetual') {
-	$expiry = 'Sin vencimiento';
-} elseif ($d['expires_at'] === null) {
-	$expiry = 'Empieza al activar la licencia';
-} else {
-	$expiry = V::date($d['expires_at']);
-}
+// Las fechas de la licencia van en la zona horaria del cliente.
+$expiry = $d['license_type'] === 'perpetual' ? 'Sin vencimiento (uso perpetuo)' : V::licenseDate($d, 'expires_at');
 ?>
 <!doctype html>
 <html lang="es">
@@ -149,19 +143,27 @@ if ($d['license_type'] === 'perpetual') {
 			</tr>
 			<tr>
 				<th>Modalidad</th>
-				<td><?= V::escape($typeNames[$d['license_type']]) ?></td>
+				<td><?= V::escape(V::licenseTerms($d)) ?></td>
 			</tr>
 			<tr>
 				<th>Emisión de licencia</th>
-				<td><?= V::escape(V::date($d['issued_at'])) ?></td>
+				<td><?= V::escape(V::date($d['issued_at'], $d['time_zone'] ?? null)) ?></td>
+			</tr>
+			<tr>
+				<th>Inicio del periodo</th>
+				<td><?= V::escape(V::licenseDate($d, 'period_starts_at')) ?></td>
 			</tr>
 			<tr>
 				<th>Vencimiento</th>
 				<td><?= V::escape($expiry) ?></td>
 			</tr>
 			<tr>
+				<th>Actualizaciones hasta</th>
+				<td><?= V::escape(V::licenseDate($d, 'updates_until')) ?></td>
+			</tr>
+			<tr>
 				<th>Plan</th>
-				<td><?= V::escape($d['plan']['name']) ?><?= $d['plan']['custom'] ? ' · personalizada' : '' ?></td>
+				<td><?= V::escape($d['plan']['name']) ?><?= $d['plan']['custom'] ? ' · licencia personalizada' : '' ?></td>
 			</tr>
 			<?php foreach (LicenseTerms::LIMITS as $limit => $label): ?>
 				<tr>

@@ -1,4 +1,5 @@
 <?php
+use AdelPos\License\Domain\LicenseTerms;
 use AdelPos\License\Http\View as V;
 
 $availableProducts = array_values(array_filter($products, fn($product) => $product['state'] === 'active'));
@@ -125,7 +126,12 @@ $selectedProduct = $availableProducts[0]['product_id'] ?? '';
 					<label for="plan_id" class="form-label">Plan de la licencia</label>
 					<select class="form-select" name="plan_id" id="plan_id" required>
 						<?php foreach ($plans as $plan): ?>
-							<option value="<?= V::escape($plan['plan_id']) ?>">
+							<option
+								value="<?= V::escape($plan['plan_id']) ?>"
+								data-cash_registers="<?= (int) $plan['cash_registers'] ?>"
+								data-order_takers="<?= (int) $plan['order_takers'] ?>"
+								data-kitchen_displays="<?= (int) $plan['kitchen_displays'] ?>"
+							>
 								<?= V::escape($plan['display_name']) ?> · <?= (int) $plan['cash_registers'] ?>
 									<?= (int) $plan['cash_registers'] === 1 ? 'caja' : 'cajas' ?> ·
 									<?= (int) $plan['order_takers'] ?>
@@ -135,8 +141,32 @@ $selectedProduct = $availableProducts[0]['product_id'] ?? '';
 						<?php endforeach; ?>
 					</select>
 					<div class="form-text">
-						El plan fija los cupos de cajas, comanderos y pantallas de cocina (KDS) que se firman en la
-						licencia.
+						El plan llena los cupos de cajas, comanderos y pantallas de cocina (KDS) que se firman en la
+						licencia. Puedes ajustarlos: la licencia queda entonces personalizada.
+					</div>
+					<div class="row g-3 mt-1">
+						<?php foreach (LicenseTerms::LIMITS as $limit => $label): ?>
+							<div class="col-md-4">
+								<label for="<?= $limit ?>" class="form-label"><?= V::escape($label) ?></label>
+								<input
+									class="form-control"
+									type="number"
+									id="<?= $limit ?>"
+									name="<?= $limit ?>"
+									min="0"
+									max="<?= LicenseTerms::MAX_LIMIT ?>"
+									step="1"
+									value="<?= (int) $plans[0][$limit] ?>"
+									data-plan-limit
+									required
+								>
+							</div>
+						<?php endforeach; ?>
+					</div>
+					<div class="alert alert-warning mt-3" id="custom-notice" role="status" hidden>
+						<strong>Licencia personalizada.</strong>
+						Los cupos ya no son los del plan elegido. La licencia se firmará como personalizada y dejará de
+						seguir a su plan.
 					</div>
 					<div class="section-heading mt-5">
 						<span>04</span>

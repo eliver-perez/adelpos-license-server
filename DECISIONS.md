@@ -263,6 +263,19 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 10 | Las respuestas reales de la API se validan contra `openapi.yaml` en `HttpApiTest`, en cada petición: el cuerpo cumple el esquema de su ruta y de su código HTTP, la petición aceptada cumple el esquema de petición, y la respuesta trae exactamente los campos obligatorios. | Especificación, Fase 7: «las respuestas reales cumplen el esquema y el OpenAPI». |
 | 11 | La prueba del verificador en Go se omite si Go no está instalado. `composer test:contract` sigue comprobando los archivos de prueba. | El servidor de producción no necesita Go. |
 
+### Fase 8 — Panel: emisión con el modelo nuevo
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | Las fechas de una licencia (inicio del periodo, vencimiento y fin de actualizaciones) se muestran en la **zona horaria de su cliente**, con el nombre de la zona a la vista. Las fechas de eventos del panel (auditoría, activaciones, revisiones, historial) siguen en la zona del panel, `America/Monterrey`, también con su nombre. | Especificación, Fase 8, punto 6. Toda fecha lleva su zona escrita, así que no hay ambigüedad aunque en una pantalla convivan las dos. |
+| 2 | La zona horaria del cliente se elige de una lista con las zonas IANA que conoce el servidor. Por omisión, `America/Monterrey`. Cambiarla no modifica fechas ya firmadas. | Contrato, sección 5.1. |
+| 3 | En el formulario de emisión, el plan llena los tres cupos. Si se cambia un número aparece de inmediato el aviso «Licencia personalizada», y desaparece si se vuelve al valor del plan. El servidor es quien decide: compara lo recibido con el plan. | Especificación, Fase 8, punto 2. El aviso es una ayuda; la regla está en `LicenseService`. |
+| 4 | El detalle de la licencia muestra tipo con su condición, plan y si está personalizada, los tres cupos, «1 computadora principal a la vez», inicio, vencimiento, tolerancia, fin de actualizaciones y la zona del cliente. Una licencia sin activar muestra «Empieza al activar». | Especificación, Fase 8, punto 3. Sustituye a «Instalaciones: 1 autorizada», la última marca de herencia. |
+| 5 | Cada revisión firmada muestra su estado y, si es de cierre, su motivo: «licencia liberada», «transferida a otra computadora» o «revocada por el propietario». | Especificación, Fase 8, punto 3. |
+| 6 | Las constancias PDF guardan en su instantánea las condiciones, el periodo y la zona del cliente, y muestran modalidad, plan, cupos, inicio, vencimiento y fin de actualizaciones. | Especificación, Fase 8, punto 5. Su diseño final es de la etapa 5. |
+| 7 | Renovación y mantenimiento siguen como quedaron en la Fase 2: la tarjeta «Disponible próximamente» y el rechazo del servidor, con sus pruebas. | Especificación, Fase 8, punto 4. |
+| 8 | Sin dependencias nuevas. | — |
+
 ### Repaso de formato
 
 | # | Decisión | Motivo |
