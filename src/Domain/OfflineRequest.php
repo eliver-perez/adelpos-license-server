@@ -2,8 +2,35 @@
 declare(strict_types=1);
 namespace AdelPos\License\Domain;
 
+/** Solicitud sin internet «.licreq» (contrato V1.0, sección 9.1). */
 final class OfflineRequest
 {
+	public const ACTIONS = ['activate', 'renew', 'deactivate'];
+
+	/** Primera línea del mensaje que firma la instalación con su llave de licencias. */
+	public const SIGNATURE_PREFIX = "ADELPOS-LICREQ-V1\n";
+
+	/** Campos del contenido que lleva toda solicitud. */
+	private const FIELDS = [
+		'action',
+		'request_id',
+		'created_at',
+		'product_id',
+		'server_id',
+		'installation_public_key',
+		'app_version',
+	];
+
+	/** Instante en UTC terminado en «Z», con 0 a 9 decimales. */
+	private const INSTANT = '/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?Z\z/';
+
+	/**
+	 * Comprueba el sobre, el contenido y la firma de una solicitud.
+	 *
+	 * @return array{payload: array<string, string>, public: string, digest_material: string}
+	 *     el contenido sin el código comercial, la llave pública en binario y el texto con
+	 *     el que se reconoce un reintento de la misma solicitud
+	 */
 	public static function verify(string $envelope): array
 	{
 		$outer = StrictJson::object($envelope, 65536);
@@ -27,83 +54,19 @@ final class OfflineRequest
 			throw new ApiProblem('INVALID_REQUEST');
 		}
 		$payload = StrictJson::object($bytes, 49152);
-		$fields = [
-			'action',
-			'request_id',
-			'created_at',
-			'product_id',
-			'installation_id',
-			'installation_public_key',
-			'fingerprint_version',
-			'fingerprint_hash',
-		];
-		if (!in_array($payload['action'] ?? null, ['activate', 'renew', 'deactivate'], true)) {
-			throw new ApiProblem('INVALID_REQUEST');
-		}
-		if ($payload['action'] !== 'activate') {
-			$fields = [...$fields, 'license_id', 'activation_id'];
-		}
-		if (array_key_exists('license_key', $payload)) {
-			$fields[] = 'license_key';
-		}
-		$actual = array_keys($payload);
-		sort($actual);
-		sort($fields);
-		if ($actual !== $fields) {
-			throw new ApiProblem('INVALID_REQUEST');
-		}
-		foreach ($payload as $value) {
-			if (
-				!is_string($value) ||
-				$value === '' ||
-				strlen($value) > 256 ||
-				preg_match('/[\x00-\x1f\x7f]/', $value)
-			) {
-				throw new ApiProblem('INVALID_REQUEST');
-			}
-		}
-		Protocol::uuid($payload['request_id']);
-		$uuidV4 = '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/i';
-		if (!preg_match($uuidV4, $payload['installation_id'])) {
-			throw new ApiProblem('INVALID_REQUEST');
-		}
-		if ($payload['action'] !== 'activate') {
-			Protocol::uuid($payload['license_id']);
-			Protocol::uuid($payload['activation_id']);
-		}
-		// HEREDADO: se reemplaza en etapa 2–4 según CONTRATO_LICENCIAS_ADEL_POS.md (huella del equipo, versión '1')
-		if (
-			!preg_match('/\A[a-z][a-z0-9_]{1,63}\z/', $payload['product_id']) ||
-			$payload['fingerprint_version'] !== '1' ||
-			!preg_match('/\Asha256:[a-f0-9]{64}\z/', $payload['fingerprint_hash'])
-		) {
-			throw new ApiProblem('INVALID_REQUEST');
-		}
-		// Validate calendar and UTC without normalizing the signed bytes or trusting the device clock.
-		if (
-			!preg_match(
-				'/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|\+00:00)\z/',
-				$payload['created_at'],
-				$date,
-			) ||
-			!checkdate((int) $date[2], (int) $date[3], (int) $date[1]) ||
-			(int) $date[4] > 23 ||
-			(int) $date[5] > 59 ||
-			(int) $date[6] > 59
-		) {
-			throw new ApiProblem('INVALID_REQUEST');
-		}
+		self::assertContent($payload);
 		$public = Protocol::decode($payload['installation_public_key'], 32);
-		if (
-			!sodium_crypto_sign_verify_detached(
-				Protocol::decode($outer['signature_b64u'], 64),
-				"LICREQ-V1\n" . $outer['payload_b64u'],
-				$public,
-			)
-		) {
+		// Se firma el segmento tal como llegó: no se normaliza nada antes de verificar.
+		$signed = sodium_crypto_sign_verify_detached(
+			Protocol::decode($outer['signature_b64u'], 64),
+			self::SIGNATURE_PREFIX . $outer['payload_b64u'],
+			$public,
+		);
+		if (!$signed) {
 			throw new ApiProblem('INVALID_PROOF');
 		}
-		unset($payload['license_key']); // Only the encrypted original may contain a commercial credential.
+		// El código comercial solo queda en el original cifrado.
+		unset($payload['license_key']);
 		return [
 			'payload' => $payload,
 			'public' => $public,
@@ -113,5 +76,63 @@ final class OfflineRequest
 				'signature_b64u' => $outer['signature_b64u'],
 			]),
 		];
+	}
+
+	/** Campos exactos de cada acción y formato de cada uno. */
+	private static function assertContent(array $payload): void
+	{
+		$action = $payload['action'] ?? null;
+		if (!in_array($action, self::ACTIONS, true)) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+		$expected = self::FIELDS;
+		if ($action !== 'activate') {
+			$expected = [...$expected, 'license_id', 'activation_id'];
+		} elseif (array_key_exists('license_key', $payload)) {
+			// Opcional, y solo al activar: el propietario puede asignar la licencia sin él.
+			$expected[] = 'license_key';
+		}
+		$received = array_keys($payload);
+		sort($received);
+		sort($expected);
+		if ($received !== $expected) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+		foreach ($payload as $value) {
+			if (
+				!is_string($value) ||
+				$value === '' ||
+				strlen($value) > 256 ||
+				!mb_check_encoding($value, 'UTF-8') ||
+				preg_match('/[\x00-\x1f\x7f]/', $value)
+			) {
+				throw new ApiProblem('INVALID_REQUEST');
+			}
+		}
+		Protocol::uuid($payload['request_id']);
+		Protocol::serverId($payload['server_id']);
+		if ($action !== 'activate') {
+			Protocol::uuid($payload['license_id']);
+			Protocol::uuid($payload['activation_id']);
+		}
+		if (
+			!preg_match('/\A[a-z][a-z0-9_]{1,63}\z/', $payload['product_id']) ||
+			strlen($payload['app_version']) > 100 ||
+			!self::instant($payload['created_at'])
+		) {
+			throw new ApiProblem('INVALID_REQUEST');
+		}
+	}
+
+	/** Valida la fecha sin convertirla y sin confiar en el reloj del equipo que la escribió. */
+	private static function instant(string $value): bool
+	{
+		if (preg_match(self::INSTANT, $value, $date) !== 1) {
+			return false;
+		}
+		return checkdate((int) $date[2], (int) $date[3], (int) $date[1]) &&
+			(int) $date[4] <= 23 &&
+			(int) $date[5] <= 59 &&
+			(int) $date[6] <= 59;
 	}
 }

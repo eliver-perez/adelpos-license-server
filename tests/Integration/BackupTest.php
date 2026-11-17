@@ -71,10 +71,9 @@ final class BackupTest extends TestCase
 				'request_id' => Uuid::create(),
 				'created_at' => '2026-09-26T12:00:00Z',
 				'product_id' => 'adel_pos',
-				'installation_id' => Uuid::create(),
+				'server_id' => Uuid::create(),
 				'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
-				'fingerprint_version' => '1',
-				'fingerprint_hash' => 'sha256:' . str_repeat('d', 64),
+				'app_version' => '0.12.0',
 				'license_key' => $license['secret'],
 			];
 			$envelope = static function (array $input) use ($pair): string {
@@ -83,7 +82,10 @@ final class BackupTest extends TestCase
 					'schema_version' => '1.0',
 					'payload_b64u' => $bytes,
 					'signature_b64u' => Protocol::encode(
-						sodium_crypto_sign_detached("LICREQ-V1\n" . $bytes, sodium_crypto_sign_secretkey($pair)),
+						sodium_crypto_sign_detached(
+							"ADELPOS-LICREQ-V1\n" . $bytes,
+							sodium_crypto_sign_secretkey($pair),
+						),
 					),
 				]);
 			};
@@ -102,7 +104,8 @@ final class BackupTest extends TestCase
 			);
 			$keys->generate('backup-new', 'license');
 			$keys->activate('backup-new', 'Test rotation');
-			$renew = array_replace($payload, [
+			// El código comercial solo viaja al activar.
+			$renew = array_replace(array_diff_key($payload, ['license_key' => true]), [
 				'action' => 'renew',
 				'request_id' => Uuid::create(),
 				'license_id' => $license['id'],

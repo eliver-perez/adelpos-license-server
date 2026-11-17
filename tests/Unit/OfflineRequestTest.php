@@ -8,26 +8,31 @@ use PHPUnit\Framework\TestCase;
 
 final class OfflineRequestTest extends TestCase
 {
-	private function envelope(array $changes = [], ?string $inner = null): string
-	{
+	/** Solicitud de activación del contrato (sección 9.1); $prefix permite firmar con otro prefijo. */
+	private function envelope(
+		array $changes = [],
+		?string $inner = null,
+		string $prefix = "ADELPOS-LICREQ-V1\n",
+		array $remove = [],
+	): string {
 		$pair = sodium_crypto_sign_seed_keypair(str_repeat('x', 32));
 		$payload = [
 			'action' => 'activate',
 			'request_id' => Uuid::create(),
-			'created_at' => '2001-02-03T12:34:56.123456789+00:00',
+			'created_at' => '2001-02-03T12:34:56.123456789Z',
 			'product_id' => 'adel_pos',
-			'installation_id' => Uuid::create(),
+			'server_id' => Uuid::create(),
 			'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
-			'fingerprint_version' => '1',
-			'fingerprint_hash' => 'sha256:' . str_repeat('a', 64),
-			'license_key' => 'ADELPOS-sensitive-optional',
+			'app_version' => '0.12.0',
+			'license_key' => 'K7M-9R3X-6TVP-8CHD',
 		];
-		$encoded = Protocol::encode($inner ?? Protocol::json(array_replace($payload, $changes)));
+		$payload = array_diff_key(array_replace($payload, $changes), array_flip($remove));
+		$encoded = Protocol::encode($inner ?? Protocol::json($payload));
 		return Protocol::json([
 			'schema_version' => '1.0',
 			'payload_b64u' => $encoded,
 			'signature_b64u' => Protocol::encode(
-				sodium_crypto_sign_detached("LICREQ-V1\n" . $encoded, sodium_crypto_sign_secretkey($pair)),
+				sodium_crypto_sign_detached($prefix . $encoded, sodium_crypto_sign_secretkey($pair)),
 			),
 		]);
 	}
@@ -36,32 +41,88 @@ final class OfflineRequestTest extends TestCase
 	{
 		$envelope = $this->envelope();
 		$verified = OfflineRequest::verify($envelope);
-		self::assertArrayNotHasKey('license_key', $verified['payload']);
-		self::assertSame('2001-02-03T12:34:56.123456789+00:00', $verified['payload']['created_at']);
+		// El contenido que se guarda a la vista nunca lleva el código comercial.
+		self::assertSame(
+			['action', 'request_id', 'created_at', 'product_id', 'server_id', 'installation_public_key', 'app_version'],
+			array_keys($verified['payload']),
+		);
+		self::assertSame('2001-02-03T12:34:56.123456789Z', $verified['payload']['created_at']);
 		$reformatted = json_encode(array_reverse(json_decode($envelope, true), true), JSON_PRETTY_PRINT);
 		self::assertSame($verified, OfflineRequest::verify($reformatted));
-		foreach (glob(dirname(__DIR__, 2) . '/contracts/v1/fixtures/*.licreq') as $file) {
-			self::assertContains(OfflineRequest::verify(file_get_contents($file))['payload']['action'], [
-				'activate',
-				'renew',
-				'deactivate',
-			]);
+		// El código comercial es opcional al activar.
+		OfflineRequest::verify($this->envelope(remove: ['license_key']));
+		// «renew» y «deactivate» llevan la licencia y la activación, y no llevan código.
+		$bound = [
+			'license_id' => '11111111-1111-4111-8111-111111111111',
+			'activation_id' => '33333333-3333-4333-8333-333333333333',
+		];
+		foreach (['renew', 'deactivate'] as $action) {
+			$payload = OfflineRequest::verify($this->envelope(['action' => $action] + $bound, remove: ['license_key']))[
+				'payload'
+			];
+			self::assertSame($action, $payload['action']);
+			self::assertCount(9, $payload);
 		}
+		// Sin decimales también es un instante válido.
+		OfflineRequest::verify($this->envelope(['created_at' => '2026-11-16T06:30:00Z']));
+	}
+
+	public function testTheReplacedFormatIsRejected(): void
+	{
+		$fingerprint = ['fingerprint_version' => '1', 'fingerprint_hash' => 'sha256:' . str_repeat('a', 64)];
+		$previous = ['installation_id' => Uuid::create()] + $fingerprint;
+		$invalid = [
+			'huella' => $this->envelope($fingerprint),
+			'identidad anterior' => $this->envelope($previous, remove: ['server_id', 'app_version']),
+			'solicitud anterior completa' => $this->envelope(
+				$previous,
+				prefix: "LICREQ-V1\n",
+				remove: ['server_id', 'app_version'],
+			),
+		];
+		foreach ($invalid as $label => $envelope) {
+			try {
+				OfflineRequest::verify($envelope);
+				self::fail('Accepted: ' . $label);
+			} catch (ApiProblem $error) {
+				self::assertSame('INVALID_REQUEST', $error->errorCode, $label);
+			}
+		}
+		// El contenido correcto firmado con el prefijo anterior no autentica.
+		try {
+			OfflineRequest::verify($this->envelope(prefix: "LICREQ-V1\n"));
+			self::fail('Previous signature prefix accepted');
+		} catch (ApiProblem $error) {
+			self::assertSame(['INVALID_PROOF', 401], [$error->errorCode, $error->status]);
+		}
+		self::assertSame("ADELPOS-LICREQ-V1\n", OfflineRequest::SIGNATURE_PREFIX);
 	}
 
 	public static function invalidPayloads(): array
 	{
+		$bound = [
+			'license_id' => '11111111-1111-4111-8111-111111111111',
+			'activation_id' => '33333333-3333-4333-8333-333333333333',
+		];
 		return [
 			'wrong calendar' => [['created_at' => '2026-02-30T00:00:00Z']],
 			'non UTC' => [['created_at' => '2026-01-01T00:00:00-06:00']],
+			'UTC written as an offset' => [['created_at' => '2026-01-01T00:00:00+00:00']],
+			'ten decimals' => [['created_at' => '2026-01-01T00:00:00.1234567890Z']],
 			'invalid hour' => [['created_at' => '2026-01-01T24:00:00Z']],
 			'missing seconds' => [['created_at' => '2026-01-01T00:00Z']],
-			'non v4' => [['installation_id' => '00000000-0000-1000-8000-000000000000']],
-			'numeric version' => [['fingerprint_version' => 1]],
+			'server_id is not version 4' => [['server_id' => '00000000-0000-1000-8000-000000000000']],
+			'uppercase server_id' => [['server_id' => 'AAAAAAAA-2222-4222-8222-222222222222']],
+			'numeric version' => [['app_version' => 12]],
+			'empty version' => [['app_version' => '']],
+			'version over 100 characters' => [['app_version' => str_repeat('1', 101)]],
 			'unknown member' => [['features' => ['prueba_d' => true]]],
 			'renew missing identity' => [['action' => 'renew']],
-			'invalid fingerprint' => [['fingerprint_hash' => 'sha256:' . str_repeat('A', 64)]],
+			'renew with a commercial code' => [['action' => 'renew'] + $bound],
+			'activate with an activation' => [$bound],
 			'invalid action' => [['action' => 'refresh']],
+			'transfer is not an offline action' => [['action' => 'transfer']],
+			'invalid product' => [['product_id' => 'Adel POS']],
 			'padded public' => [['installation_public_key' => str_repeat('a', 43) . '=']],
 			'control character' => [['license_key' => "secret\n"]],
 		];

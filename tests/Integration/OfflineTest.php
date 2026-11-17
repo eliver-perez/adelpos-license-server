@@ -78,13 +78,14 @@ final class OfflineTest extends TestCase
 			'request_id' => Uuid::create(),
 			'created_at' => '1999-01-01T00:00:00Z',
 			'product_id' => 'adel_pos',
-			'installation_id' => $device['id'],
+			'server_id' => $device['id'],
 			'installation_public_key' => $device['public'],
-			'fingerprint_version' => '1',
-			'fingerprint_hash' => 'sha256:' . str_repeat('b', 64),
-			'license_key' => $this->license['secret'],
+			'app_version' => '0.12.0',
 		];
-		if ($activation !== null) {
+		if ($activation === null) {
+			// El código comercial es opcional y solo viaja al activar.
+			$payload['license_key'] = $this->license['secret'];
+		} else {
 			$payload += ['license_id' => $activation['license_id'], 'activation_id' => $activation['activation_id']];
 		}
 		$encoded = Protocol::encode(Protocol::json(array_replace($payload, $changes)));
@@ -92,7 +93,7 @@ final class OfflineTest extends TestCase
 			'schema_version' => '1.0',
 			'payload_b64u' => $encoded,
 			'signature_b64u' => Protocol::encode(
-				sodium_crypto_sign_detached("LICREQ-V1\n" . $encoded, $device['secret']),
+				sodium_crypto_sign_detached("ADELPOS-LICREQ-V1\n" . $encoded, $device['secret']),
 			),
 		]);
 	}
@@ -304,14 +305,21 @@ final class OfflineTest extends TestCase
 		}
 		self::assertSame('pending', $this->app->read->offline($id)['status']);
 		self::assertSame(1, $this->rowCount('license_revisions'));
-		$renewed = $this->payload($this->approve($id));
-		self::assertSame($active['activation_id'], $renewed['activation_id']);
-		self::assertSame(2, $renewed['license_revision']);
-		// «renew» entrega los derechos vigentes: las fechas del primer periodo no cambian.
+		// Días después se aprueba: «renew» entrega la revisión vigente, sin firmar otra.
+		$this->clock->instant = $this->clock->instant->modify('+4 days');
+		$result = $this->approve($id);
+		$renewed = $this->payload($result);
+		self::assertSame($active, $renewed);
+		self::assertSame(1, $renewed['license_revision']);
 		self::assertSame('2026-10-25T12:00:00.000000Z', $renewed['expires_at']);
-		self::assertSame($active['expires_at'], $renewed['expires_at']);
-		self::assertSame($active['period_starts_at'], $renewed['period_starts_at']);
 		self::assertSame(5, $renewed['grace_days']);
+		self::assertSame(1, $this->rowCount('license_revisions'));
+		self::assertSame(1, (int) $this->app->read->license($this->license['id'])['revision_counter']);
+		// La decisión apunta a la revisión que ya existía: es el mismo archivo .lic.
+		self::assertSame(
+			$this->app->db->one('SELECT BIN_TO_UUID(revision_id) AS id FROM license_revisions')['id'],
+			$result['revision_id'],
+		);
 		self::assertSame(1, (int) $this->app->read->license($this->license['id'])['row_version']);
 		self::assertSame(0, $this->rowCount('subscription_periods'));
 	}
@@ -322,9 +330,17 @@ final class OfflineTest extends TestCase
 		$id = $this->import($this->envelope('renew', $active));
 		$renewed = $this->payload($this->approve($id));
 		self::assertNull($renewed['expires_at']);
-		self::assertSame($active['updates_until'], $renewed['updates_until']);
-		self::assertSame($active['activation_id'], $renewed['activation_id']);
-		self::assertSame(2, $renewed['license_revision']);
+		self::assertSame($active, $renewed);
+		self::assertSame(1, $this->rowCount('license_revisions'));
+		// Si los derechos cambiaron después, otra solicitud recibe la revisión nueva.
+		$this->app->licenses->change($this->actor, Uuid::create(), $this->license['id'], 'features', [
+			'version' => 1,
+			'features' => ['prueba_d'],
+			'reason' => 'Cambio de módulos',
+		]);
+		$current = $this->payload($this->approve($this->import($this->envelope('renew', $active)), ['version' => 2]));
+		self::assertSame([2, ['prueba_d' => true]], [$current['license_revision'], $current['features']]);
+		self::assertSame(2, $this->rowCount('license_revisions'));
 	}
 
 	public function testSignedDeactivationReleasesSlotAndLeavesTerminalRevision(): void
@@ -365,7 +381,7 @@ final class OfflineTest extends TestCase
 		$active = $this->activate();
 		foreach (
 			[
-				'installation_id' => Uuid::create(),
+				'server_id' => Uuid::create(),
 				'license_id' => Uuid::create(),
 				'activation_id' => Uuid::create(),
 			]
@@ -379,9 +395,7 @@ final class OfflineTest extends TestCase
 			}
 		}
 		try {
-			$this->import(
-				$this->envelope('renew', $active, ['installation_id' => $this->device['id']], $this->device()),
-			);
+			$this->import($this->envelope('renew', $active, ['server_id' => $this->device['id']], $this->device()));
 			self::fail('Different key accepted');
 		} catch (Problem $error) {
 			self::assertSame(409, $error->status);
@@ -393,13 +407,207 @@ final class OfflineTest extends TestCase
 			'reason' => 'Damaged device',
 			'accept_offline_limit' => '1',
 		]);
+		// La activación ya terminó: su solicitud recibe la revisión de cierre, y no se firma otra.
+		$closing = $this->payload($this->approve($pending));
+		self::assertSame(
+			[$active['activation_id'], 'revoked', 'transferred', 2],
+			[
+				$closing['activation_id'],
+				$closing['license_status'],
+				$closing['status_reason'],
+				$closing['license_revision'],
+			],
+		);
+		self::assertSame(2, $this->rowCount('license_revisions'));
+		self::assertSame('approved', $this->app->read->offline($pending)['status']);
+		self::assertSame('transferred', $this->app->db->one('SELECT state FROM activations')['state']);
+	}
+
+	public function testTheSameInstallationActivatingAgainReceivesItsCurrentRevision(): void
+	{
+		$active = $this->activate();
+		$license = $this->app->db->one('SELECT * FROM licenses');
+		$this->clock->instant = $this->clock->instant->modify('+7 days');
+		// La misma computadora (misma identidad y misma llave) pide activar otra vez.
+		$again = $this->payload($this->approve($this->import($this->envelope(changes: ['app_version' => '0.13.0']))));
+		self::assertSame($active, $again);
+		self::assertSame(1, $this->rowCount('activations'));
+		self::assertSame(1, $this->rowCount('license_revisions'));
+		self::assertSame(0, $this->rowCount('license_transfers'));
+		$after = $this->app->db->one('SELECT * FROM licenses');
+		foreach (
+			['period_starts_at', 'updates_until', 'anchor_day', 'anchor_local_time', 'revision_counter']
+			as $field
+		) {
+			self::assertSame($license[$field], $after[$field], $field);
+		}
+		// Queda registrada la versión de AD-EL POS que firmó la última solicitud.
+		self::assertSame('0.13.0', $this->app->db->one('SELECT app_version FROM activations')['app_version']);
+		// No es una transferencia: no se puede forzar contra sí misma.
+		$forced = $this->import($this->envelope());
 		try {
-			$this->approve($pending);
-			self::fail('Terminal activation renewed');
+			$this->approve($forced, ['force_activation_id' => $active['activation_id'], 'accept_offline_limit' => '1']);
+			self::fail('Transfer to the same installation accepted');
+		} catch (Problem $error) {
+			self::assertSame('El destino debe ser otra instalación.', $error->getMessage());
+		}
+		// La misma identidad con otra llave es otra instalación: necesita la transferencia del propietario.
+		$impostor = $this->device();
+		$impostor['id'] = $this->device['id'];
+		$other = $this->import($this->envelope(device: $impostor));
+		try {
+			$this->approve($other);
+			self::fail('Another key received the license');
 		} catch (Problem $error) {
 			self::assertSame(409, $error->status);
 		}
-		self::assertSame('pending', $this->app->read->offline($pending)['status']);
+		$transferred = $this->payload(
+			$this->approve($other, ['force_activation_id' => $active['activation_id'], 'accept_offline_limit' => '1']),
+		);
+		self::assertSame(
+			[3, $impostor['public']],
+			[$transferred['license_revision'], $transferred['installation_public_key']],
+		);
+	}
+
+	public function testThePeriodStartsWhenTheRequestIsApprovedAndTheStoredCopyNeverChanges(): void
+	{
+		$this->license = $this->issue('subscription');
+		$envelope = $this->envelope(changes: ['created_at' => '2026-09-01T08:00:00.5Z', 'app_version' => '0.12.3']);
+		$id = $this->import($envelope);
+		// Recibir la solicitud no concede nada: la licencia sigue sin fechas.
+		$license = $this->app->db->one('SELECT * FROM licenses WHERE license_id=?', [
+			Uuid::bytes($this->license['id']),
+		]);
+		self::assertNull($license['period_starts_at']);
+		self::assertSame(0, $this->rowCount('activations'));
+		// Se aprueba tres días después, a las 18:30:15 UTC (12:30:15 en America/Monterrey).
+		$this->clock->instant = new \DateTimeImmutable('2026-09-28T18:30:15.250000Z');
+		$payload = $this->payload($this->approve($id));
+		self::assertSame(
+			[
+				'issued_at' => '2026-09-28T18:30:15.250000Z',
+				'period_starts_at' => '2026-09-28T18:30:15.250000Z',
+				'expires_at' => '2026-10-28T18:30:15.250000Z',
+				'updates_until' => '2026-10-28T18:30:15.250000Z',
+			],
+			array_intersect_key($payload, [
+				'issued_at' => 1,
+				'period_starts_at' => 1,
+				'expires_at' => 1,
+				'updates_until' => 1,
+			]),
+		);
+		$license = $this->app->db->one('SELECT * FROM licenses WHERE license_id=?', [
+			Uuid::bytes($this->license['id']),
+		]);
+		self::assertSame([28, '12:30:15.250000'], [(int) $license['anchor_day'], $license['anchor_local_time']]);
+		$activation = $this->app->db->one('SELECT * FROM activations');
+		self::assertSame(
+			['2026-09-28 18:30:15.250000', '0.12.3', Uuid::bytes($this->device['id'])],
+			[$activation['activated_at'], $activation['app_version'], $activation['server_id']],
+		);
+		// El original se conserva cifrado y sin cambios, byte por byte, con su código comercial dentro.
+		$stored = $this->app->db->one('SELECT evidence_encrypted,projection_json FROM offline_requests');
+		self::assertSame(
+			$envelope,
+			$this->app->crypto->decryptEvidence($stored['evidence_encrypted'], 'offline:v1:' . $id),
+		);
+		self::assertStringNotContainsString($this->license['secret'], $stored['projection_json']);
+		self::assertStringNotContainsString($envelope, $stored['evidence_encrypted']);
+	}
+
+	public function testRequestsOfTheReplacedFormatAreRejected(): void
+	{
+		$sign = function (array $payload, string $prefix): string {
+			$encoded = Protocol::encode(Protocol::json($payload));
+			return Protocol::json([
+				'schema_version' => '1.0',
+				'payload_b64u' => $encoded,
+				'signature_b64u' => Protocol::encode(
+					sodium_crypto_sign_detached($prefix . $encoded, $this->device['secret']),
+				),
+			]);
+		};
+		$current = [
+			'action' => 'activate',
+			'request_id' => Uuid::create(),
+			'created_at' => '2026-09-25T12:00:00Z',
+			'product_id' => 'adel_pos',
+			'server_id' => $this->device['id'],
+			'installation_public_key' => $this->device['public'],
+			'app_version' => '0.12.0',
+		];
+		$fingerprint = ['fingerprint_version' => '1', 'fingerprint_hash' => 'sha256:' . str_repeat('b', 64)];
+		$previous = array_diff_key($current, ['server_id' => 1, 'app_version' => 1]) + [
+			'installation_id' => $this->device['id'],
+			...$fingerprint,
+		];
+		$cases = [
+			'solicitud anterior completa' => [$sign($previous, "LICREQ-V1\n"), 400],
+			'contenido anterior con el prefijo nuevo' => [$sign($previous, "ADELPOS-LICREQ-V1\n"), 400],
+			'contenido nuevo con huella' => [$sign($current + $fingerprint, "ADELPOS-LICREQ-V1\n"), 400],
+			'contenido nuevo sin versión de la aplicación' => [
+				$sign(array_diff_key($current, ['app_version' => 1]), "ADELPOS-LICREQ-V1\n"),
+				400,
+			],
+			'contenido nuevo firmado con el prefijo anterior' => [$sign($current, "LICREQ-V1\n"), 401],
+			'otra versión del sobre' => [
+				str_replace('"schema_version":"1.0"', '"schema_version":"2.0"', $sign($current, "ADELPOS-LICREQ-V1\n")),
+				400,
+			],
+		];
+		foreach ($cases as $label => [$envelope, $status]) {
+			try {
+				$this->import($envelope);
+				self::fail('Accepted: ' . $label);
+			} catch (Problem $error) {
+				self::assertSame($status, $error->status, $label);
+			}
+		}
+		// Nada quedó reservado ni guardado.
+		self::assertSame(0, $this->rowCount('license_requests'));
+		self::assertSame(0, $this->rowCount('offline_requests'));
+		// La misma solicitud, con el formato del contrato, sí se recibe.
+		self::assertNotSame('', $this->import($sign($current, "ADELPOS-LICREQ-V1\n")));
+	}
+
+	public function testRenewAndDeactivateOfARevokedLicenseDeliverItsClosingRevision(): void
+	{
+		$active = $this->activate();
+		$this->app->licenses->change($this->actor, Uuid::create(), $this->license['id'], 'revoke', [
+			'version' => 1,
+			'reason' => 'Revocación comercial',
+		]);
+		self::assertSame(2, $this->rowCount('license_revisions'));
+		$version = (int) $this->app->read->license($this->license['id'])['row_version'];
+		// La computadora, sin internet, todavía no sabe que su licencia fue revocada.
+		foreach (['renew' => [], 'deactivate' => ['accept_offline_limit' => '1']] as $action => $extra) {
+			$closing = $this->payload(
+				$this->approve($this->import($this->envelope($action, $active)), ['version' => $version] + $extra),
+			);
+			self::assertSame(
+				[$active['activation_id'], 'revoked', 'revoked', 2],
+				[
+					$closing['activation_id'],
+					$closing['license_status'],
+					$closing['status_reason'],
+					$closing['license_revision'],
+				],
+				$action,
+			);
+		}
+		// No se firmó nada más y la activación conserva su estado.
+		self::assertSame(2, $this->rowCount('license_revisions'));
+		self::assertSame('revoked', $this->app->db->one('SELECT state FROM activations')['state']);
+		// Activar una licencia revocada sigue sin ser posible.
+		$this->device = $this->device();
+		try {
+			$this->approve($this->import($this->envelope()), ['version' => $version]);
+			self::fail('Revoked license activated');
+		} catch (Problem $error) {
+			self::assertSame('La licencia no está disponible para este producto.', $error->getMessage());
+		}
 	}
 
 	public function testForcedTransferIsAtomicAndRecordsBothInstallations(): void

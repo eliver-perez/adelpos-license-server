@@ -233,6 +233,20 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 11 | Las rutas (`ApiKernel::ROUTES`) y el tamaño máximo (`MAX_BODY_BYTES`, 16 KiB) son constantes públicas. | La Fase 7 las compara con `openapi.yaml`. |
 | 12 | Sin dependencias nuevas de Composer en esta fase. | — |
 
+### Fase 6 — Archivos sin internet
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | El contenido de un `.licreq` tiene exactamente los campos de la sección 9.1: `server_id` y `app_version`, sin huella. `license_key` es opcional y **solo se acepta en `activate`**. | Contrato, sección 9.1: «en `activate`, opcionalmente `license_key`». Antes se aceptaba en cualquier acción. |
+| 2 | `created_at` debe ser UTC terminado en `Z`, con 0 a 9 decimales. Ya no se acepta `+00:00`. Es un dato informativo: ninguna fecha de la licencia sale de él. | Contrato, sección 3. |
+| 3 | `renew` entrega la revisión vigente de la activación, tal como está firmada. No firma otra ni avanza el contador. La decisión guardada apunta a esa misma revisión. | Especificación, Fase 6, punto 2. Si los derechos cambiaron, la revisión vigente ya es la nueva. |
+| 4 | `renew` y `deactivate` se atienden aunque la activación haya terminado o la licencia esté revocada: la computadora recibe su revisión de cierre. `activate` sigue exigiendo una licencia vigente. | Propuesta V1.1 n.º 12. Una computadora sin internet solo se entera de su revocación o de su transferencia por esta vía. |
+| 5 | `activate` de la misma instalación (misma identidad y misma llave, con activación vigente) entrega su revisión vigente sin crear otra activación. No es una transferencia y no puede forzarse contra sí misma. La misma identidad con otra llave es otra instalación y necesita la transferencia del propietario. | Propuesta V1.1 n.º 12, con la misma definición de «misma instalación» que la API en línea. |
+| 6 | La versión de AD-EL POS que firmó la solicitud se guarda en la activación, igual que en la API en línea. | Decisión 8 de la Fase 5. |
+| 7 | El panel muestra `server_id` y la versión de AD-EL POS en la revisión de una solicitud, y avisa cuando la computadora que pide activar ya tiene la licencia. | La huella ya no existe. |
+| 8 | La transferencia forzada y la liberación forzada del panel siguen como estaban, con su confirmación de identidad. Firman `transferred` desde la Fase 4. | Especificación, Fase 6, punto 5. Su relación con el autoservicio es de la etapa 4. |
+| 9 | Sin dependencias nuevas de Composer en esta fase. | — |
+
 ### Repaso de formato
 
 | # | Decisión | Motivo |

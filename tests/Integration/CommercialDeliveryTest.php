@@ -112,17 +112,16 @@ final class CommercialDeliveryTest extends TestCase
 			'request_id' => Uuid::create(),
 			'created_at' => '2026-10-21T12:00:00Z',
 			'product_id' => 'adel_pos',
-			'installation_id' => $installation,
+			'server_id' => $installation,
 			'installation_public_key' => Protocol::encode(sodium_crypto_sign_publickey($pair)),
-			'fingerprint_version' => '1',
-			'fingerprint_hash' => 'sha256:' . str_repeat('a', 64),
+			'app_version' => '0.12.0',
 		];
 		$encoded = Protocol::encode(Protocol::json($payload));
 		$request = Protocol::json([
 			'schema_version' => '1.0',
 			'payload_b64u' => $encoded,
 			'signature_b64u' => Protocol::encode(
-				sodium_crypto_sign_detached("LICREQ-V1\n" . $encoded, sodium_crypto_sign_secretkey($pair)),
+				sodium_crypto_sign_detached("ADELPOS-LICREQ-V1\n" . $encoded, sodium_crypto_sign_secretkey($pair)),
 			),
 		]);
 		$imported = $app->offline->import($this->actor, Uuid::create(), $request);

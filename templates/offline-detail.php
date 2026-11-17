@@ -9,8 +9,15 @@ foreach ($license['activations'] ?? [] as $activation) {
 		$active = $activation;
 	}
 }
-$needsTransfer = $payload['action'] === 'activate' && $active !== null;
-$canApprove = $license !== null && $license['commercial_status'] === 'issued';
+// La misma computadora es la misma identidad con la misma llave que la instalación activa.
+$sameInstallation =
+	$active !== null &&
+	$active['installation_text'] === $payload['server_id'] &&
+	$active['public_key_text'] === $payload['installation_public_key'];
+$needsTransfer = $payload['action'] === 'activate' && $active !== null && !$sameInstallation;
+// Activar exige una licencia vigente. Las otras dos acciones se atienden aunque esté revocada:
+// la computadora recibe su revisión de cierre.
+$canApprove = $license !== null && ($payload['action'] !== 'activate' || $license['commercial_status'] === 'issued');
 $approveLabel = $needsTransfer ? 'Confirmar transferencia' : 'Aprobar y generar .lic';
 $actionNames = ['activate' => 'Activación', 'renew' => 'Renovación', 'deactivate' => 'Desactivación'];
 $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' => 'Rechazada'];
@@ -44,15 +51,15 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 				</div>
 				<div class="wide">
 					<dt>Instalación</dt>
-					<dd class="mono"><?= V::escape($payload['installation_id']) ?></dd>
+					<dd class="mono"><?= V::escape($payload['server_id']) ?></dd>
 				</div>
 				<div class="wide">
 					<dt>Clave pública de instalación</dt>
 					<dd class="mono"><?= V::escape($payload['installation_public_key']) ?></dd>
 				</div>
-				<div class="wide">
-					<dt>Huella del equipo · versión <?= V::escape($payload['fingerprint_version']) ?></dt>
-					<dd class="mono"><?= V::escape($payload['fingerprint_hash']) ?></dd>
+				<div>
+					<dt>Versión de AD-EL POS</dt>
+					<dd class="mono"><?= V::escape($payload['app_version']) ?></dd>
 				</div>
 				<?php if (isset($payload['activation_id'])): ?>
 					<div class="wide">
@@ -186,8 +193,14 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 					<input type="hidden" name="renewal_mode" value="current">
 					<?php if ($payload['action'] === 'renew'): ?>
 						<p class="small text-secondary">
-							Se entregará una revisión con los derechos actuales de la licencia. Registrar una renovación
-							o una compra de mantenimiento al aprobar estará disponible próximamente.
+							Se entregará la revisión vigente de la licencia, tal como está firmada. Registrar una
+							renovación o una compra de mantenimiento al aprobar estará disponible próximamente.
+						</p>
+					<?php endif; ?>
+					<?php if ($payload['action'] === 'activate' && $sameInstallation): ?>
+						<p class="small text-secondary">
+							Esta computadora ya tiene activa la licencia. Recibirá su archivo vigente: no se crea otra
+							activación ni cambian las fechas.
 						</p>
 					<?php endif; ?>
 					<?php if ($payload['action'] === 'deactivate'): ?>

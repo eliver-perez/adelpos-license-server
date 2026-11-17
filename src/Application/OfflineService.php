@@ -42,7 +42,7 @@ final class OfflineService
 						$requestId,
 						$payload['action'],
 						$digest,
-						Uuid::bytes($payload['installation_id']),
+						Uuid::bytes($payload['server_id']),
 						isset($payload['activation_id']) ? Uuid::bytes($payload['activation_id']) : null,
 						$verified['public'],
 						$this->clock->sql(),
@@ -68,7 +68,8 @@ final class OfflineService
 				}
 				$this->lockProduct($payload['product_id']);
 				if ($payload['action'] !== 'activate') {
-					$license = $this->lockLicense($payload['license_id'], $payload['product_id']);
+					// Solo se recibe la solicitud de una instalación que esta licencia conoce.
+					$license = $this->lockLicense($payload['license_id'], $payload['product_id'], false);
 					$this->boundActivation($payload, $license);
 				}
 				$id = Uuid::create();
@@ -172,7 +173,9 @@ final class OfflineService
 				) {
 					throw new Problem('La licencia debe coincidir con la solicitud firmada.');
 				}
-				$license = $this->lockLicense($licenseId, $payload['product_id']);
+				// Activar exige una licencia vigente. «renew» y «deactivate» también se atienden si la
+				// licencia fue revocada: la computadora recibe su revisión de cierre.
+				$license = $this->lockLicense($licenseId, $payload['product_id'], $payload['action'] === 'activate');
 				if ((int) $license['row_version'] !== $version) {
 					throw new Problem('Los derechos cambiaron. Revisa nuevamente la licencia.', 409);
 				}
@@ -187,39 +190,54 @@ final class OfflineService
 							ORDER BY activation_id FOR UPDATE",
 						[$license['license_id']],
 					);
+					// La misma instalación es la misma identidad con la misma llave, igual que en la API en línea.
+					$sameInstallation =
+						$active &&
+						$active['server_id'] === Uuid::bytes($payload['server_id']) &&
+						hash_equals($active['installation_public_key'], $verified['public']);
 					if ($outgoing !== '') {
 						if (!$active || $active['activation_id'] !== Uuid::bytes($outgoing)) {
 							throw new Problem('La instalación de origen cambió. Revisa la transferencia.', 409);
 						}
-						if ($active['server_id'] === Uuid::bytes($payload['installation_id'])) {
+						if ($sameInstallation) {
 							throw new Problem('El destino debe ser otra instalación.');
 						}
 						$this->retire($license['license_id'], $active['activation_id'], true);
-					} elseif ($active) {
+					} elseif ($active && !$sameInstallation) {
 						// Una licencia vale para una sola computadora principal a la vez (contrato, sección 1).
 						throw new Problem(
 							'La licencia ya tiene una instalación activa. Desactívala o solicita transferencia.',
 							409,
 						);
 					}
-					// El primer periodo de la licencia empieza en este momento, el de la aprobación.
-					$activation = $this->activator->activate(
-						$license,
-						Uuid::bytes($payload['installation_id']),
-						$verified['public'],
-						null,
-					);
-					$activationId = $activation['activation_id'];
-					$revision = $activation['revision'];
-				} else {
-					$activationId = $this->boundActivation($payload, $license)['activation_id'];
-					if ($payload['action'] === 'deactivate') {
-						$this->db->execute(
-							"UPDATE activations SET state='deactivated',ended_at=? WHERE activation_id=?",
-							[$this->clock->sql(), $activationId],
+					if ($outgoing === '' && $sameInstallation) {
+						// Esta computadora ya tiene la licencia: recibe su revisión vigente, sin otra activación ni otras fechas.
+						$activationId = $active['activation_id'];
+						$this->recordVersion($active, $payload);
+						$revision = $this->currentRevision($active);
+					} else {
+						// El primer periodo de la licencia empieza en este momento, el de la aprobación.
+						$activation = $this->activator->activate(
+							$license,
+							Uuid::bytes($payload['server_id']),
+							$verified['public'],
+							$payload['app_version'],
 						);
+						$activationId = $activation['activation_id'];
+						$revision = $activation['revision'];
 					}
-					$revision = $this->publisher->publish($license['license_id'], $activationId);
+				} else {
+					$activation = $this->boundActivation($payload, $license);
+					$activationId = $activation['activation_id'];
+					$this->recordVersion($activation, $payload);
+					if ($payload['action'] === 'deactivate' && $activation['state'] === 'active') {
+						// Libera la licencia y firma la revisión de cierre «deactivated».
+						$revision = $this->retire($license['license_id'], $activationId, false);
+					} else {
+						// «renew» entrega la revisión vigente, sin firmar otra. Si la activación ya terminó,
+						// la revisión vigente es la de cierre, y eso es lo que recibe.
+						$revision = $this->currentRevision($activation);
+					}
 				}
 				if ($outgoing !== '') {
 					$this->transferRecord(
@@ -315,16 +333,47 @@ final class OfflineService
 		}
 	}
 
-	private function lockLicense(string $id, string $product): array
+	/** Bloquea la licencia del producto. Para activar debe estar vigente, no revocada. */
+	private function lockLicense(string $id, string $product, bool $mustBeIssued = true): array
 	{
 		$license = $this->db->one('SELECT * FROM licenses WHERE license_id=? AND product_id=? FOR UPDATE', [
 			Uuid::bytes($id),
 			$product,
 		]);
-		if (!$license || $license['commercial_status'] !== 'issued') {
+		if (!$license || ($mustBeIssued && $license['commercial_status'] !== 'issued')) {
 			throw new Problem('La licencia no está disponible para este producto.');
 		}
 		return $license;
+	}
+
+	/** Revisión vigente de una activación, con la misma forma que devuelve RevisionPublisher::publish(). */
+	private function currentRevision(array $activation): array
+	{
+		$revision = $this->db->one(
+			'SELECT revision_id,license_revision,license_jws
+				FROM license_revisions
+				WHERE revision_id=? AND activation_id=?',
+			[$activation['current_revision_id'], $activation['activation_id']],
+		);
+		if (!$revision) {
+			throw new \RuntimeException('Missing current revision.');
+		}
+		return [
+			'revision' => (int) $revision['license_revision'],
+			'revision_id' => Uuid::text($revision['revision_id']),
+			'jws' => $revision['license_jws'],
+		];
+	}
+
+	/** Guarda la versión de AD-EL POS que firmó la última solicitud de la activación. */
+	private function recordVersion(array $activation, array $payload): void
+	{
+		if ($activation['app_version'] !== $payload['app_version']) {
+			$this->db->execute('UPDATE activations SET app_version=? WHERE activation_id=?', [
+				$payload['app_version'],
+				$activation['activation_id'],
+			]);
+		}
 	}
 
 	private function boundActivation(array $payload, array $license): array
@@ -333,17 +382,17 @@ final class OfflineService
 			Uuid::bytes($payload['activation_id']),
 			$license['license_id'],
 		]);
+		// No importa si la activación sigue vigente: una que ya terminó recibe su revisión de cierre.
 		if (
 			!$activation ||
-			$activation['state'] !== 'active' ||
 			$activation['product_id'] !== $payload['product_id'] ||
-			$activation['server_id'] !== Uuid::bytes($payload['installation_id']) ||
+			$activation['server_id'] !== Uuid::bytes($payload['server_id']) ||
 			!hash_equals(
 				$activation['installation_public_key'],
 				Protocol::decode($payload['installation_public_key'], 32),
 			)
 		) {
-			throw new Problem('La identidad firmada no coincide con una instalación activa de esta licencia.', 409);
+			throw new Problem('La identidad firmada no coincide con una instalación de esta licencia.', 409);
 		}
 		return $activation;
 	}

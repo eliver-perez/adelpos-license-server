@@ -879,7 +879,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | Repaso de formato (regla del propietario) | **Hecho.** 261 pruebas, 26 248 aserciones, todas OK. Verificador Go OK. Playwright OK. |
 | 4 — Contenido y firma de la licencia | **Cerrada.** 340 pruebas, 26 412 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 7 de las 20 marcas de herencia. |
 | 5 — API en línea | **Cerrada.** 344 pruebas, 26 611 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 6 de las 20 marcas de herencia. |
-| 6 — Archivos sin internet | Pendiente |
+| 6 — Archivos sin internet | **Cerrada.** 357 pruebas, 26 674 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 5 de las 20 marcas de herencia. |
 | 7 — Archivos del contrato y verificador de referencia | Pendiente |
 | 8 — Panel: emisión con el modelo nuevo | Pendiente |
 | 9 — Cierre | Pendiente |
@@ -1635,3 +1635,58 @@ Las 19 quedan detectadas.
 - **Fase 6:** `.licreq` con `server_id` y `app_version`, sin huella y con `ADELPOS-LICREQ-V1`; `renew` y la reactivación sin internet entregan la revisión vigente sin firmar otra.
 - **Fase 7:** `openapi.yaml` con estas rutas, peticiones, respuestas y errores, y la prueba que lo compara con `ApiKernel::ROUTES`.
 - **Etapa 4:** `transfer`, `TRANSFER_LIMIT` y `transfer_available`.
+
+---
+
+## Etapa 2 · Fase 6 — Archivos sin internet (contrato §9)
+
+Las solicitudes `.licreq` usan el formato del contrato y el servidor ya no acepta el anterior. El `.lic` sigue siendo el mismo JWS de la API en línea.
+
+### E2-6.1 Qué cambió
+
+| Tema | Antes | Ahora |
+| --- | --- | --- |
+| Contenido del `.licreq` | `installation_id` y huella | `server_id` (UUID v4 en minúsculas) y `app_version`; la huella se rechaza |
+| Firma | Prefijo `LICREQ-V1` | `ADELPOS-LICREQ-V1\n` + `payload_b64u` |
+| `license_key` | Opcional en cualquier acción | Opcional y solo en `activate` |
+| `created_at` | `Z` o `+00:00` | Solo `Z`, con 0 a 9 decimales |
+| `activate` | Sin cálculo de periodo hasta la Fase 4 | El primer periodo empieza al aprobar (Fase 4). La misma computadora que vuelve a pedirlo recibe su revisión vigente |
+| `renew` | Firmaba una revisión nueva cada vez | Entrega la revisión vigente, sin firmar otra |
+| `deactivate` | Liberaba y firmaba el cierre | Igual; si la activación ya terminó, entrega el cierre que existe |
+| Activación terminada o licencia revocada | `renew` y `deactivate` se rechazaban | Reciben su revisión de cierre |
+
+**Se conserva sin cambios:** el sobre (`schema_version`, `payload_b64u`, `signature_b64u`), el original guardado cifrado y sin cambios, que recibir la solicitud no concede nada sin la aprobación, el código comercial que nunca se muestra, los reintentos compartidos con la API en línea y la transferencia forzada desde el panel.
+
+### E2-6.2 Marcas
+
+- **Herencia:** quedan **5 de 20**. Se resolvió la de `OfflineRequest`. Quedan `generate-fixtures.php` ×4 (Fase 7) y `templates/license-detail.php` (Fase 8).
+- **`PENDIENTE etapa 3`** (sin cambio): registrar una renovación al aprobar un `renew` (`OfflineService`).
+
+### E2-6.3 Pruebas
+
+**Resultado:** PHPUnit **357 pruebas, 26 674 aserciones, todas OK**. Verificador Go y `generate-fixtures.php --check` OK (archivos heredados). Playwright OK.
+
+| Lo que pide la especificación | Prueba |
+| --- | --- |
+| Las tres acciones, de punta a punta | `OfflineTest` (importar, aprobar y leer el `.lic`) y `offline-panel.cjs` (subir, revisar, aprobar y descargar desde el navegador) |
+| Firma inválida | `OfflineRequestTest::testTamperedSignatureAndDuplicateOuterKeys` y `OfflineTest::testModifiedSignedBytesConflictAndInvalidSignatureReservesNothing` |
+| Solicitud con huella o con el prefijo anterior | `OfflineTest::testRequestsOfTheReplacedFormatAreRejected` (6 casos; nada queda reservado) y `OfflineRequestTest::testTheReplacedFormatIsRejected` |
+| El periodo empieza al aprobar, con reloj congelado | `OfflineTest::testThePeriodStartsWhenTheRequestIsApprovedAndTheStoredCopyNeverChanges`: se importa un día y se aprueba tres días después; el periodo, el ancla y la fecha de activación son los de la aprobación |
+| Solicitud repetida | `testImportIsPendingEncryptedAndDuplicateFormattingIsHarmless` y `testApprovalIsIdempotentAndOppositeOrSecondDecisionCannotChangeIt` |
+| La copia guardada no cambia | La prueba del periodo: el original descifrado es idéntico byte por byte después de aprobar. `testEvidenceTamperingAndSqlMutationAreRejected` |
+
+**Pruebas nuevas (13):** 4 en `OfflineTest` (la misma computadora que vuelve a activar, periodo al aprobar, formato anterior rechazado, licencia revocada) y 9 en `OfflineRequestTest` (formato anterior y 8 casos más de contenido inválido).
+
+**Pruebas que cambiaron de resultado esperado:**
+
+- `testRenewDelivers…` y `testPerpetualRenew…`: `renew` devolvía la revisión 2; ahora devuelve la misma revisión 1, byte a byte, y no se firma nada.
+- `testBoundIdentityChecksAllSignedFieldsAndRechecksAtApproval`: aprobar el `renew` de una activación terminada se rechazaba; ahora entrega su revisión de cierre `transferred`.
+- `OfflineRequestTest` ya no lee los archivos heredados de `contracts/v1/fixtures/`: son del formato anterior. La lectura de los archivos nuevos vuelve en la Fase 7.
+
+**Comprobación de las reglas:** se quitaron una a la vez **15 reglas** (prefijo de la firma, código comercial fuera de `activate`, fecha con desfase o con más de 9 decimales, versión sin límite, identidad en cualquier caja, `renew` que firma, misma computadora, otra llave, licencia revocada, activación terminada y versión guardada). Las 15 hicieron fallar alguna prueba.
+
+### E2-6.4 Pendientes que deja la fase
+
+- **Fase 7:** archivos de prueba `.licreq` de las tres acciones con el formato nuevo, y el verificador de referencia.
+- **Fase 8:** el detalle de la licencia en el panel (plan, cupos, fechas y motivo de cierre).
+- **Etapa 3:** registrar una renovación al aprobar una solicitud `renew`.

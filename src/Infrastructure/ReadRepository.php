@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Infrastructure;
 
-use AdelPos\License\Domain\{Problem, Uuid};
+use AdelPos\License\Domain\{Problem, Protocol, Uuid};
 
 final class ReadRepository
 {
@@ -224,13 +224,19 @@ final class ReadRepository
 		);
 		$license['activations'] = $this->db->all(
 			'SELECT BIN_TO_UUID(activation_id) AS id_text,BIN_TO_UUID(server_id) AS installation_text,
-					state,activated_at,ended_at
+					installation_public_key,app_version,state,activated_at,ended_at
 				FROM activations
 				WHERE license_id=?
 				ORDER BY activated_at DESC
 				LIMIT 50',
 			[Uuid::bytes($id)],
 		);
+		foreach ($license['activations'] as &$activation) {
+			// La llave pública, en el mismo formato en que la envía la instalación.
+			$activation['public_key_text'] = Protocol::encode($activation['installation_public_key']);
+			unset($activation['installation_public_key']);
+		}
+		unset($activation);
 		$revisionCount = (int) $this->db
 			->execute('SELECT COUNT(*) FROM license_revisions WHERE license_id=?', [Uuid::bytes($id)])
 			->fetchColumn();
