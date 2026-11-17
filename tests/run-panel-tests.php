@@ -91,13 +91,14 @@ function panel(string $root, array $env, PDO $pdo, string $log): int
 			fwrite(STDERR, "El servidor local no arrancó; revisa $log\n");
 			return 1;
 		}
+		// tests/transfers-panel.cjs simula a AD-EL POS con tests/panel-api.php, con este mismo PHP.
 		return proc_close(
 			proc_open(
 				['node', 'tests/panel.cjs'],
 				[0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR],
 				$pipes,
 				$root,
-				$env,
+				$env + ['ADELPOS_PANEL_PHP' => PHP_BINARY],
 			),
 		);
 	} finally {

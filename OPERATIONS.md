@@ -109,7 +109,8 @@ Todo se hace en el panel:
   - **Solo se emiten licencias de AD-EL POS** (`adel_pos`): es el único producto que el contrato permite firmar.
   - **Las fechas empiezan al activar.** Una licencia emitida no tiene vencimiento asignado; el panel muestra «Empieza al activar». El primer periodo empieza cuando el servidor confirma la primera activación en línea, o cuando se aprueba la primera solicitud sin internet. Si después se activa en otra computadora, conserva sus fechas.
   - **El detalle de la licencia** muestra tipo, plan, cupos, inicio, vencimiento y fin de actualizaciones, en la zona horaria del cliente, y el motivo de cierre de cada revisión firmada: licencia liberada, transferida a otra computadora o revocada por el propietario.
-  - **Una computadora principal a la vez.** Para pasarla a otra computadora, la primera libera la licencia, o el propietario la transfiere desde el panel.
+  - **Una computadora principal a la vez.** Para pasarla a otra computadora, la primera libera la licencia, AD-EL POS la transfiere por autoservicio, o el propietario la transfiere desde el panel.
+  - **Transferencias** (etapa 4), en la sección «Transferencias» del detalle: el historial (vía, origen y destino, fecha, estado y forma de confirmación) y la transferencia por autoservicio pendiente, si la hay.
   - **Al emitir se registra el pago de alta,** en MXN y tal como se cobró. El panel sugiere el precio del catálogo del plan y del plazo; si el monto es otro, pide el motivo. Una licencia personalizada, o un plan sin precio, pide el monto a mano. Una prueba vale 0.
 - **Ciclo comercial** (etapa 3), desde el detalle de la licencia. Cada operación muestra primero una revisión con las fechas nuevas y el monto sugerido, y después se confirma con el monto cobrado:
   - **Renovar** una suscripción activada: si paga antes de que termine la tolerancia, el periodo nuevo empieza en el vencimiento; si no, en la fecha de pago. Conserva sus cupos y puede cambiar la duración.
@@ -133,7 +134,22 @@ Todo se hace en el panel:
   - Una computadora cuya activación ya terminó, o cuya licencia fue revocada, recibe su revisión de cierre: así se entera sin internet.
 - **Recuperación de equipo averiado:** retira la licencia de esa computadora con autorización excepcional; queda firmada como transferida. La firma no demuestra que se hayan borrado copias del equipo anterior.
 
-La API en línea solo atiende `POST` a `/v1/activations/challenge`, `/v1/activations`, `/v1/activations/refresh` y `/v1/activations/deactivate`, con JSON de hasta 16 KiB. Su especificación es `contracts/v1/openapi.yaml`. La transferencia por autoservicio (`/v1/activations/transfer`) llega en la etapa 4.
+La API en línea solo atiende `POST` a `/v1/activations/challenge`, `/v1/activations`, `/v1/activations/transfer`, `/v1/activations/refresh` y `/v1/activations/deactivate`, con JSON de hasta 16 KiB. Su especificación es `contracts/v1/openapi.yaml`.
+
+### Transferencias por autoservicio y alertas
+
+AD-EL POS puede mover la licencia a otra computadora sin soporte. Mientras la computadora anterior no consulte, la transferencia queda **pendiente de confirmar** y otra transferencia por autoservicio recibe «Comunícate con soporte». La anterior la confirma sola en cuanto tenga internet y consulte, o con una solicitud sin internet de `renew` o `deactivate`.
+
+**Las alertas** aparecen en el botón de notificaciones de la barra superior (con el número sin revisar), en el resumen y en «Alertas». No se envían correos.
+
+| Alerta | Qué pasó | Cómo atenderla |
+| --- | --- | --- |
+| Transferencia por autoservicio bloqueada | Otra computadora intentó transferir mientras había una transferencia pendiente. El detalle dice qué computadora lo intentó, su versión de AD-EL POS, cuántas veces y desde cuándo está pendiente | Llamar al cliente. Si cambió de computadora porque la anterior se dañó o ya no existe, **liberar el contador** (abajo) y pedirle que vuelva a transferir. Si nadie reconoce el intento, no liberar nada: la anterior sigue esperando su confirmación |
+| Transferencias frecuentes | La licencia suma dos o más transferencias en los 12 meses anteriores (en la zona del cliente), de autoservicio o del propietario | Revisar el historial de transferencias del detalle. Varias computadoras en poco tiempo pueden ser un cambio de equipo legítimo o una licencia que circula entre restaurantes |
+
+Después de atenderla, **«Marcar como revisada»** (operador o superadministrador; la cuenta de consulta solo las ve). Queda quién y cuándo. Si la situación se repite, se abre otra alerta.
+
+**Liberar el contador de autoservicio** (solo el superadministrador, en «Transferencias» del detalle, con motivo y confirmando la identidad): úsalo solo cuando la computadora anterior **nunca** va a volver a conectarse. No retira la licencia de la anterior: si conserva una copia sin internet, sigue funcionando hasta su vencimiento, o para siempre si es perpetua. Si regresa y consulta, recibe su cierre.
 
 ## 7. Mantenimiento diario
 

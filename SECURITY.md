@@ -1,6 +1,6 @@
 # Seguridad
 
-Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados al cerrar la etapa 2. El protocolo es el del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0. Las decisiones están en [DECISIONS.md](DECISIONS.md).
+Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados al cerrar la etapa 4. El protocolo es el del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0. Las decisiones están en [DECISIONS.md](DECISIONS.md).
 
 ## 1. Modelo de amenazas
 
@@ -143,7 +143,7 @@ Contadores persistentes en `rate_limit_buckets`, confirmados fuera de la transac
 | Confirmación de identidad | 10 por administrador, cada 15 minutos |
 | API: desafíos y operaciones | 30 por minuto por IP (contadores separados) |
 | API: identidad autenticada | 30 por minuto por producto y llave pública |
-| API: código comercial | 10 cada 15 minutos por producto y código |
+| API: código comercial | 10 cada 15 minutos por producto y código, compartidos entre activar y transferir |
 | Importación `.licreq` | 30 por minuto por administrador |
 | Generación de constancias | 10 por minuto por administrador |
 | Verificación pública de constancias | 30 por minuto por IP |
@@ -160,8 +160,11 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 - **Códigos comerciales.** 15 símbolos aleatorios de un alfabeto de 31 (74.31 bits), sin prefijo ni dígito verificador. Se guardan como HMAC y como copia cifrada; nunca aparecen en registros, sesiones, auditoría ni respuestas idempotentes.
 - **Errores técnicos.** Producen un 503 genérico (`TEMPORARY_UNAVAILABLE`), sin trazas, y no dejan efectos parciales. La referencia de correlación queda solo en el registro del servidor: la respuesta lleva el `request_id` del cliente o `null`.
 - **Una computadora a la vez.** Una licencia tiene como máximo una activación vigente, también bajo concurrencia (índice único en la base). Otra instalación recibe `ACTIVATION_LIMIT`.
+- **Transferencia por autoservicio** (contrato §8.4). La nueva computadora prueba la posesión de su llave y presenta el código, como al activar, con el mismo límite de intentos por código. Solo puede haber **una pendiente de confirmar** por licencia, garantizado en la base: un segundo intento recibe `TRANSFER_LIMIT` y abre una alerta en el panel. La transferencia se confirma solo cuando la computadora anterior prueba con su llave que es ella y recibe su cierre; la consulta de la nueva o una llave ajena no confirman. Transferir nunca cambia las fechas: no sirve para reiniciar una prueba ni para alargar una suscripción.
+- **Alertas.** Cada intento bloqueado y cada licencia con dos o más transferencias en 12 meses, de autoservicio o del propietario, quedan en el panel hasta que alguien las revisa; la revisión queda en la auditoría.
+- **Limitación conocida: la computadora anterior sin internet.** Después de una transferencia, la computadora anterior sigue funcionando con su última revisión mientras no consulte: hasta su vencimiento, o **para siempre si es perpetua**. El servidor no puede retirar a distancia una revisión ya aceptada (contrato §9.2 y §12). Por eso el contador de autoservicio no vuelve a 0 hasta que la anterior confirma, y la liberación manual exige al superadministrador, un motivo y nueva autenticación: libera el contador, no las copias de la computadora anterior.
 
-> **Pendiente (etapa 4).** La transferencia por autoservicio todavía no existe: la acción `transfer` y su ruta se rechazan. `limit_req` de Nginx para la API se configura en la etapa 5.
+> **Pendiente (etapa 5).** `limit_req` de Nginx para la API.
 
 ## 8. Flujo sin internet
 
@@ -173,7 +176,7 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 - **Revisiones de cierre.** Una activación terminada o una licencia revocada solo pueden recibir su revisión de cierre: nunca vuelven a quedar activas por una solicitud `renew` o `deactivate`.
 - **Limitación aceptada: reducciones programadas sin internet** (etapa 3, Fase 7). Cuando un cambio de plan programado reduce cupos, la tarea diaria firma la revisión reducida al llegar su instante. Una computadora sin internet la recibe solo en su siguiente consulta, `renew` o descarga del `.lic`; mientras tanto conserva los números mayores que ya tenía firmados. El servidor no puede retirar a distancia una revisión que la computadora ya aceptó, igual que con una revocación (contrato §9.2).
 
-> **Pendiente (etapa 4).** Alertas por transferencias repetidas y su relación con el autoservicio.
+- **Transferencias del propietario.** La transferencia sin internet con destino y «recuperar plaza» nacen confirmadas: no consumen la transferencia por autoservicio, pero cuentan para la alerta de transferencias frecuentes. La aprobación de un `renew` o `deactivate` de la computadora anterior confirma su transferencia pendiente.
 
 ## 9. Constancias y verificación pública
 

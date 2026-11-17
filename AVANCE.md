@@ -2954,3 +2954,148 @@ Se quitaron **10 reglas**, todas detectadas: en el generador (cambiándolo y reg
 | `generate-fixtures.php --check` | 20 licencias, 17 casos negativos, 10 de revisión, 40 de fechas, 11 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
 | Verificador de referencia en Go | OK en todos los casos |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+
+---
+
+## Etapa 4 · Fase 6 — Panel y cierre
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E4-6.1 Cifras por fase
+
+| Fase | Commit | Pruebas | Aserciones | PHP de la suite | Reglas quitadas una a la vez |
+| --- | --- | --- | --- | --- | --- |
+| Partida (etapa 3) | `d45651a` | 432 | 28 135 | 8.5.7 y 8.3.36 | — |
+| 0 — Verificación y bonificación | `4b178fc` | 437 | 28 203 | 8.5.7 y 8.3.36 | 14 |
+| 1 — Modelo de datos | `e61aa05` | 443 | 28 282 | 8.5.7 y 8.3.36 | 36 |
+| 2 — Transferencia por autoservicio | `e2661ae` | 451 | 28 542 | 8.3.36 | 20 |
+| 3 — Confirmación y liberación manual | `3f07a19` | 456 | 28 688 | 8.3.36 | 18 |
+| 4 — Alertas en el panel | `bbb943e` | 464 | 28 867 | 8.3.36 | 18 |
+| 5 — Archivos del contrato | `17201e4` | 466 | 28 983 | 8.3.36 | 10 |
+| 6 — Panel y cierre | este commit | **466** | **28 983** | **8.3.36 y 8.5.7** | — (Playwright) |
+
+Playwright corrió en las fases que cambiaron el panel (0, 1, 3 y 4) y en este cierre. Desde la Fase 2, por indicación del propietario, la suite de cada fase se corrió solo en PHP 8.3 (la versión del VPS), y PHP 8.5 una vez, aquí.
+
+La etapa cierra con **34 pruebas más** que la etapa 3 (466 contra 432), en **PHP 8.3.36 y PHP 8.5.7**. Se quitaron **116 reglas**, una a la vez, y todas quedaron vigiladas por una prueba. En la primera pasada **siete no se detectaban**, por tres motivos, y cada uno se corrigió en su fase:
+
+- **Comprobaciones que no podían fallar** (una en la Fase 0): se quitaron del código, con la explicación en un comentario.
+- **Reglas que otra cubría** (cinco: las listas cerradas de vías, estados y acciones en la Fase 1, y «activación transferida» y «origen de la pendiente» en la Fase 3): se reescribieron para que cada regla dependa de una sola condición. A la de estados le faltaba además un caso en la prueba (un estado desconocido con todos los datos de confirmación).
+- **Un caso que faltaba en la prueba** (el rol que se revisa antes de pedir la identidad, en la Fase 3): se agregó.
+
+Cinco mutaciones se rehicieron porque no quitaban la regla (rompían la sintaxis o no cambiaban nada); con la versión correcta se detectaron.
+
+### E4-6.2 Pruebas nuevas y sustituidas
+
+Ninguna prueba se eliminó sin sustituto.
+
+| Fase | Nuevas | Sustituidas o con aserciones cambiadas | Motivo |
+| --- | --- | --- | --- |
+| 0 | 1 en `CreditTest`, 4 en `PlanChangeTest` | Los casos `credits` del contrato y las aserciones de la bonificación de `PlanChangeTest` y de Playwright | La bonificación suma todos los periodos pagados (decisión 3) |
+| 1 | `TransferModelTest` (5), 1 en `InitialSchemaTest` | Lista de migraciones y número de tablas de `InitialSchemaTest`; 2 aserciones de `OfflineTest` | Migración `008` |
+| 2 | `SelfServiceTransferTest` (8) | `transfer_available` es `true` en `ActivationsTest` y `HttpApiTest`; `transfer` deja de ser inválido en `ProtocolTest` y `ActivationsTest`; marcas de `StageClosureTest`; ejemplos del OpenAPI | La transferencia existe |
+| 3 | `TransferConfirmationTest` (5) | `SelfServiceTransferTest` comprueba la confirmación al consultar | La consulta de la anterior confirma |
+| 4 | `AlertsTest` (6), 1 en `CalendarPeriodTest`, 1 en `ViewTest` | `TransferConfirmationTest` cuenta solo las alertas de intento bloqueado; marcas de `StageClosureTest` | La alerta de transferencias frecuentes |
+| 5 | 1 en `ContractFilesTest`, 1 en `HttpApiTest` | Cifras de los archivos del contrato y del verificador Go | 3 licencias y 3 casos de revisión nuevos |
+| 6 | `tests/transfers-panel.cjs` (Playwright), `tests/panel-api.php` | — | Recorrido de transferencias y alertas |
+
+### E4-6.3 Qué se hizo en esta fase
+
+- **Playwright:** `tests/transfers-panel.cjs` simula a AD-EL POS por la API (`tests/panel-api.php`) y recorre: la transferencia por autoservicio y su reflejo en el detalle; el intento bloqueado con su alerta en la barra superior, su menú y el resumen; marcar como revisada; la liberación manual del contador con nueva autenticación; y la alerta de transferencias frecuentes en «Alertas», con su filtro, también en el teléfono.
+- **Marcas:** cero `PENDIENTE etapa 4`. Queda una de la etapa 5 (diseño final de las constancias).
+- **Documentos:** `README.md`, `ARCHITECTURE.md` (sección 12 nueva, «Transferencias y alertas»), `SCHEMA.md`, `SECURITY.md` (con la limitación conocida de la computadora anterior sin internet), `OPERATIONS.md` (cómo atender cada alerta y cuándo liberar el contador), `TEST_PLAN.md` y `contracts/v1/README.md`.
+- **`DECISIONS.md`:** sección 13 (decisiones del propietario), sección 9 con las propuestas n.º 33 a 37, sección 14 y 16 con las decisiones técnicas de cada fase, y **sección 15: la tabla consolidada y final de las propuestas V1.1, de la n.º 1 a la n.º 37**, con el texto de cada regla tal como quedó implementada y su estado.
+- **Paquete de despliegue:** generado y revisado: 160 archivos más `RELEASE.json` (eran 153). Los 7 nuevos son la migración `008`, `Alerts`, `Transfers`, `PaidPeriods` y las plantillas `alerts.php`, `alert-item.php` y `license-transfers.php`. No incluye pruebas, archivos de prueba del contrato, llaves, configuración local ni `var/`; su SHA-256 verifica.
+
+### E4-6.4 Consultas al propietario
+
+Se trabajaron las fases 0 a 6 sin detenerse, como se pidió. Nada obligó a modificar el contrato, ninguna prueba se hizo pasar debilitando una regla y no hizo falta ninguna acción irreversible ni fuera del repositorio.
+
+**Propuestas V1.1 nuevas** (pendientes de su respuesta; las dos se pueden revertir sin tocar el contrato):
+
+| N.º | Sección | Qué no queda definido | Criterio aplicado | Alternativa |
+| --- | --- | --- | --- | --- |
+| 36 | §8.4, §8.7 | Un código retirado de una licencia revocada. La especificación pone «retirado → `LICENSE_NOT_FOUND`» antes que «revocada → `REVOKED`», pero revocar retira el código vigente, así que `REVOKED` nunca llegaría | `REVOKED`, igual que `activate` desde la etapa 2: mismo código, misma respuesta en las dos rutas | `LICENSE_NOT_FOUND` para los códigos que se retiraron antes de revocar, por un reemplazo de código |
+| 37 | §8.4, regla 5 | Si una transferencia hecha exactamente 12 meses antes (mismo día y hora local del cliente) cuenta para la alerta | Sí: la ventana incluye su inicio. Avisar de más cuesta menos que no avisar | Ventana sin su instante inicial |
+
+**Decisiones que van más allá de la especificación:**
+
+| # | Decisión | Por qué | Cómo revertirla |
+| --- | --- | --- | --- |
+| J | El «historial de la licencia» de una transferencia es su registro en `license_transfers` (la sección «Transferencias» del detalle) y la auditoría; no se escribe en `license_changes` | `license_changes` es el historial comercial, una fila por versión de los derechos; la transferencia no cambia derechos, y subir la versión haría fallar los formularios abiertos del panel. Las transferencias del propietario tampoco escribían ahí | Escribir también en `license_changes`, subiendo `row_version` |
+| K | En una renovación anticipada sobre una licencia emitida antes de la etapa 3 (sin pago de alta), el periodo anterior no tiene valor conocido: no hay monto sugerido y se escribe a mano | No se sabe qué plazo cubría ni cuánto se cobró. No existen licencias así | Usar el precio del catálogo del plan y del periodo actual |
+| L | La liberación manual pide la identidad dentro del servicio (no solo en el panel), y rechaza a otra cuenta antes de pedírsela | La regla no depende de la pantalla y no gasta el código de otra cuenta | Pedirla solo en el panel, como las operaciones forzadas anteriores |
+| M | Las recuperaciones del propietario dejan de repetirse en el apartado sin internet del detalle: están en «Transferencias», con su motivo y quién la hizo | Un solo historial de transferencias | Volver a mostrarlas en los dos lugares |
+| N | Además del botón de la barra y del resumen, «Alertas» está en la navegación lateral y en el detalle de cada licencia; marcar como revisada vuelve a la pantalla de donde se pidió | Encontrar y atender las alertas sin buscar | Quitar la entrada de la navegación |
+| O | En la alerta de transferencias frecuentes, el contador es el número de veces que se repitió la situación mientras estuvo abierta (una por transferencia), y el detalle guarda cuántas hay en la ventana y las 20 más recientes | La especificación define el número de intentos solo para el intento bloqueado | Contar otra cosa, por ejemplo solo las de autoservicio |
+
+**Observaciones:**
+
+- **Partida en PHP 8.3.** Una primera corrida empezó junto con los primeros cambios de la Fase 0 y cargó código a medio editar. Se repitió en una copia limpia de `d45651a` (`git worktree` con su propia copia de `vendor/`): 432 pruebas OK.
+- **Datos de prueba.** Una corrida detenida a mano (Fase 0) dejó una base `adelpos_license_test_*`, y dos mutaciones de la Fase 4 que rompían la sintaxis dejaron otras 12 con sus usuarios: el error ocurría al armar el escenario, después de crear la base y antes de que la prueba pudiera limpiarla. Se eliminaron las 13 y sus usuarios; no tenían carpetas de llaves. En `/private/tmp/` queda la carpeta `adelpos-license-stack-b9d1a4a88869`, de una corrida con Nginx del 17 de noviembre a las 06:22, anterior a esta etapa. No se tocó: no la creó esta etapa. Tiene una llave TLS autofirmada de prueba; se puede borrar.
+- **Límite de confirmaciones de identidad en Playwright.** El recorrido completo del panel usa una sola cuenta, y con la liberación manual pasa de 10 confirmaciones en 15 minutos. El recorrido reinicia ese contador en la base sintética (`DECISIONS.md`, sección 16); el límite del servidor no cambió.
+
+### E4-6.5 Criterios de aceptación
+
+| Criterio | Estado | Evidencia |
+| --- | --- | --- |
+| La bonificación suma lo no consumido de todos los periodos pagados, calculado sobre su valor completo, y queda cubierta con casos exactos | Cumplido | `CreditTest`, `PlanChangeTest`, 11 casos `credits` |
+| La transferencia por autoservicio cumple §8.4 con las reglas de la especificación, y nunca cambia las fechas | Cumplido | `SelfServiceTransferTest`, `HttpApiTest` |
+| `TRANSFER_LIMIT` y `transfer_available` son reales y están probados, con concurrencia | Cumplido | `SelfServiceTransferTest` (dos carreras), `TransferConfirmationTest` (una) |
+| La confirmación funciona por las tres formas, más la liberación manual auditada | Cumplido | `TransferConfirmationTest` |
+| Las alertas aparecen en el resumen y en la barra superior, sin duplicarse, y se marcan como revisadas | Cumplido | `AlertsTest`, `TransferModelTest`, Playwright |
+| `openapi.yaml`, los archivos de prueba y el verificador Go cubren la transferencia | Cumplido | `ContractFilesTest`, verificador Go |
+| Tabla consolidada de propuestas V1.1 lista para el contrato `_v2` | Cumplido | `DECISIONS.md`, sección 15 (n.º 1 a 37) |
+| Cero `PENDIENTE etapa 4`; pasan la suite en PHP 8.5 y 8.3, Playwright, secretos, formato y paquete | Cumplido | E4-6.7 |
+| El contrato no se modificó | Cumplido | `StageClosureTest` (SHA-256) |
+
+### E4-6.6 Pendientes para la etapa 5
+
+- **Pantallas definitivas** del panel: también las del ciclo comercial, las transferencias y las alertas (las de esta etapa son mínimas), y el diseño final de las constancias, que podrían incluir los pagos y las transferencias.
+- **`limit_req` de Nginx** para la API.
+- **Despliegue en `licensing.sicrat.com`** con `APP_ENV=production` y `LICENSE_ENVIRONMENT=test`, la migración `008` y la tarea diaria.
+- **Contrato `_v2`:** lo redacta el propietario con la tabla de `DECISIONS.md`, sección 15. Cuando llegue, conviene repasar las referencias a «V1.0» en `contracts/v1/`, `README.md` y los documentos, y cerrar en el código lo que el `_v2` decida sobre las propuestas n.º 36 y 37.
+
+**Sin etapa asignada:** avisos a los clientes por cambios del catálogo; avisos por correo de las alertas (la decisión 4 los excluye por ahora); pasarela de pagos, facturación e impuestos.
+
+### E4-6.7 Comandos para reproducir la verificación
+
+```sh
+# Suite completa contra MySQL 8.0.46 aislado, con las variables TEST_* de E2-9.7 (en PHP 8.3, la del VPS)
+env TEST_FPM_BIN=/opt/homebrew/opt/php@8.3/sbin/php-fpm … /opt/homebrew/opt/php@8.3/bin/php vendor/bin/phpunit
+
+# La misma suite en PHP 8.5
+php vendor/bin/phpunit
+
+# Archivos del contrato
+php contracts/v1/generate-fixtures.php --check
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go run -C contracts/v1/verify . ../fixtures/vectors.json
+
+# Panel, transferencias, alertas y dispositivos de confianza con Playwright (mismas variables TEST_*)
+php tests/run-panel-tests.php all
+
+# Formato, secretos y paquete
+npm run format:check
+php bin/check-secrets.php
+php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
+
+# Marcas: sin pendientes de la etapa 4
+git grep -n "PENDIENTE etapa" -- src bin templates
+```
+
+**Resultado de la verificación final (2026-11-17):**
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | 466 pruebas, 28 983 aserciones, todas OK |
+| PHPUnit, PHP 8.5.7 | 466 pruebas, 28 983 aserciones, todas OK |
+| `generate-fixtures.php --check` | 20 licencias, 17 casos negativos, 10 de revisión, 40 de fechas, 11 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go | OK en todos los casos |
+| Playwright | Panel (con el ciclo comercial, las transferencias y las alertas), sin internet y dispositivos de confianza OK; datos sintéticos eliminados |
+| `npm run format:check` | Sin diferencias |
+| `bin/check-secrets.php` | Sin hallazgos |
+| `bin/build-release.php` | 160 archivos más `RELEASE.json` |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+| Marcas `PENDIENTE etapa 4` | 0 (queda 1 de la etapa 5) |
+| Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |
+
+La primera corrida de cierre encontró una sola falla, en las dos versiones: el mensaje final de Playwright, que se había ampliado en esta fase, pasaba de 140 columnas (`CodeStyleTest`). Se partió la línea y se repitieron las dos suites y Playwright.

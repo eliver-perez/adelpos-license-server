@@ -415,6 +415,10 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		// comprar mantenimiento y propagar un aumento del catálogo.
 		await require('./commercial-panel.cjs')({ page, screenshot });
 
+		// Transferencias y alertas (etapa 4): AD-EL POS simulado por la API, la alerta en la barra y en el
+		// resumen, marcarla como revisada, liberar el contador y la alerta de transferencias frecuentes.
+		await require('./transfers-panel.cjs')({ page, secret, freshCode, screenshot });
+
 		for (const route of [
 			'/admin/customers',
 			'/admin/products',
@@ -509,7 +513,8 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		console.log(
 			'Panel OK: login, MFA, roles, CSRF/origin, issuance of the three license types, ' +
 				'commercial cycle (renewal, plan change with credit, scheduled reduction, trial conversion, ' +
-				'maintenance and catalog propagation), offline upload/review/approval/rejection/download, ' +
+				'maintenance and catalog propagation), self-service transfers and alerts (top bar, summary, review, ' +
+				'manual release and frequent transfers), offline upload/review/approval/rejection/download, ' +
 				'forced transfer with reauthentication, signed deactivation and responsive navigation.',
 		);
 		console.log('Screenshots: var/screenshots (synthetic data, no credentials).');

@@ -22,12 +22,12 @@ El servidor de AD-EL POS verifica cada licencia sin internet, con las llaves pú
 | `public/assets/` | `app.css`, `app.js`, Bootstrap 5 local (sin CDN) y la marca en `brand/` (`adel-pos-tema-claro.png`, `adel-pos-tema-oscuro.png`, `icon.png`). |
 | `src/App.php`, `src/Config.php` | Arranque y composición de servicios. La configuración viene de `ADELPOS_LICENSE_CONFIG` o de `config/local.php`. Las variables de entorno con el mismo nombre tienen prioridad, y `Config::validate()` revisa claves, origen y el entorno de licencias (`LICENSE_ENVIRONMENT`). `App::boot()` se detiene si la llave de firma activa es de otro entorno. |
 | `src/Http/` | `Kernel` (panel: rutas, sesión, CSRF, origen, redes permitidas), `ApiKernel` (API `/v1`), `View` (escape, fechas con su zona horaria, textos del modelo de licencias y etiquetas de auditoría) y `Network` (`ADMIN_NETWORKS`). |
-| `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios de módulos, clave y revocación), `PlanService` (catálogo de planes y propagación de aumentos), `CommercialService` (renovación, conversión, cambio de plan, mantenimiento y periodo inicial, cada uno con su vista previa), `ScheduledChanges` (cambios de plan programados y la tarea que los aplica), `Payments` (registro de pagos), `LicenseHistory` (historial comercial de una licencia), `ActivationService` (API en línea), `OfflineService` (`.licreq`/`.lic`), `LicenseActivator` (alta de una instalación y primer periodo, común a las dos vías), `RevisionPublisher` (contenido y firma de las revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias) y `Operations` (idempotencia). |
-| `src/Domain/` | Reglas sin estado: `LicenseContent` (campos, orden y reglas del contenido firmado), `Protocol` (peticiones de la API y prueba de posesión), `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `LicenseTerms` (tipos, periodos, duraciones, cupos, tolerancia y precios por plazo), `CalendarPeriod` (motor de fechas: primer periodo, renovación y mantenimiento), `Money` (montos en MXN como centavos enteros), `Credit` (bonificación de un cambio de plan), `TimeZones`, `Input`, `Uuid`, `Problem`, `ApiProblem` (códigos de error y su HTTP) y `ApiResponse`. |
+| `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios de módulos, clave y revocación), `PlanService` (catálogo de planes y propagación de aumentos), `CommercialService` (renovación, conversión, cambio de plan, mantenimiento y periodo inicial, cada uno con su vista previa), `ScheduledChanges` (cambios de plan programados y la tarea que los aplica), `Payments` (registro de pagos), `LicenseHistory` (historial comercial de una licencia), `ActivationService` (API en línea), `Transfers` (transferencias de autoservicio y del propietario, su confirmación y la liberación manual), `Alerts` (alertas del panel y su revisión), `PaidPeriods` (periodos pagados que todavía corren, base de la bonificación), `OfflineService` (`.licreq`/`.lic`), `LicenseActivator` (alta de una instalación y primer periodo, común a las dos vías), `RevisionPublisher` (contenido y firma de las revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias) y `Operations` (idempotencia). |
+| `src/Domain/` | Reglas sin estado: `LicenseContent` (campos, orden y reglas del contenido firmado), `Protocol` (peticiones de la API y prueba de posesión), `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `LicenseTerms` (tipos, periodos, duraciones, cupos, tolerancia y precios por plazo), `CalendarPeriod` (motor de fechas: primer periodo, renovación, mantenimiento y los 12 meses anteriores de la alerta), `Money` (montos en MXN como centavos enteros), `Credit` (bonificación de un cambio de plan), `TimeZones`, `Input`, `Uuid`, `Problem`, `ApiProblem` (códigos de error y su HTTP) y `ApiResponse`. |
 | `src/Infrastructure/` | MySQL (`Database`, `Migrator`, `ReadRepository`, `MySqlFiles`), criptografía (`Crypto`, `SigningKeys`, `Totp`), `Sessions`, `RateLimiter`, `Audit`, respaldos (`Backup`, `EncryptedArchive`, `RecoveryVerifier`), `CertificatePdf` y `Clock`. |
 | `templates/` | Vistas PHP del panel, la verificación pública y la constancia PDF. |
 | `bin/` | CLI de operación: configuración, migración, permisos, administrador inicial, llaves, respaldo y restauración, verificación de auditoría, limpieza, cambios de plan programados (`apply-scheduled-changes.php`), comprobaciones previas, paquete de despliegue y revisión de secretos. |
-| `database/migrations/` | `001_esquema_inicial.sql` (esquema recibido y producto `adel_pos` sin módulos), `002_entornos_de_firma.sql`, `003_contrato_v1.sql`, `004_retiro_de_lo_heredado.sql`, `005_precios_y_pagos.sql`, `006_editor_de_planes.sql` y `007_cambios_programados.sql`. Ver [SCHEMA.md](SCHEMA.md). |
+| `database/migrations/` | `001_esquema_inicial.sql` (esquema recibido y producto `adel_pos` sin módulos), `002_entornos_de_firma.sql`, `003_contrato_v1.sql`, `004_retiro_de_lo_heredado.sql`, `005_precios_y_pagos.sql`, `006_editor_de_planes.sql`, `007_cambios_programados.sql` y `008_transferencias_y_alertas.sql`. Ver [SCHEMA.md](SCHEMA.md). |
 | `deploy/` | Ejemplos de Nginx y del pool de PHP-FPM, y el servicio y temporizador `adelpos-license-maintenance.*`. |
 | `contracts/v1/` | Forma exacta del contrato: `license.schema.json`, `openapi.yaml`, los archivos de prueba con su generador y el verificador de referencia en Go. Al paquete de despliegue solo van el esquema y el OpenAPI, como documentación. |
 
@@ -44,8 +44,9 @@ Recorrido de una petición:
    - `operator`: escribe, con permisos opcionales (`credentials.reveal`, `documents.delivery` y `offline.download`).
    - `viewer`: solo consulta.
 
-   Las acciones sensibles (revelar el código, descargar un `.lic`, constancias de entrega, transferencias) piden de nuevo la contraseña y un código de verificación.
-6. **Idempotencia.** Cada mutación lleva un `operation_id`. `Operations` guarda el resultado, así que un reintento no repite la operación.
+   Las acciones sensibles (revelar el código, descargar un `.lic`, constancias de entrega, transferencias y la liberación manual del contador de autoservicio) piden de nuevo la contraseña y un código de verificación.
+7. **Alertas.** Cada pantalla muestra en la barra superior el botón de notificaciones con el número de alertas sin revisar (`ReadRepository::alertSummary`).
+8. **Idempotencia.** Cada mutación lleva un `operation_id`. `Operations` guarda el resultado, así que un reintento no repite la operación.
 
 ## 4. API en línea `/v1`
 
@@ -53,10 +54,11 @@ Sigue la sección 8 del contrato. Su especificación formal es [contracts/v1/ope
 
 | Ruta | Acción |
 | --- | --- |
-| `POST /v1/activations/challenge` | Desafío de un solo uso, de 5 minutos, para `activate`, `refresh` o `deactivate` |
+| `POST /v1/activations/challenge` | Desafío de un solo uso, de 5 minutos, para `activate`, `transfer`, `refresh` o `deactivate` |
 | `POST /v1/activations` | Activar con el código comercial y la prueba de posesión |
-| `POST /v1/activations/refresh` | Devolver la revisión vigente de una activación; si ya terminó, su revisión de cierre |
-| `POST /v1/activations/deactivate` | Liberar la licencia y devolver la revisión de cierre |
+| `POST /v1/activations/transfer` | Transferir por autoservicio a esta instalación (sección 12 de este documento) |
+| `POST /v1/activations/refresh` | Devolver la revisión vigente de una activación; si ya terminó, su revisión de cierre, y confirmar la transferencia pendiente que salió de ella |
+| `POST /v1/activations/deactivate` | Liberar la licencia y devolver la revisión de cierre; también confirma la transferencia pendiente |
 
 **Condiciones de cada petición:**
 - `POST`;
@@ -73,7 +75,8 @@ Sigue la sección 8 del contrato. Su especificación formal es [contracts/v1/ope
 **Funcionamiento:**
 - `license_requests` guarda cada `request_id`: un reintento idéntico devuelve la misma respuesta, y uno con otro contenido recibe `REQUEST_CONFLICT`.
 - La primera activación de una licencia fija su primer periodo. `LicenseActivator` registra la activación y `RevisionPublisher` firma la revisión.
-- Una licencia vale para una sola computadora principal a la vez. La misma instalación (misma identidad y misma llave) que vuelve a activar recibe su revisión vigente. Otra recibe `ACTIVATION_LIMIT` con `details.transfer_available`.
+- Una licencia vale para una sola computadora principal a la vez. La misma instalación (misma identidad y misma llave) que vuelve a activar recibe su revisión vigente. Otra recibe `ACTIVATION_LIMIT` con `details.transfer_available`: `true` si no hay una transferencia por autoservicio pendiente.
+- Activar y transferir comparten la búsqueda del código, su límite de intentos (10 cada 15 minutos por código) y la verificación de la prueba con la llave enviada.
 - Desactivar una activación que ya terminó devuelve su revisión de cierre. `REVOKED` lo recibe solo quien intenta activar una licencia revocada.
 - La versión de AD-EL POS (`app_version`) queda guardada en la activación.
 
@@ -173,11 +176,25 @@ Reglas comunes:
 4. **Vista previa:** cada operación tiene un `quote…` que calcula lo mismo sin escribir. El panel la muestra (GET) antes de confirmar (POST), y la confirmación lleva el instante exacto de pago de la vista previa.
 5. **Firma** solo cuando cambia algo del contenido firmado, para cada activación vigente. Las computadoras sin internet la reciben con `renew` o con la descarga del `.lic`.
 
-## 12. Pendiente para las etapas siguientes
+## 12. Transferencias y alertas (etapa 4)
 
-La etapa 3 no dejó marcas `PENDIENTE etapa 3`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:`.
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Transferencia por autoservicio | `ActivationService::transfer` y `Transfers::selfService` | Contrato §8.4, en el orden de la especificación: código, revocada, misma instalación, sin activación vigente (activación normal), pendiente (`TRANSFER_LIMIT`) y, si no, cierre `transferred` de la anterior, activación nueva con las mismas fechas (`LicenseActivator::attach`) y registro `self_service` / `pending`, en una transacción |
+| Transferencias del propietario | `Transfers::recordOwner`, desde `OfflineService` | La transferencia sin internet con destino y «recuperar plaza» quedan con la vía `owner`, confirmadas: no consumen el autoservicio |
+| Confirmación | `Transfers::confirm`, desde `ActivationService` y `OfflineService` | La computadora anterior confirma al autenticarse y recibir su cierre: `refresh`, `deactivate`, o la aprobación de su `.licreq` de `renew` o `deactivate`. Idempotente |
+| Liberación manual | `Transfers::release` | El superadministrador, con motivo y nueva autenticación dentro del servicio |
+| Alertas | `Alerts` | `transfer_blocked` con cada `TRANSFER_LIMIT`; `frequent_transfers` con dos o más transferencias en los 12 meses de calendario anteriores, en la zona del cliente. Una abierta por tipo y licencia, con su contador; revisarla la cierra |
+
+**Garantías en la base:** una sola transferencia de autoservicio pendiente por licencia y una sola alerta abierta por tipo y licencia, con índices únicos sobre columnas generadas. **Orden de bloqueo:** producto, licencia, activación, transferencia, alerta y, al final, la cabeza de auditoría; `Alerts` nunca escribe en la auditoría por su cuenta.
+
+**Transferir nunca cambia las fechas.** Las fechas son de la licencia, no de la activación: una prueba o suscripción vencida se transfiere y sigue vencida.
+
+## 13. Pendiente para las etapas siguientes
+
+Las etapas 3 y 4 no dejaron marcas `PENDIENTE etapa 3` ni `PENDIENTE etapa 4`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:`.
 
 | Parte | Cómo funciona hoy | Etapa |
 | --- | --- | --- |
-| Transferencias | Solo desde el panel, por el propietario. La acción `transfer` y su ruta no existen; `transfer_available` es siempre `false` | 4: transferencia por autoservicio, confirmación por la computadora anterior y alertas |
-| Panel y constancias | Ajuste mínimo para emitir, consultar y operar el ciclo comercial | 5: pantallas definitivas, diseño final de las constancias, `limit_req` de Nginx y despliegue en el VPS |
+| Panel y constancias | Ajuste mínimo para emitir, consultar, operar el ciclo comercial, las transferencias y las alertas | 5: pantallas definitivas, diseño final de las constancias, `limit_req` de Nginx y despliegue en el VPS |
+| Contrato `_v2` | V1.0 con 37 propuestas V1.1 registradas | El propietario lo redacta con la tabla consolidada de `DECISIONS.md`, sección 15 |

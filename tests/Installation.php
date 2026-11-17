@@ -6,8 +6,8 @@ use AdelPos\License\App;
 use AdelPos\License\Domain\{Protocol, Uuid};
 
 /**
- * Una instalación sintética de AD-EL POS para las pruebas del ciclo comercial: activa una
- * licencia en línea con su código, consulta su revisión vigente y lee el contenido firmado.
+ * Una instalación sintética de AD-EL POS para las pruebas del ciclo comercial y del panel: activa o
+ * transfiere una licencia en línea con su código, consulta su revisión vigente y lee el contenido firmado.
  */
 final class Installation
 {
@@ -37,6 +37,29 @@ final class Installation
 		$content = self::content($response->status, $response->body);
 		$this->activationId = $content['activation_id'];
 		return $content;
+	}
+
+	/**
+	 * Transfiere en línea la licencia a esta instalación (contrato §8.4). Devuelve el código HTTP y, si tuvo
+	 * éxito, el contenido firmado de su revisión.
+	 *
+	 * @return array{status: int, content: ?array}
+	 */
+	public function transfer(string $licenseKey): array
+	{
+		$response = $this->app->activations->execute(
+			'transfer',
+			$this->request('transfer', [
+				'license_key' => $licenseKey,
+				'installation_public_key' => $this->publicKey,
+			]),
+		);
+		if ($response->status !== 200) {
+			return ['status' => $response->status, 'content' => null];
+		}
+		$content = self::content($response->status, $response->body);
+		$this->activationId = $content['activation_id'];
+		return ['status' => 200, 'content' => $content];
 	}
 
 	/** Consulta en línea la revisión vigente de su activación. */

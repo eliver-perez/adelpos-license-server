@@ -2,12 +2,12 @@
 
 Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es un proyecto independiente del punto de venta: emite, firma, revoca y audita licencias, y ofrece un panel privado para el propietario.
 
-- **Panel administrativo:** clientes, productos, catálogo de planes con precios, licencias, solicitudes sin internet, constancias PDF, administradores y auditoría.
+- **Panel administrativo:** clientes, productos, catálogo de planes con precios, licencias, solicitudes sin internet, transferencias, alertas con su botón de notificaciones en la barra superior, constancias PDF, administradores y auditoría.
 - **Ciclo comercial:** monto de alta, renovación, conversión de una prueba, cambio de plan con bonificación, cambios programados, mantenimiento de una perpetua y edición del periodo inicial, cada uno con su pago registrado en MXN.
-- **API `/v1`:** activación en línea con desafío y prueba de posesión, consulta de actualización y desactivación.
+- **API `/v1`:** activación en línea con desafío y prueba de posesión, transferencia por autoservicio, consulta de actualización y desactivación.
 - **Flujo sin internet:** el panel importa una solicitud `.licreq`, el propietario la aprueba y entrega un archivo `.lic` firmado.
 
-> **Estado: etapa 3 cerrada.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea y archivos sin internet. Desde la etapa 3 administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado**: precios y pagos, editor de planes, renovación, conversión, cambio de plan, mantenimiento y una tarea diaria que aplica las reducciones programadas. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para las etapas 4 y 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
+> **Estado: etapa 4 cerrada. La API cumple completo el contrato.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea (con la transferencia por autoservicio, `TRANSFER_LIMIT` y `transfer_available`) y archivos sin internet. Administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado** (etapa 3), y desde la etapa 4 la confirmación de las transferencias por la computadora anterior, su liberación manual y las alertas del panel. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para la etapa 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
 
 ## Requisitos
 
@@ -154,12 +154,12 @@ php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
 
 ## Pendiente para las etapas siguientes
 
-La etapa 3 no dejó ninguna marca `PENDIENTE etapa 3`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:` y el servidor lo rechaza con un mensaje claro.
+Las etapas 3 y 4 no dejaron marcas `PENDIENTE etapa 3` ni `PENDIENTE etapa 4`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:`.
 
 | Qué falta | Etapa |
 | --- | --- |
-| Transferencia por autoservicio (`transfer`, `TRANSFER_LIMIT` y `transfer_available`), confirmación por la computadora anterior y alertas. Hoy las transferencias las hace solo el propietario desde el panel | 4 |
-| Pantallas definitivas del panel (las del ciclo comercial son mínimas), diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
+| Pantallas definitivas del panel (las del ciclo comercial, de las transferencias y de las alertas son mínimas), diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
+| Contrato `_v2`: lo redacta el propietario a partir de la tabla consolidada de propuestas V1.1 ([DECISIONS.md](DECISIONS.md), sección 15) | Propietario |
 | Avisos a los clientes por cambios del catálogo (decisión 9 del propietario); pasarela de pagos, facturación e impuestos | Sin etapa asignada |
 
 ## Contrato
@@ -172,7 +172,7 @@ La etapa 3 no dejó ninguna marca `PENDIENTE etapa 3`. Lo que todavía no existe
 | [contracts/v1/fixtures/](contracts/v1/fixtures/) | Archivos de prueba compartidos, con llaves públicas de prueba |
 | [contracts/v1/verify/](contracts/v1/verify/) | Verificador de referencia en Go, base de la integración de AD-EL POS |
 
-Las ambigüedades encontradas al implementarlo están registradas como propuestas para una V1.1 en [DECISIONS.md](DECISIONS.md), sección 9.
+Las ambigüedades encontradas al implementarlo están registradas como propuestas para una V1.1 en [DECISIONS.md](DECISIONS.md), sección 9. La sección 15 es la tabla consolidada y final, de la n.º 1 a la n.º 37, con el texto de cada regla tal como quedó implementada: el insumo para el contrato `_v2`.
 
 ## Documentación
 
