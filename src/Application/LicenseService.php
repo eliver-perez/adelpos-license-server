@@ -7,9 +7,9 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class LicenseService
 {
-	// PENDIENTE etapa 3: conversión de prueba a pago, compra de mantenimiento y edición del periodo
-	// inicial de una licencia sin activar (contrato, secciones 5.2, 5.4 y 5.5). El editor de planes
-	// está en PlanService y la renovación, en CommercialService.
+	// PENDIENTE etapa 3: compra de mantenimiento y edición del periodo inicial de una licencia sin
+	// activar (contrato, secciones 5.2 y 5.5). El editor de planes está en PlanService; la renovación
+	// y la conversión de una prueba, en CommercialService.
 	public const PENDING = [
 		'maintenance' => 'La compra de mantenimiento estará disponible próximamente.',
 	];

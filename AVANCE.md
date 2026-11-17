@@ -2266,3 +2266,40 @@ Se quitaron **26 reglas**, todas detectadas: tolerancia exclusiva y en horas exa
 
 - Renovación con un cambio programado pendiente (Fase 7) y renovación con plan nuevo después del vencimiento (Fase 5).
 - El recorrido de renovar desde el detalle con Playwright es de la Fase 9.
+
+---
+
+## Etapa 3 · Fase 4 — Conversión de prueba a pago (contrato §5.4 y decisión 5)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-4.1 Qué cambió
+
+- **`CommercialService::convert()` y `quoteConversion()`:** de una prueba a una suscripción con cualquier periodo o a una perpetua con 0, 6 o 12 meses de actualizaciones, con cualquier plan o cupos personalizados, durante la prueba o después de vencida. El pago se registra con el concepto `conversion`, sin bonificación.
+  - **Prueba activada:** el periodo nuevo empieza en la fecha de pago, los días de prueba no se acumulan, la tolerancia pasa a ser la del tipo nuevo y se firma una revisión nueva para la misma activación.
+  - **Prueba sin activar:** cambian sus condiciones y las fechas se fijan al activar, como en cualquier licencia.
+- **Panel:** tarjeta «Convertir en licencia de pago» en el detalle de una prueba, con tipo, periodo o meses de actualizaciones, plan y cupos; pantalla «Convertir la prueba en licencia de pago» con el periodo nuevo y el monto sugerido. Fragmento `target-fields.php` para elegir plan y cupos, que reutilizan las fases 5 y 6.
+
+### E3-4.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/ConversionTest.php` (nueva) | 4 | Prueba activada a suscripción durante la prueba: misma activación, revisión 2, periodo desde el pago, tolerancia de 5 días, plan nuevo, pago de conversión con su periodo; vista previa sin escrituras, personalizada sin precio y 6 meses por omisión; prueba vencida a perpetua con 0, 6 y 12 meses; prueba sin activar a suscripción personalizada y a perpetua, con las fechas al activar; rechazos (no es prueba, tipo de destino, sin plan, plan inexistente o archivado, pago antes del inicio de la prueba, sin monto, cupo fuera de rango, revocada) |
+
+### E3-4.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **16 reglas** con `ConversionTest`: solo una prueba, no revocada, destino suscripción o perpetua, plan archivado, plan existente y bloqueado, pago no anterior al inicio de la prueba, periodo desde la fecha de pago, fechas al activar si no está activada, tolerancia del tipo nuevo, marca de personalizada, personalizada sin precio, firma para la misma activación, pago del periodo, periodo que cubre el pago, monto obligatorio y 6 meses por omisión.
+
+**14 se detectaron a la primera.** «Personalizada sin precio» no: el plan de la prueba no tenía precios, y además la vista previa calculaba la sugerencia por separado. Se unificó el cálculo y se agregó un caso con un plan con precio. «6 meses por omisión» tampoco: se agregó la aserción. Ahora se detectan las dos.
+
+### E3-4.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 409 pruebas, 27 865 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 409 pruebas, 27 865 aserciones, todas OK |
+| Playwright | Panel, sin internet y dispositivos de confianza OK |
+
+### E3-4.5 Pendientes que deja la fase
+
+- El recorrido de convertir una prueba con Playwright es de la Fase 9.

@@ -363,3 +363,14 @@ Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`
 | 8 | Cada operación del ciclo comercial tiene una vista previa en el panel (GET) que calcula lo mismo que la confirmación (POST) sin escribir nada. La confirmación lleva la fecha de pago exacta de la vista previa, así que el cálculo no cambia entre una y otra. | El operador ve el vencimiento nuevo y el monto sugerido antes de cobrar. |
 | 9 | El historial comercial se escribe con una clase compartida, `LicenseHistory`, que usan la emisión, el catálogo y el ciclo comercial. | Antes cada servicio tenía su propia copia. |
 | 10 | Sin dependencias nuevas. | — |
+
+### Fase 4 — Conversión de prueba a pago
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | `CommercialService::convert()` convierte una prueba en suscripción (cualquier periodo) o perpetua (0, 6 o 12 meses; 6 por omisión), con cualquier plan del catálogo que se ofrezca o con cupos personalizados. Sin bonificación: lo sugerido es el precio del catálogo. | Contrato §5.4 y decisión 5 del propietario; especificación, Fase 4. |
+| 2 | Prueba activada: el periodo nuevo se calcula con `CalendarPeriod::firstPeriod()` desde la fecha de pago, con su día y su hora como ancla, y se firma una revisión nueva para la misma activación. Prueba sin activar: solo cambian sus condiciones; las fechas se fijan al activar. | Contrato §5.4 y especificación, Fase 4, puntos 2 y 3. |
+| 3 | **En una perpetua convertida, `period_starts_at` es la fecha de pago** y las actualizaciones se cuentan desde ella. | El contrato dice que en una perpetua `period_starts_at` es «la activación», y en §5.4 que el periodo nuevo empieza en la fecha de pago. Se sigue §5.4, como pide la especificación (Fase 4, punto 2). **Propuesta V1.1 n.º 26.** |
+| 4 | La fecha de pago de la conversión de una prueba activada no puede ser anterior al inicio de la prueba. | «Se puede convertir durante la prueba o después de vencida»: nunca antes. Un periodo que empezara antes de la activación no tiene sentido. |
+| 5 | El plan de destino se bloquea (`FOR SHARE`) antes que la licencia, igual que en la emisión, para que una propagación del catálogo no se cruce con la conversión. Un plan archivado no se acepta. | Mismo orden de bloqueo que el resto de las operaciones (Fase 2, decisión 6). |
+| 6 | Sin dependencias nuevas. | — |

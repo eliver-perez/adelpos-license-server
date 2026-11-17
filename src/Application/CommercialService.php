@@ -193,10 +193,149 @@ final class CommercialService
 	}
 
 	/**
-	 * Bloquea la licencia para un cambio comercial: primero su producto, después la licencia, en el
-	 * mismo orden que las demás operaciones. Exige la versión que vio el formulario.
+	 * Convierte una prueba en licencia de pago (contrato §5.4 y decisión 5 del propietario): a una
+	 * suscripción con cualquier periodo o a una perpetua con 0, 6 o 12 meses de actualizaciones, con
+	 * cualquier plan o cupos personalizados. Se puede convertir durante la prueba o después de vencida,
+	 * sin bonificación.
+	 *
+	 * Si la prueba ya está activada, el periodo nuevo empieza en la fecha de pago y los días de prueba
+	 * restantes no se acumulan; se firma una revisión nueva para la misma activación, sin reinstalar.
+	 * Si no está activada, solo cambian sus condiciones: las fechas se fijan al activarla.
 	 */
-	private function lock(string $licenseId, int $version): array
+	public function convert(Actor $actor, string $operationId, string $licenseId, array $input): array
+	{
+		$request = self::conversionInput($input);
+		return $this->operations->run(
+			$actor,
+			self::ROLES,
+			$operationId,
+			'license.convert',
+			[$licenseId, $request],
+			function () use ($actor, $operationId, $licenseId, $request): array {
+				$license = $this->lock($licenseId, $request['version'], $request['target']['plan_id'], $plan);
+				$conversion = $this->planConversion($license, $plan, $request);
+				if ($request['amount'] === null) {
+					throw new Problem('Escribe el monto cobrado.');
+				}
+				$terms = $request['terms'];
+				$target = $conversion['target'];
+				$period = $conversion['period'];
+				$this->db->execute(
+					'UPDATE licenses
+						SET license_type=?,billing_period=?,trial_duration=NULL,updates_months=?,grace_days=?,
+							plan_id=?,plan_name=?,plan_custom=?,cash_registers=?,order_takers=?,kitchen_displays=?,
+							period_starts_at=?,expires_at=?,updates_until=?,anchor_day=?,anchor_local_time=?,
+							row_version=row_version+1,updated_at=?
+						WHERE license_id=?',
+					[
+						$terms['license_type'],
+						$terms['billing_period'],
+						$terms['updates_months'],
+						LicenseTerms::graceDays($terms['license_type']),
+						$target['plan']['plan_id'],
+						$target['plan']['display_name'],
+						$target['custom'] ? 1 : 0,
+						$target['limits']['cash_registers'],
+						$target['limits']['order_takers'],
+						$target['limits']['kitchen_displays'],
+						self::sqlOrNull($period['period_starts_at'] ?? null),
+						self::sqlOrNull($period['expires_at'] ?? null),
+						self::sqlOrNull($period['updates_until'] ?? null),
+						$period['anchor_day'] ?? null,
+						$period['anchor_local_time'] ?? null,
+						$this->clock->sql(),
+						$license['license_id'],
+					],
+				);
+				$covers = null;
+				if (($period['expires_at'] ?? null) !== null) {
+					$covers = [$period['period_starts_at'], $period['expires_at']];
+				}
+				$paymentId = $this->payments->record($actor, $operationId, $license['license_id'], [
+					'concept' => 'conversion',
+					'term' => LicenseTerms::term($terms),
+					'plan_id' => $target['plan']['plan_id'],
+					'paid_at' => $conversion['paid_at'],
+					'amount' => $request['amount'],
+					'catalog' => $conversion['catalog'],
+					'credit' => 0,
+					'reason' => $request['reason'],
+					'reference' => $request['reference'],
+					'covers' => $covers,
+				]);
+				$this->db->execute('UPDATE licenses SET period_payment_id=? WHERE license_id=?', [
+					$paymentId,
+					$license['license_id'],
+				]);
+				$signed = $this->publisher->commercialChange($license['license_id'], false);
+				$id = Uuid::text($license['license_id']);
+				$this->history->record($id, $actor->id, 'license.converted', $request['note'], $request['reference'], [
+					'paid_at' => CalendarPeriod::utc($conversion['paid_at']),
+					'license_type' => $terms['license_type'],
+					'billing_period' => $terms['billing_period'],
+					'updates_months' => $terms['updates_months'],
+					'plan_id' => $target['plan']['plan_id'],
+					'custom' => $target['custom'],
+					'activated' => $period !== [],
+					'revisions_signed' => $signed,
+				]);
+				return ['id' => $id, 'revisions_signed' => $signed];
+			},
+		);
+	}
+
+	/** Vista previa de convert(): condiciones, fechas si ya está activada y monto sugerido. */
+	public function quoteConversion(string $licenseId, array $input): array
+	{
+		$request = self::conversionInput($input);
+		$plan =
+			$this->db->one('SELECT * FROM plans WHERE plan_id=?', [$request['target']['plan_id']]) ??
+			throw new Problem('El plan elegido no existe en el catálogo.');
+		return $this->planConversion($this->read($licenseId), $plan, $request);
+	}
+
+	/** Lo que haría una conversión: la prueba, su destino, el periodo nuevo y el precio sugerido. */
+	private function planConversion(array $license, array $plan, array $request): array
+	{
+		if ($license['commercial_status'] !== 'issued') {
+			throw new Problem('Una licencia revocada no se puede convertir.');
+		}
+		if ($license['license_type'] !== 'trial') {
+			throw new Problem('Solo una prueba se convierte en licencia de pago. Esta licencia ya es de pago.');
+		}
+		$target = $this->target($request['target'], $plan);
+		$zone = $this->zone($license);
+		$paidAt = $this->payments->paidAt($request['paid_at'], $zone, $license['license_id']);
+		$period = [];
+		if ($license['period_starts_at'] !== null) {
+			// La conversión se paga durante la prueba o después: nunca antes de que empezara.
+			if (CalendarPeriod::sql($paidAt) < $license['period_starts_at']) {
+				throw new Problem('La fecha de pago es anterior al inicio de la prueba.');
+			}
+			// El periodo nuevo empieza en la fecha de pago, con su día y su hora como ancla (§5.4).
+			$period = CalendarPeriod::firstPeriod($request['terms'], $paidAt, $zone);
+		}
+		// Una conversión no tiene bonificación: lo sugerido es el precio del catálogo. Una licencia
+		// personalizada no tiene precio.
+		$catalog = $target['custom'] ? null : LicenseTerms::catalogPrice($plan, LicenseTerms::term($request['terms']));
+		return [
+			'license' => $license,
+			'time_zone' => $zone,
+			'paid_at' => $paidAt,
+			'terms' => $request['terms'],
+			'target' => $target,
+			'period' => $period,
+			'catalog' => $catalog,
+			'suggested' => $catalog,
+		];
+	}
+
+	/**
+	 * Bloquea la licencia para un cambio comercial: primero su producto, después el plan de destino
+	 * si lo hay y por último la licencia, en el mismo orden que la emisión y el editor de planes.
+	 * Exige la versión que vio el formulario. Devuelve la licencia; el plan queda en $plan.
+	 */
+	private function lock(string $licenseId, int $version, ?string $planId = null, ?array &$plan = null): array
 	{
 		$bytes = Uuid::bytes($licenseId);
 		$productId = $this->db->execute('SELECT product_id FROM licenses WHERE license_id=?', [$bytes])->fetchColumn();
@@ -204,6 +343,11 @@ final class CommercialService
 			throw new Problem('No se encontró la licencia.', 404);
 		}
 		$this->db->one('SELECT product_id FROM products WHERE product_id=? FOR SHARE', [$productId]);
+		if ($planId !== null) {
+			$plan =
+				$this->db->one('SELECT * FROM plans WHERE plan_id=? FOR SHARE', [$planId]) ??
+				throw new Problem('El plan elegido no existe en el catálogo.');
+		}
 		$license = $this->db->one('SELECT * FROM licenses WHERE license_id=? FOR UPDATE', [$bytes]);
 		if ((int) $license['row_version'] !== $version) {
 			throw new Problem('Otro operador cambió la licencia. Recarga su detalle.', 409);
@@ -235,6 +379,80 @@ final class CommercialService
 	{
 		return $this->db->one('SELECT * FROM plans WHERE plan_id=?', [$planId]) ??
 			throw new \RuntimeException('License plan not found.');
+	}
+
+	/**
+	 * Datos del plan y los cupos de destino: el plan llena los tres cupos, y un número distinto del
+	 * plan deja la licencia personalizada. Elegir un plan del catálogo con sus números quita la marca.
+	 */
+	private static function targetInput(array $input): array
+	{
+		$planId = Input::text($input, 'plan_id', 64, false);
+		if ($planId === '') {
+			throw new Problem('Elige el plan de la licencia.');
+		}
+		$limits = [];
+		foreach (LicenseTerms::LIMITS as $key => $label) {
+			$limits[$key] =
+				($input[$key] ?? '') === '' ? null : Input::integer($input, $key, 0, LicenseTerms::MAX_LIMIT, $label);
+		}
+		return ['plan_id' => $planId, 'limits' => $limits];
+	}
+
+	/** Plan de destino ya bloqueado y los cupos que resultan; dice si la licencia queda personalizada. */
+	private function target(array $target, array $plan): array
+	{
+		if ($plan['state'] !== 'active') {
+			throw new Problem('El plan elegido está archivado y ya no se ofrece.');
+		}
+		$limits = [];
+		$custom = false;
+		foreach (array_keys(LicenseTerms::LIMITS) as $key) {
+			$limits[$key] = $target['limits'][$key] ?? (int) $plan[$key];
+			$custom = $custom || $limits[$key] !== (int) $plan[$key];
+		}
+		return ['plan' => $plan, 'limits' => $limits, 'custom' => $custom];
+	}
+
+	/** Condiciones de destino de una conversión: suscripción con su periodo, o perpetua con sus meses. */
+	public static function conversionInput(array $input): array
+	{
+		$type = Input::text($input, 'license_type', 16, false);
+		if (!in_array($type, ['subscription', 'perpetual'], true)) {
+			throw new Problem('Una prueba se convierte a una suscripción o a una perpetua.');
+		}
+		$terms = [
+			'license_type' => $type,
+			'billing_period' => null,
+			'trial_duration' => null,
+			'updates_months' => null,
+		];
+		if ($type === 'subscription') {
+			$period = Input::text($input, 'billing_period', 16, false);
+			if (!in_array($period, LicenseTerms::BILLING_PERIODS, true)) {
+				throw new Problem('Elige el periodo de la suscripción: mensual, trimestral, semestral o anual.');
+			}
+			$terms['billing_period'] = $period;
+		} else {
+			$months = Input::text($input, 'updates_months', 2, false);
+			$months = $months === '' ? (string) LicenseTerms::DEFAULT_UPDATES_MONTHS : $months;
+			if (!in_array($months, array_map('strval', LicenseTerms::UPDATES_MONTHS), true)) {
+				throw new Problem('Elige los meses de actualizaciones de la licencia perpetua: 0, 6 o 12.');
+			}
+			$terms['updates_months'] = (int) $months;
+		}
+		return [
+			'version' => (int) ($input['version'] ?? 0),
+			'terms' => $terms,
+			'target' => self::targetInput($input),
+			'reference' => Input::text($input, 'reference', 190, false),
+			'note' => Input::text($input, 'reason', 500, false),
+		] + Payments::input($input);
+	}
+
+	private static function sqlOrNull(?\DateTimeImmutable $instant): ?string
+	{
+		return $instant === null ? null : CalendarPeriod::sql($instant);
 	}
 
 	private static function utc(): \DateTimeZone

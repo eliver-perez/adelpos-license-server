@@ -9,6 +9,7 @@ $notices = [
 	'administrative' => 'Información administrativa actualizada. Los derechos y activaciones se conservaron.',
 	'document' => 'Constancia generada. Disponible en el historial de documentos.',
 	'renew' => 'Renovación registrada con su pago. Se firmó una revisión nueva para la computadora activa.',
+	'convert' => 'Conversión registrada con su pago. Si la prueba estaba activada, la computadora recibe una revisión nueva.',
 ];
 $activated = $license['period_starts_at'] !== null;
 $billingPeriods = [
@@ -219,16 +220,62 @@ $termNotes = [
 					<button class="btn btn-primary">Revisar renovación</button>
 				</form>
 			<?php endif; ?>
+			<?php if ($license['license_type'] === 'trial'): ?>
+				<form
+					class="panel form-panel stack-form mb-4"
+					id="convert-form"
+					method="get"
+					action="/admin/licenses/<?= V::escape($licenseId) ?>/convert"
+				>
+					<span class="eyebrow">CONVERSIÓN</span>
+					<h2>Convertir en licencia de pago</h2>
+					<p class="text-secondary small mb-0">
+						Durante la prueba o después de vencida, a cualquier tipo y plan. Si ya está activada, el periodo
+						nuevo empieza en la fecha de pago, sin reinstalar.
+					</p>
+					<label>
+						Tipo
+						<select class="form-select mt-2" name="license_type">
+							<option value="subscription">Suscripción</option>
+							<option value="perpetual">Perpetua</option>
+						</select>
+					</label>
+					<label>
+						Periodo de la suscripción
+						<select class="form-select mt-2" name="billing_period">
+							<?php foreach ($billingPeriods as $value => $label): ?>
+								<option value="<?= $value ?>"><?= V::escape($label) ?></option>
+							<?php endforeach; ?>
+						</select>
+					</label>
+					<label>
+						Actualizaciones de la perpetua
+						<select class="form-select mt-2" name="updates_months">
+							<option value="0">Sin actualizaciones</option>
+							<option value="6" selected>6 meses</option>
+							<option value="12">12 meses</option>
+						</select>
+					</label>
+					<?php
+					$selectedPlan = $license['plan_id'];
+					require __DIR__ . '/target-fields.php';
+					?>
+					<label>
+						Fecha de pago <span class="optional">vacía: este momento</span>
+						<input class="form-control mt-2" type="datetime-local" name="paid_at">
+					</label>
+					<button class="btn btn-primary">Revisar conversión</button>
+				</form>
+			<?php endif; ?>
 			<?php
-			// PENDIENTE etapa 3: formularios de conversión de una prueba, mantenimiento y periodo inicial.
+			// PENDIENTE etapa 3: formularios de mantenimiento y de edición del periodo inicial.
 			?>
-			<?php if ($license['license_type'] !== 'subscription' || !$activated): ?>
+			<?php if ($license['license_type'] === 'perpetual' || !$activated): ?>
 				<section class="panel form-panel mb-4">
 					<span class="eyebrow">CICLO COMERCIAL</span>
 					<h2 class="mt-3">Disponible próximamente</h2>
 					<p class="text-secondary small mb-0">
-						La conversión de una prueba, la compra de mantenimiento y la edición del periodo inicial todavía no
-						están disponibles. Una suscripción se renueva cuando ya está activada.
+						La compra de mantenimiento y la edición del periodo inicial todavía no están disponibles.
 					</p>
 				</section>
 			<?php endif; ?>

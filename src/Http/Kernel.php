@@ -482,7 +482,7 @@ final class Kernel
 			);
 			return;
 		}
-		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})/(renew)$~', $this->path, $matches)) {
+		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})/(renew|convert)$~', $this->path, $matches)) {
 			$this->commercial($method, $operationId, $matches[1], $matches[2]);
 			return;
 		}
@@ -513,6 +513,7 @@ final class Kernel
 						ctype_digit($revisionPage) ? (int) $revisionPage : 1,
 					),
 					'capabilities' => $this->app->read->capabilities(),
+					'plans' => $this->app->read->plans(),
 				]);
 				return;
 			}
@@ -640,19 +641,19 @@ final class Kernel
 		if ($method === 'POST') {
 			$result = match ($operation) {
 				'renew' => $this->app->commercial->renew($this->actor, $operationId, $licenseId, $_POST),
+				'convert' => $this->app->commercial->convert($this->actor, $operationId, $licenseId, $_POST),
 			};
 			$this->redirect('/admin/licenses/' . $result['id'] . '?notice=' . $operation);
 			return;
 		}
 		$license = $this->app->read->license($licenseId);
 		$quote = match ($operation) {
-			'renew' => $this->app->commercial->quoteRenewal(
-				$licenseId,
-				$_GET + ['version' => $license['row_version']],
-			),
+			'renew' => $this->app->commercial->quoteRenewal($licenseId, $_GET),
+			'convert' => $this->app->commercial->quoteConversion($licenseId, $_GET),
 		};
+		$titles = ['renew' => 'Revisar renovación', 'convert' => 'Revisar conversión'];
 		$this->render('license-' . $operation, [
-			'title' => 'Revisar renovación',
+			'title' => $titles[$operation],
 			'license' => $license,
 			'quote' => $quote,
 		]);
