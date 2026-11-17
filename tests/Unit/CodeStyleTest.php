@@ -30,9 +30,6 @@ final class CodeStyleTest extends TestCase
 		'database/migrations/*.sql',
 	];
 
-	/** La especificación de la etapa 2 prohíbe modificar la migración inicial. */
-	private const EXCLUDED = ['database/migrations/001_esquema_inicial.sql'];
-
 	private static function root(): string
 	{
 		return dirname(__DIR__, 2);
@@ -44,10 +41,8 @@ final class CodeStyleTest extends TestCase
 		$files = [];
 		foreach (self::PATTERNS as $pattern) {
 			foreach (glob(self::root() . '/' . $pattern) as $path) {
-				$relative = substr($path, strlen(self::root()) + 1);
-				if (!in_array($relative, self::EXCLUDED, true)) {
-					$files[] = $relative;
-				}
+				// La migración inicial también: el propietario autorizó reformatearla en la etapa 3.
+				$files[] = substr($path, strlen(self::root()) + 1);
 			}
 		}
 		sort($files);

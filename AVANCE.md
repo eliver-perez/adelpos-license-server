@@ -1997,3 +1997,120 @@ git grep -n "PENDIENTE etapa" -- src bin templates
 | `bin/check-secrets.php` | Sin hallazgos |
 | `bin/build-release.php` | Paquete de 133 archivos más `RELEASE.json`; del contrato, solo el esquema y el OpenAPI |
 | Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |
+
+---
+
+# Avance — Etapa 3: planes y ciclo comercial
+
+Especificación: [docs/ETAPA_3_PLANES_Y_CICLO_COMERCIAL.md](docs/ETAPA_3_PLANES_Y_CICLO_COMERCIAL.md). Fuente de verdad: el contrato V1.0, que no se modifica. Las decisiones del propietario para la etapa están en `DECISIONS.md`, sección 11.
+
+El propietario pidió trabajar las fases 0 a 9 sin detenerse entre ellas. Lo que el contrato o la especificación no resuelven se decide con el criterio más conservador y coherente con el contrato, se aplica y queda como propuesta V1.1 nueva (desde la n.º 23) en las consultas del cierre.
+
+## Etapa 3 · Fase 0 — Verificación y preparación
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-0.1 Estado de partida
+
+| Comprobación | Resultado |
+| --- | --- |
+| Commit | `72b9098` «Etapa 2, Fase 9: cierre de la etapa». Árbol limpio, salvo la especificación de esta etapa, que llegó sin versionar y se agrega en este commit. |
+| PHPUnit, PHP 8.5.7 | 377 pruebas, 27 440 aserciones, todas OK (1 min 46 s) |
+| `generate-fixtures.php --check` | Comprobado: 11 licencias, 17 casos negativos, 6 de revisión, 24 de fechas, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go 1.25.5 | OK en todos los casos |
+| Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |
+| `bin/check-secrets.php` y `npm run format:check` | Sin hallazgos; sin diferencias |
+
+### E3-0.2 PHP 8.3 real
+
+**Instalación.** Homebrew trae `php@8.3` en su repositorio principal, así que no hizo falta el tap `shivammathur/php`. Se instaló como *keg-only* en `/opt/homebrew/opt/php@8.3`: no reemplaza al `php` 8.5 que usa el resto del equipo.
+
+- Se descartó un contenedor: desde Docker en macOS no se alcanza el socket `/tmp/mysql.sock`, y las cuentas que crean las pruebas son `@'localhost'`.
+- Para instalarlo, Homebrew actualizó 27 bibliotecas compartidas (curl, openldap, sqlite, pcre2, krb5, libzip, freetype y otras) e instaló `openssl@4`, `icu4c@79` y `aspell`. No se actualizaron los programas que dependen de ellas. Después se comprobó que PHP 8.5.7, PHP-FPM 8.5.7, Nginx 1.31.3, OpenSSL 3.6.3 y pdftotext 26.08.0 siguen funcionando, y la suite volvió a pasar en 8.5.
+
+| Dato | Valor |
+| --- | --- |
+| Versión | PHP 8.3.36 (cli y fpm-fcgi), compilado el 2026-10-19, Zend OPcache 8.3.36 |
+| Extensiones que exige `composer.json` | gd, mbstring, PDO, pdo_mysql 8.3.36, sodium (libsodium 1.0.22) y xmlwriter: todas presentes |
+| Otras extensiones de la prueba | intl (ICU 79.1), openssl, zip, curl, json, ctype, tokenizer, dom |
+| Datos de zonas horarias | 2026.1, 419 zonas: los mismos que PHP 8.5.7 |
+| PHP-FPM de las pruebas con Nginx | `TEST_FPM_BIN=/opt/homebrew/opt/php@8.3/sbin/php-fpm` |
+| Resultado | **377 pruebas, 27 440 aserciones, todas OK** (1 min 29 s), incluidos el motor de fechas (`CalendarPeriodTest`), los archivos del contrato (`ContractFilesTest`), las pruebas con Nginx y PHP-FPM reales y los respaldos con `mysqldump` 8.0.46 |
+| `generate-fixtures.php --check` con PHP 8.3 | Comprobado, mismos 81 casos |
+
+El VPS usará PHP 8.3.6 (decisión 1 de la etapa 1); aquí es 8.3.36, la misma versión menor. **Nada falló en PHP 8.3**, así que no hubo commit de corrección.
+
+### E3-0.3 Migración inicial reformateada (decisión D)
+
+- `001_esquema_inicial.sql` se reescribió con la regla de código legible: una columna o restricción por línea, tabuladores, y cada `CHECK` con una condición por línea. Las líneas pasaron de hasta 238 columnas a menos de 120.
+- **No cambió el orden** de tablas, columnas, índices ni llaves foráneas. MySQL nombra las llaves foráneas sin nombre (`admin_sessions_ibfk_1`…) según su orden, así que cambiarlo habría cambiado el esquema.
+- `InitialSchemaTest` sigue pasando: el esquema que produce es idéntico al de la cadena heredada, salvo el endurecimiento ya registrado.
+- `CodeStyleTest` ya no excluye este archivo. **Regla comprobada:** con una línea indentada con espacios dentro de la `001`, la prueba falla y nombra la línea.
+- Cambia el checksum del archivo. No hay instalaciones, así que no afecta a nadie.
+
+### E3-0.4 `DECISIONS.md`
+
+- Sección 9: las propuestas V1.1 n.º 14 a 20 quedan aprobadas, y se agregan la **n.º 21** (un cambio de catálogo nunca reduce licencias existentes, ni al renovar: sustituye una frase de §11) y la **n.º 22** (reglas de precios, conversión, cambio de plan, bonificación y mantenimiento).
+- Sección 10, repaso de formato: la decisión 4 registra la autorización de la decisión D.
+- Sección 11, nueva: las 10 decisiones del propietario para esta etapa.
+
+### E3-0.5 Marcas `PENDIENTE etapa 3` y la fase que las resuelve
+
+```sh
+git grep -n "PENDIENTE etapa 3" -- src bin templates
+```
+
+| Archivo | Qué queda pendiente | Fase |
+| --- | --- | --- |
+| `src/Application/LicenseService.php:10` | Renovación con fecha de pago y tolerancia | 3 |
+| | Conversión de prueba a pago | 4 |
+| | Compra de mantenimiento y edición del periodo inicial | 6 |
+| | Editor de planes y propagación | 2 |
+| `src/Application/OfflineService.php:109` | Registrar una renovación al aprobar un `renew` sin internet | 3 |
+| `src/Http/Kernel.php:491` | Rutas de renovación y mantenimiento, hoy rechazadas | 3 y 6 |
+| `templates/license-detail.php:184` | Formularios de renovación y mantenimiento («Disponible próximamente») | 6 y 9 |
+
+Los pendientes de etapa 3 que `AVANCE.md` (E2-9.6) y `DECISIONS.md` registran fuera del código:
+
+| Pendiente | Fase |
+| --- | --- |
+| Rediseño de `subscription_periods` y `maintenance_purchases`, hoy sin escrituras | 1 |
+| Límite conocido del motor de fechas al encadenar periodos (`DECISIONS.md`, sección 10, Fase 3, decisión 8) | 3 |
+| Casos de renovación, conversión, cambio de plan y mantenimiento en `contracts/v1/fixtures/` (propuesta V1.1 n.º 6) | 8 |
+| Edición del periodo inicial de una licencia sin activar (propuesta V1.1 n.º 11) | 6 |
+
+### E3-0.6 Plan de la etapa
+
+| Fase | Migración | Contenido |
+| --- | --- | --- |
+| 1 | `005` | Precios opcionales en `plans`; tabla de pagos de solo inserción que reemplaza a `subscription_periods` y `maintenance_purchases`; monto de alta al emitir |
+| 2 | `006` | Estado y versión de los planes; editor solo para el superadministrador; propagación de aumentos en una sola transacción |
+| 3 | — | Renovación (§5.3), su vía sin internet y el límite del motor de fechas |
+| 4 | — | Conversión de prueba a cualquier tipo y plan |
+| 5 | `007` | Cambio de plan con bonificación y cambios programados |
+| 6 | — | Mantenimiento anual y edición del periodo inicial |
+| 7 | — | `bin/apply-scheduled-changes.php` en la tarea diaria |
+| 8 | — | Archivos del contrato nuevos |
+| 9 | — | Panel, Playwright, documentación y paquete |
+
+### E3-0.7 Pruebas de la fase
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 377 pruebas, 27 440 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 377 pruebas, 27 440 aserciones, todas OK |
+| Playwright (panel y dispositivos de confianza) | OK |
+| Archivos del contrato y verificador Go | Sin cambios; OK |
+
+### E3-0.8 Comandos para reproducir
+
+```sh
+# PHP 8.3 sin reemplazar al PHP del equipo (Homebrew, keg-only)
+HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_UPGRADE=1 HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1 \
+    brew install php@8.3
+
+# Suite completa en PHP 8.3 (variables TEST_* de E2-9.7, con el PHP-FPM de 8.3)
+env TEST_FPM_BIN=/opt/homebrew/opt/php@8.3/sbin/php-fpm ... \
+    /opt/homebrew/opt/php@8.3/bin/php vendor/bin/phpunit
+/opt/homebrew/opt/php@8.3/bin/php contracts/v1/generate-fixtures.php --check
+```

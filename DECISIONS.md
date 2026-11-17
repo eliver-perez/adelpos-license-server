@@ -144,7 +144,7 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 5 | §8.6 | `deactivate` sobre una activación terminada | Aprobada (decisión 7) |
 | 6 a 13 | §13, §8.7, §4, §11, §5.2, §9.1, §2 | Casos de renovación en la etapa 3, uso de `INCOMPATIBLE_SCHEMA`, `request_id` nulo, nombres de los planes, motivo de la liberación forzada, edición del periodo inicial, casos sin internet y formatos menores | Aplicadas sin objeción (decisión 8) |
 
-**Propuestas nuevas, encontradas al implementar las fases 4 a 8.** Se aplicaron con el criterio indicado para no detener el trabajo, y **están pendientes de la aprobación del propietario**. Cada una se puede revertir sin tocar el contrato. El detalle está en AVANCE.md, sección E2-9.4.
+**Propuestas encontradas al implementar las fases 4 a 8 de la etapa 2.** Se aplicaron con el criterio indicado para no detener el trabajo. **El propietario las aprobó el 2026-11-16** (sección 11, decisión 1). El detalle está en AVANCE.md, sección E2-9.4.
 
 | N.º | Sección | Qué no queda definido | Criterio aplicado |
 | --- | --- | --- | --- |
@@ -155,6 +155,13 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 18 | §3 | El servidor emite instantes con 6 decimales y el cliente acepta de 0 a 9. No dice cuál describe el esquema. | El esquema admite de 0 a 9; el servidor se exige 6 exactos antes de firmar. |
 | 19 | §8.7 | La tabla no incluye el HTTP de una petición que llega sin TLS. La decisión 5 del propietario enumeró 404, 405, 413 y 415. | Se conserva `403` con `INVALID_REQUEST`, que ya existía. En producción Nginx no deja pasar HTTP. |
 | 20 | §8.3 | Define «la misma instalación» como el mismo `server_id` y la misma llave. La especificación aclara el caso del mismo `server_id` con otra llave; no el de la misma llave con otro `server_id`. | Los dos casos son otra instalación: reciben `ACTIVATION_LIMIT`. |
+
+**Propuestas de la etapa 3.** Las dos primeras son decisiones del propietario que amplían o precisan el contrato (sección 11). Se incorporan al contrato `_v2` al cerrar la etapa 4.
+
+| N.º | Sección | Qué cambia | Estado |
+| --- | --- | --- | --- |
+| 21 | §11 | **Sustituye** la frase «aplica a licencias nuevas o en su siguiente renovación». Al renovar, la licencia conserva sus números: un cambio en el catálogo **nunca reduce** las licencias existentes, ni siquiera al renovar. Los aumentos del catálogo se aplican a las existentes solo si el propietario lo elige al guardar. Cómo avisar al cliente de los cambios de catálogo se decide después. | Decisión del propietario (sección 11, decisión 9) |
+| 22 | §5.3, §5.4, §5.5, §11 | Reglas comerciales: precios opcionales en MXN y registro del monto cobrado, sin IVA ni facturas; mantenimiento de una perpetua solo por 12 meses; una prueba se convierte en cualquier tipo y plan; subir de plan con bonificación (suscripción) o pagando la diferencia (perpetua); bajar de plan al vencer lo pagado, y una perpetua no baja; cambios mixtos cupo por cupo. | Decisión del propietario (sección 11, decisiones 3 a 8) |
 
 ## 10. Decisiones técnicas de la etapa 2
 
@@ -289,5 +296,23 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 1 | El formato lo aplica Prettier 3.10.1 con `@prettier/plugin-php` 0.26.0 (`.prettierrc.json`: tabuladores, 120 columnas). Son dependencias de desarrollo de npm, con versión exacta. | Un formateador da el mismo resultado siempre y evita discutir el estilo archivo por archivo. npm ya se usaba para Playwright; no se añade nada a Composer ni al paquete de despliegue. |
 | 2 | Las plantillas (`templates/`) no pasan por Prettier: se indentaron con una herramienta propia y las líneas densas se reescribieron a mano. | El complemento de PHP no formatea bien archivos que mezclan HTML y PHP. |
 | 3 | El límite que comprueba la prueba de estilo es de 140 columnas, con el tabulador contado como 4. Prettier apunta a 120. | Prettier no parte cadenas ni expresiones regulares, y el HTML anidado ocupa columnas con la indentación. |
-| 4 | `001_esquema_inicial.sql` queda fuera del repaso. | La especificación de la etapa 2 prohíbe modificarlo. Queda como consulta al propietario en AVANCE.md, sección E2-F.2. |
+| 4 | `001_esquema_inicial.sql` queda fuera del repaso. | La especificación de la etapa 2 prohíbe modificarlo. Queda como consulta al propietario en AVANCE.md, sección E2-F.2. **El propietario lo autorizó al empezar la etapa 3 (decisión D) y se reformateó en su Fase 0.** |
 | 5 | El SQL dentro del código se parte por cláusula, y cada `CHECK` de las migraciones nuevas lleva una condición por línea. | Es la parte del código que más se lee al revisar una regla. |
+
+## 11. Decisiones del propietario para la etapa 3
+
+Todas son del 2026-11-16 y están al inicio de la especificación de la etapa (`docs/ETAPA_3_PLANES_Y_CICLO_COMERCIAL.md`).
+
+| # | Decisión |
+| --- | --- |
+| 1 | **Aprobadas** las propuestas V1.1 n.º 14 a 20 (sección 9) y las decisiones A, B y C de la etapa 2 (AVANCE.md, sección E2-9.4): la emisión solo de `adel_pos`, `license_key` solo en `activate` y las dos dependencias de desarrollo. |
+| 2 | **Autorizado** reformatear `001_esquema_inicial.sql` con la regla de código legible (decisión D). El esquema que produce no cambia. |
+| 3 | **Precios:** se capturan en el panel, en el catálogo de planes; son opcionales, y si falta uno el panel pide el monto a mano; moneda única **MXN**; se registra el monto tal como se cobra, sin calcular IVA ni emitir facturas. |
+| 4 | **Mantenimiento de una perpetua:** solo por un año, 12 meses. |
+| 5 | **Una prueba se convierte en cualquier tipo:** suscripción con cualquier periodo o perpetua, con cualquier plan. |
+| 6 | **Subir de plan** o aumentar cupos. Suscripción: el periodo nuevo empieza en la fecha de pago y se descuenta una bonificación por los días que faltaban del periodo pagado. Perpetua: se paga la diferencia entre los precios perpetuos de los dos planes y el cambio aplica de inmediato. |
+| 7 | **Bajar de plan** o reducir cupos: el plan nuevo empieza cuando vence el tiempo pagado. Una perpetua no puede bajar de plan. |
+| 8 | **Cambio que sube unos cupos y baja otros:** los aumentos como en el punto 6 y las reducciones como en el punto 7, cupo por cupo. |
+| 9 | **Al renovar, la licencia conserva sus números.** Un cambio en el catálogo nunca reduce las licencias existentes. Los aumentos se aplican a las existentes si el propietario lo elige al guardar. Sustituye una frase del contrato §11: propuesta V1.1 n.º 21. |
+| 10 | Las decisiones 3 a 8 se registran como propuesta V1.1 n.º 22, para incorporarlas al contrato `_v2`. |
+
