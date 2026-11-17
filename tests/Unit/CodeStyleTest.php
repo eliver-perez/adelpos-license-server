@@ -25,6 +25,7 @@ final class CodeStyleTest extends TestCase
 		'public/assets/app.js',
 		'public/assets/app.css',
 		'contracts/v1/*.php',
+		'contracts/v1/verify/*.go',
 		'templates/*.php',
 		'database/migrations/*.sql',
 	];

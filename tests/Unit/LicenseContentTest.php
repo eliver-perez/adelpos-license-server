@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 final class LicenseContentTest extends TestCase
 {
 	/** El ejemplo de la sección 4 del contrato, con identificadores de prueba. */
-	private static function subscription(): array
+	public static function subscription(): array
 	{
 		return [
 			'schema_version' => '1.0',
@@ -38,7 +38,7 @@ final class LicenseContentTest extends TestCase
 		];
 	}
 
-	private static function perpetual(): array
+	public static function perpetual(): array
 	{
 		return array_replace(self::subscription(), [
 			'license_type' => 'perpetual',
@@ -49,7 +49,7 @@ final class LicenseContentTest extends TestCase
 		]);
 	}
 
-	private static function trial(): array
+	public static function trial(): array
 	{
 		return array_replace(self::subscription(), [
 			'license_type' => 'trial',
@@ -109,10 +109,16 @@ final class LicenseContentTest extends TestCase
 		}
 	}
 
-	/** @return iterable<string, array{0: string, 1: string, 2: array<string, mixed>, 3: string}> */
-	public static function invalidContents(): iterable
+	/**
+	 * Cada caso: tipo de licencia de partida, cambios que la vuelven inválida y campo que debe
+	 * nombrar el error. El cuarto elemento, false, marca las reglas que solo comprueba el
+	 * servidor porque un esquema JSON no puede expresarlas (ver ContractFilesTest).
+	 *
+	 * @return list<array{0: string, 1: array<string, mixed>, 2: string, 3?: bool}>
+	 */
+	public static function invalidCases(): array
 	{
-		$cases = [
+		return [
 			['subscription', ['schema_version' => '1.1'], 'schema_version'],
 			['subscription', ['schema_version' => 1.0], 'schema_version'],
 			['subscription', ['product_id' => 'producto_prueba'], 'product_id'],
@@ -147,12 +153,12 @@ final class LicenseContentTest extends TestCase
 			['subscription', ['license_status' => 'revoked', 'status_reason' => 'expired'], 'status_reason'],
 			['subscription', ['license_revision' => 0], 'license_revision'],
 			['subscription', ['license_revision' => '7'], 'license_revision'],
-			['subscription', ['license_revision' => 7.0], 'license_revision'],
+			['subscription', ['license_revision' => 7.0], 'license_revision', false],
 			// Instantes: UTC, con seis decimales y terminados en «Z».
-			['subscription', ['issued_at' => '2026-11-16T06:30:00Z'], 'issued_at'],
+			['subscription', ['issued_at' => '2026-11-16T06:30:00Z'], 'issued_at', false],
 			['subscription', ['issued_at' => '2026-11-16T06:30:00.000000+00:00'], 'issued_at'],
 			['subscription', ['issued_at' => '2026-11-16 06:30:00.000000Z'], 'issued_at'],
-			['subscription', ['issued_at' => '2026-02-30T06:30:00.000000Z'], 'issued_at'],
+			['subscription', ['issued_at' => '2026-02-30T06:30:00.000000Z'], 'issued_at', false],
 			['subscription', ['issued_at' => '2026-11-16T24:00:00.000000Z'], 'issued_at'],
 			['subscription', ['period_starts_at' => null], 'period_starts_at'],
 			['subscription', ['updates_until' => null], 'updates_until'],
@@ -160,12 +166,12 @@ final class LicenseContentTest extends TestCase
 			['trial', ['expires_at' => null], 'expires_at'],
 			['perpetual', ['expires_at' => '2027-05-16T06:30:00.000000Z'], 'expires_at'],
 			// El vencimiento es posterior al inicio del periodo.
-			['subscription', ['expires_at' => '2026-11-16T06:30:00.000000Z'], 'expires_at'],
-			['subscription', ['expires_at' => '2026-11-01T06:30:00.000000Z'], 'expires_at'],
+			['subscription', ['expires_at' => '2026-11-16T06:30:00.000000Z'], 'expires_at', false],
+			['subscription', ['expires_at' => '2026-11-01T06:30:00.000000Z'], 'expires_at', false],
 			// Suscripción y prueba: las actualizaciones terminan con la vigencia.
-			['subscription', ['updates_until' => '2027-01-16T06:30:00.000000Z'], 'updates_until'],
-			['trial', ['updates_until' => '2026-12-16T06:30:00.000000Z'], 'updates_until'],
-			['perpetual', ['updates_until' => '2026-11-16T06:29:59.999999Z'], 'updates_until'],
+			['subscription', ['updates_until' => '2027-01-16T06:30:00.000000Z'], 'updates_until', false],
+			['trial', ['updates_until' => '2026-12-16T06:30:00.000000Z'], 'updates_until', false],
+			['perpetual', ['updates_until' => '2026-11-16T06:29:59.999999Z'], 'updates_until', false],
 			['subscription', ['grace_days' => 15], 'grace_days'],
 			['subscription', ['grace_days' => 0], 'grace_days'],
 			['subscription', ['grace_days' => '5'], 'grace_days'],
@@ -177,6 +183,7 @@ final class LicenseContentTest extends TestCase
 				'subscription',
 				['plan' => ['name' => 'Plan elemental', 'plan_id' => 'elemental', 'custom' => false]],
 				'plan',
+				false,
 			],
 			[
 				'subscription',
@@ -194,6 +201,7 @@ final class LicenseContentTest extends TestCase
 				'subscription',
 				['limits' => ['order_takers' => 3, 'cash_registers' => 3, 'kitchen_displays' => 3]],
 				'limits',
+				false,
 			],
 			[
 				'subscription',
@@ -218,13 +226,19 @@ final class LicenseContentTest extends TestCase
 			],
 			// «features» es un objeto con «clave → true»: nunca una lista ni un valor falso.
 			['subscription', ['features' => []], 'features'],
-			['subscription', ['features' => ['modulo_uno' => true]], 'features'],
+			['subscription', ['features' => ['modulo_uno' => true]], 'features', false],
 			['subscription', ['features' => (object) ['modulo_uno' => false]], 'features'],
 			['subscription', ['features' => (object) ['modulo_uno' => 1]], 'features'],
 			['subscription', ['features' => (object) ['Modulo' => true]], 'features'],
 			['subscription', ['features' => (object) ['m' => true]], 'features'],
 		];
-		foreach ($cases as $index => [$base, $changes, $field]) {
+	}
+
+	/** @return iterable<string, array{0: string, 1: string, 2: array<string, mixed>, 3: string}> */
+	public static function invalidContents(): iterable
+	{
+		foreach (self::invalidCases() as $index => $case) {
+			[$base, $changes, $field] = $case;
 			yield $index . ' ' . $field => [$base, $field, $changes, $field];
 		}
 	}

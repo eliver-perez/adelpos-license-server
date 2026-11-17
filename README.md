@@ -80,7 +80,7 @@ php bin/preflight.php --require-signer
 
 ```sh
 composer test:unit        # pruebas unitarias
-composer test:contract    # recalcula y compara contracts/v1/fixtures sin sobrescribirlos
+composer test:contract    # recalcula y compara contracts/v1/fixtures sin sobrescribirlos (ver contracts/v1/README.md)
 
 # Suite completa contra un MySQL 8 aislado, con una cuenta que pueda crear y borrar bases y usuarios de prueba:
 env TEST_MYSQL_DSN='mysql:unix_socket=/tmp/mysql.sock;charset=utf8mb4' TEST_MYSQL_USER=root TEST_MYSQL_PASSWORD='…' \
@@ -92,8 +92,8 @@ env TEST_MYSQL_DSN='mysql:unix_socket=/tmp/mysql.sock;charset=utf8mb4' TEST_MYSQ
 npm ci --ignore-scripts --no-audit --no-fund
 env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run-panel-tests.php all
 
-# Verificador independiente del contrato heredado:
-go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+# Verificador de referencia del contrato, en Go y sin dependencias externas:
+go run -C contracts/v1/verify . ../fixtures/vectors.json
 ```
 
 ### Estilo del código

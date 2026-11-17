@@ -366,7 +366,7 @@ final class SigningEnvironmentsTest extends TestCase
 	public function testPublicFixtureSeedsAreRejectedForProductionLicensesAndOnProductionServers(): void
 	{
 		// Development or automated tests with test licenses: the public seeds of the contract fixtures are usable.
-		$this->plantFixtureSeed($this->test(), 'semilla-en-pruebas', 'lic-test-v1-a');
+		$this->plantFixtureSeed($this->test(), 'semilla-en-pruebas', 'adelpos-test-fixture-a');
 		$this->test()->check();
 		self::assertSame(
 			'semilla-en-pruebas',
@@ -401,14 +401,14 @@ final class SigningEnvironmentsTest extends TestCase
 		);
 
 		// Production licenses: rejected even when the file and the registry were relabelled as a production key.
-		$this->plantFixtureSeed($this->production(), 'adelpos-prod-202611-1', 'lic-test-v1-b');
+		$this->plantFixtureSeed($this->production(), 'adelpos-prod-202611-1', 'adelpos-test-fixture-b');
 		$rejected($this->production(), 'production licenses');
 		// The rule does not depend on the application environment having been validated.
 		$rejected(
 			$this->production(['APP_ENV' => 'testing', 'APP_URL' => 'http://127.0.0.1:8088']),
 			'production licenses, unvalidated configuration',
 		);
-		foreach (['installation-test-v1-a', 'installation-test-v1-b'] as $index => $seed) {
+		foreach (['installation-fixture-a', 'installation-fixture-b'] as $index => $seed) {
 			$this->plantFixtureSeed($this->production(), 'adelpos-prod-202611-' . ($index + 2), $seed);
 			$rejected($this->production(), $seed);
 		}

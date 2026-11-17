@@ -57,7 +57,7 @@ final class Protocol
 	public const CHALLENGE_ACTIONS = ['activate', 'refresh', 'deactivate'];
 
 	/** Campos exactos de cada petición (contrato, secciones 8.1, 8.3, 8.5 y 8.6). */
-	private const FIELDS = [
+	public const REQUEST_FIELDS = [
 		'challenge' => ['action', 'product_id', 'server_id', 'activation_id'],
 		'activate' => [
 			'request_id',
@@ -87,7 +87,7 @@ final class Protocol
 	 */
 	public static function input(string $action, array $input): array
 	{
-		$expected = self::FIELDS[$action] ?? throw new ApiProblem('INVALID_REQUEST');
+		$expected = self::REQUEST_FIELDS[$action] ?? throw new ApiProblem('INVALID_REQUEST');
 		$received = array_keys($input);
 		sort($received);
 		sort($expected);

@@ -880,7 +880,7 @@ Especificación: `docs/ETAPA_2_CONTRATO_LICENCIA_FIRMA_API.md`. Fuente de verdad
 | 4 — Contenido y firma de la licencia | **Cerrada.** 340 pruebas, 26 412 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 7 de las 20 marcas de herencia. |
 | 5 — API en línea | **Cerrada.** 344 pruebas, 26 611 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 6 de las 20 marcas de herencia. |
 | 6 — Archivos sin internet | **Cerrada.** 357 pruebas, 26 674 aserciones, todas OK. Verificador Go OK. Playwright OK. Quedan 5 de las 20 marcas de herencia. |
-| 7 — Archivos del contrato y verificador de referencia | Pendiente |
+| 7 — Archivos del contrato y verificador de referencia | **Cerrada.** 369 pruebas, 27 283 aserciones, todas OK. Verificador de referencia en Go OK. Playwright OK. Queda 1 de las 20 marcas de herencia. |
 | 8 — Panel: emisión con el modelo nuevo | Pendiente |
 | 9 — Cierre | Pendiente |
 
@@ -1541,7 +1541,7 @@ Las 7 que quedan: `Protocol` (Fase 5), `OfflineRequest` (Fase 6), `contracts/v1/
 | El contenido de cada tipo coincide campo por campo y en orden | `ActivationsTest::testPerpetualContentMatchesTheContractExactlyAndRefreshReusesSignedBytes` y `testSubscriptionTrialAndCustomContentMatchTheContractExactly`: perpetua, suscripción, prueba de 15 días y personalizada con razón social, sin módulos y en `America/Tijuana` (cruza el fin del horario de verano y un mes sin día 31) |
 | Revocación, desactivación y transferencia forzada firman `revoked` con su motivo | `ActivationsTest` (desactivación y revocación), `OfflineTest` (desactivación sin internet, transferencia forzada y liberación forzada) y `offline-panel.cjs` |
 | Las revisiones aumentan de forma global entre activaciones | `ActivationsTest::testDeactivationReleasesSlotAndOldIdentityKeepsTerminalRevision`: 1, 2 (cierre) y 3 en otra computadora, días después y con las mismas fechas |
-| Un contenido inválido no se firma y no deja cambios | `ActivationsTest::testInvalidContentIsNotSignedAndLeavesNoChanges`: ni activación, ni revisión, ni periodo, ni desafío consumido; tampoco en un cambio de módulos ni en una revocación. `LicenseContentTest`: 70 reglas rotas, una por caso |
+| Un contenido inválido no se firma y no deja cambios | `ActivationsTest::testInvalidContentIsNotSignedAndLeavesNoChanges`: ni activación, ni revisión, ni periodo, ni desafío consumido; tampoco en un cambio de módulos ni en una revocación. `LicenseContentTest`: 71 reglas rotas, una por caso |
 
 **Pruebas nuevas (79):** `LicenseContentTest` (74 casos), 3 en `ActivationsTest`, `AdministrationTest::testOnlyAdelPosLicensesCanBeIssued` y `ProtocolTest::testJwsHasTheExactContractHeaderAndAVerifiableSignature`.
 
@@ -1690,3 +1690,85 @@ Las solicitudes `.licreq` usan el formato del contrato y el servidor ya no acept
 - **Fase 7:** archivos de prueba `.licreq` de las tres acciones con el formato nuevo, y el verificador de referencia.
 - **Fase 8:** el detalle de la licencia en el panel (plan, cupos, fechas y motivo de cierre).
 - **Etapa 3:** registrar una renovación al aprobar una solicitud `renew`.
+
+---
+
+## Etapa 2 · Fase 7 — Archivos del contrato y verificador de referencia (contrato §13)
+
+La carpeta `contracts/v1/` se reemplazó por completo. Ya no queda ningún archivo del protocolo anterior.
+
+### E2-7.1 Qué hay ahora en `contracts/v1/`
+
+| Archivo | Contenido |
+| --- | --- |
+| `license.schema.json` | Contenido de la licencia (sección 4) en JSON Schema 2020-12: los 21 campos obligatorios, las condiciones por tipo y por estado, los formatos de UUID, instantes y base64url, y los cupos de 0 a 999. Permite campos adicionales |
+| `openapi.yaml` | API en línea (sección 8) en OpenAPI 3.1: las 4 rutas, sus peticiones, respuestas, errores y 17 ejemplos. El contenido de la licencia hace referencia a `license.schema.json` |
+| `fixtures/vectors.json` | Todos los casos, con su resultado esperado |
+| `fixtures/licenses/*.lic` | Las 11 licencias válidas, tal como viajan |
+| `fixtures/requests/*.licreq` | Las 3 solicitudes sin internet |
+| `generate-fixtures.php` | Generador, con `--check` |
+| `verify/` | Verificador de referencia en Go |
+| `README.md` | Qué es cada cosa y cómo se usa |
+
+**Se eliminaron:** `verify-vectors.go` y los 10 archivos de prueba heredados (`perpetual.lic`, `renewed.lic`, `activate.licreq`, `deactivate-response.json`…).
+
+### E2-7.2 Archivos de prueba
+
+| Grupo | Casos |
+| --- | --- |
+| Licencias válidas | 11: perpetua con 0, 6 y 12 meses; suscripción mensual (el ejemplo del contrato) y anual; prueba de 15 días; personalizada; cierres `deactivated`, `transferred` y `revoked`; y una firmada con otra llave de confianza |
+| Casos negativos | 17, cada uno con su motivo de rechazo |
+| Regla de la revisión | 6: primera licencia, revisión mayor, misma revisión idéntica, misma revisión con otros bytes, revisión menor y otra licencia |
+| Fechas | 24: 12 de meses de calendario, 2 de días y 10 de primer periodo |
+| Estado temporal | 13: límites exactos de vigente, tolerancia y vencida; reloj atrasado; licencias revocadas |
+| Pruebas de posesión | 4 acciones (`transfer` como vector criptográfico) |
+| Solicitudes `.licreq` | 3 acciones |
+
+Los casos de renovación, cambio de plan, conversión de prueba y compra de mantenimiento se agregan en la etapa 3 (propuesta V1.1 n.º 6).
+
+### E2-7.3 Verificador de referencia en Go
+
+`contracts/v1/verify/` aplica las reglas de las secciones 5.6 y 10 del contrato: encabezado exacto, `kid` de confianza por entorno, firma, contenido de la sección 4, entorno igual al de la llave, identidad y llave de la instalación, revisión que nunca retrocede y estado temporal con `ahora_efectivo`. Ejecuta todos los casos de licencias, negativos, revisión, estado, pruebas de posesión y `.licreq`:
+
+```
+OK: 11 licencias, 17 casos negativos, 6 casos de revisión, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes .licreq.
+```
+
+Acertó todos los casos en su primera ejecución, sin ajustar los archivos de prueba.
+
+### E2-7.4 Marcas de herencia
+
+Queda **1 de 20**: `templates/license-detail.php` («Instalaciones: 1 autorizada»), que se resuelve en la Fase 8. Las 4 marcas de `generate-fixtures.php` desaparecieron con el generador anterior.
+
+### E2-7.5 Dependencias nuevas
+
+Dos, **solo de desarrollo**: `opis/json-schema` 2.6.2 y `symfony/yaml` 7.4.23, con sus dependencias `opis/string`, `opis/uri` y `symfony/polyfill-ctype`. No van al servidor. La justificación está en `DECISIONS.md`, sección 10, Fase 7, decisión 1.
+
+### E2-7.6 Pruebas
+
+**Resultado:** PHPUnit **369 pruebas, 27 283 aserciones, todas OK**. Verificador en Go OK. `generate-fixtures.php --check` OK. Playwright OK.
+
+| Lo que pide la especificación | Prueba |
+| --- | --- |
+| Cada archivo de prueba cumple o incumple el esquema según lo esperado | `ContractFilesTest::testValidLicensesComply…` y `testNegativeLicensesFailTheSchemaAndTheValidatorExactlyWhenExpected` |
+| Las respuestas reales de la API cumplen el esquema y el OpenAPI | `HttpApiTest` valida cada respuesta por HTTP real; `ActivationsTest` y `OfflineTest` validan cada licencia firmada contra `license.schema.json` |
+| Las rutas de `ApiKernel` coinciden con las de `openapi.yaml` | `testOpenApiRoutesAreExactlyTheRoutesOfTheApi`, y también los campos de cada petición y los códigos de error |
+| El verificador Go pasa sobre todos los casos | `testGoReferenceVerifierRunsEveryFixtureCase` |
+| `generate-fixtures.php --check` da OK | `testFixturesAreExactlyWhatTheirGeneratorWrites` |
+
+**Pruebas nuevas (12):** las de `ContractFilesTest`. Vuelven, con los archivos nuevos, las dos comparaciones que se habían retirado en las fases 4 y 6: el servidor firma byte a byte los mismos JWS que los archivos de prueba, y acepta sus `.licreq`.
+
+**Conexión con la validación previa a la firma (Fase 4):** de los 71 casos inválidos de `LicenseContentTest`, el esquema rechaza 60. Los otros 11 son reglas que un esquema JSON no puede expresar y que el servidor sí comprueba; están marcados uno por uno y la prueba falla si el esquema empieza a rechazarlos o deja de rechazar alguno de los 60.
+
+**Comprobación de las reglas:** se quitaron una a la vez **24 reglas**: 5 del esquema, 6 del OpenAPI, 3 del código y del generador, y 10 del verificador en Go. La primera corrida detectó 22. Las otras dos llevaron a mejoras:
+
+- *Una respuesta del OpenAPI con menos campos obligatorios:* las respuestas reales seguían cumpliendo. Ahora `HttpApiTest` exige que cada respuesta traiga exactamente los campos obligatorios del OpenAPI.
+- *El verificador acepta una llave conocida de otro entorno:* no se notaba porque cada entorno tenía su propia lista de llaves. Se agregó el caso de una versión de producción que incluye por error una llave de pruebas.
+
+Las 24 quedan detectadas.
+
+### E2-7.7 Pendientes que deja la fase
+
+- **Fase 9:** incluir `openapi.yaml` y `license.schema.json` en el paquete de despliegue, como documentación.
+- **Etapa 3:** casos de prueba de renovación y cambio de plan.
+- **Etapa 4:** agregar `transfer` a `openapi.yaml`.

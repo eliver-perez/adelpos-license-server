@@ -16,7 +16,7 @@ Qué se prueba, cómo se ejecuta y qué falta probar en las etapas siguientes. L
 | `TEST_FPM_BIN`, `TEST_NGINX_BIN`, `TEST_OPENSSL_BIN` | Pruebas sobre Nginx + PHP-FPM + TLS reales, si no están en `PATH` |
 | `TEST_PDFTOTEXT_BIN` | `pdftotext` (Poppler) para leer el texto de las constancias |
 | `git` | Revisión de secretos, paquete y equivalencia del esquema (lee el historial) |
-| Go | Verificador independiente del contrato heredado |
+| Go | Verificador de referencia del contrato (`contracts/v1/verify/`). Sin Go, la prueba que lo ejecuta se omite |
 | Node, Google Chrome (`CHROME_PATH` si no está en la ruta de macOS) | Pruebas del panel con Playwright |
 
 ## 2. Comandos
@@ -26,7 +26,7 @@ composer test:unit                       # pruebas unitarias
 composer test:integration                # integración (requiere TEST_MYSQL_DSN)
 composer test:contract                   # recalcula y compara contracts/v1/fixtures sin sobrescribir
 env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off \
-  go run contracts/v1/verify-vectors.go contracts/v1/fixtures/vectors.json
+  go run -C contracts/v1/verify . ../fixtures/vectors.json
 npm run format:check                     # formato del código (npm run format lo aplica)
 php bin/check-secrets.php                # antes de cada commit
 ```
@@ -70,11 +70,12 @@ env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run
 | `CalendarPeriodTest` | Motor de fechas del contrato, con resultados calculados a mano: día ancla y último día del mes, años bisiestos y 29 de febrero, cambio de año, las cuatro duraciones de suscripción, pruebas de 15 días, 1 mes y 3 meses, perpetua con 0, 6 y 12 meses, día local cerca de la medianoche UTC en `America/Monterrey`, y hora inexistente y hora repetida en `America/Tijuana`, con sus límites al microsegundo. Además compara cada hora local alrededor de un cambio de horario, en cinco zonas, contra una definición independiente de la regla |
 | `AuditLabelsTest` | Toda operación de auditoría de `src/` y `bin/` tiene etiqueta en español en el panel |
 | `CodeStyleTest` | Regla de código legible: indentación con tabuladores, sin espacios al final, máximo de 140 columnas, una sentencia por etiqueta PHP en las plantillas, y el formateador (`npm run format:check`) sin diferencias. La tercera prueba se omite si no están instaladas las dependencias de npm |
+| `ContractFilesTest` | Archivos formales del contrato contra el código: los archivos de prueba son los que escribe su generador; cada licencia válida cumple `license.schema.json`, la acepta el validador del servidor y el servidor firma sus mismos bytes; cada caso negativo falla el esquema y el validador justo cuando se espera; cada regla del validador está en el esquema salvo las 11 que un esquema no puede expresar; el motor reproduce los 24 casos de fechas; el protocolo reproduce las pruebas de posesión y acepta los `.licreq`; las rutas, los campos de cada petición, los códigos de error y los ejemplos de `openapi.yaml` coinciden con el código; las semillas de prueba son las que el servidor rechaza en producción; y el verificador de referencia en Go acierta todos los casos |
 | `EncryptedArchiveTest` | Archivo cifrado de respaldos: ida y vuelta por bloques, permisos privados, llave incorrecta, truncado o alterado, rutas peligrosas y destino existente |
 | `OfflineRequestTest` | Solicitud `.licreq` del contrato: campos exactos de cada acción, bytes firmados exactos, proyección sin el código comercial, formato anterior rechazado (huella, identidad anterior y prefijo `LICREQ-V1`), 20 contenidos inválidos, firma alterada, claves duplicadas y tamaño máximo |
 | `ProductionConfigTest` | Configuración: orígenes inseguros, separación entre producción y desarrollo, entorno desconocido, claves reales obligatorias y emisor «AD-EL POS Licencias» del código de verificación. Entorno de licencias: obligatorio, solo `test` o `production`, independiente de `APP_ENV`, y `production` solo con `APP_ENV=production`; el ejemplo y `bin/configure.php` lo piden de forma explícita |
 | `ProtectedRecordTest` | Registros cifrados ligados a su propósito y contexto; un propósito no puede usar el contexto de la evidencia sin internet |
-| `LicenseContentTest` | Contenido firmado del contrato (sección 4): el ejemplo del contrato y los tres tipos son válidos; los campos y su orden son exactos; cada regla rota (70 casos) se rechaza nombrando el campo y nunca su valor |
+| `LicenseContentTest` | Contenido firmado del contrato (sección 4): el ejemplo del contrato y los tres tipos son válidos; los campos y su orden son exactos; cada regla rota (71 casos) se rechaza nombrando el campo y nunca su valor |
 | `ProtocolTest` | JSON estricto, base64url canónico, esquema sin conversiones ni campos desconocidos, encabezado exacto del JWS (`adelpos-lic+jws`) con firma verificable, mensaje exacto de la prueba de posesión (`ADELPOS-LIC-V1`), campos exactos de cada petición de la API (27 peticiones inválidas, entre ellas el protocolo anterior y `transfer`), y códigos, HTTP y formato de los errores del contrato |
 | `ReleasePackageTest` | Paquete de despliegue: contenido exacto con archivos locales sembrados, manifiesto, `.sha256`, y aborto si se versiona una llave |
 | `RulesTest` | UUID, fechas inválidas, dependencias y ciclos de módulos, vector TOTP RFC y repetición, cifrado del secreto de verificación, redes IPv4/IPv6 y HTTP de desarrollo. Del contrato: enteros del formulario dentro de su rango, condiciones de licencia (tipos, periodos, duraciones, meses, cupos y tolerancia) y zonas horarias válidas |

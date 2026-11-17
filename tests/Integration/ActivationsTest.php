@@ -5,7 +5,7 @@ namespace AdelPos\License\Tests\Integration;
 use AdelPos\License\App;
 use AdelPos\License\Application\{Actor, LicenseService};
 use AdelPos\License\Domain\{ApiProblem, ApiResponse, LicenseContent, Problem, Protocol, Uuid};
-use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
+use AdelPos\License\Tests\{ContractSchemas, FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class ActivationsTest extends TestCase
@@ -129,6 +129,10 @@ final class ActivationsTest extends TestCase
 		);
 		$content = json_decode($this->contentJson($response), true, 512, JSON_THROW_ON_ERROR);
 		self::assertSame(LicenseContent::FIELDS, array_keys($content));
+		// La respuesta y el contenido firmado cumplen los archivos publicados del contrato.
+		self::assertNull(ContractSchemas::licenseErrors($this->contentJson($response)));
+		$shape = isset(json_decode($response->body, true)['status']) ? 'DeactivationResponse' : 'LicenseResponse';
+		self::assertNull(ContractSchemas::componentErrors($shape, $response->body));
 		// El entorno firmado es el de la llave que firma.
 		self::assertSame($key['environment'], $content['environment']);
 		return $content;

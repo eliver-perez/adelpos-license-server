@@ -4,7 +4,8 @@ namespace AdelPos\License\Tests\Integration;
 
 use AdelPos\License\Application\Actor;
 use AdelPos\License\Domain\{Protocol, Uuid};
-use AdelPos\License\Tests\MySqlFixture;
+use AdelPos\License\Http\ApiKernel;
+use AdelPos\License\Tests\{ContractSchemas, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class HttpApiTest extends TestCase
@@ -103,6 +104,7 @@ final class HttpApiTest extends TestCase
 		fclose($stream);
 		$responseHeaders = $meta['wrapper_data'];
 		preg_match('/HTTP\/\S+ (\d+)/', $responseHeaders[0], $match);
+		$this->assertFollowsTheContract($path, $method, $body, (int) $match[1], $raw);
 		return [
 			'status' => (int) $match[1],
 			'body' => $raw,
@@ -110,6 +112,32 @@ final class HttpApiTest extends TestCase
 			'json' => json_decode($raw, true),
 		];
 	}
+	/** Toda respuesta real de la API cumple lo que publica contracts/v1/openapi.yaml. */
+	private function assertFollowsTheContract(
+		string $path,
+		string $method,
+		string $body,
+		int $status,
+		string $raw,
+	): void {
+		if (!str_starts_with($path, '/v1/')) {
+			return;
+		}
+		$where = $method . ' ' . $path . ' → ' . $status;
+		if ($method !== 'POST' || !isset(ApiKernel::ROUTES[$path])) {
+			// Ruta inexistente u otro método: un error con el formato general.
+			self::assertNull(ContractSchemas::componentErrors('Error', $raw), $where);
+			return;
+		}
+		self::assertNull(ContractSchemas::responseErrors($path, $status, $raw), $where);
+		if ($status === 200) {
+			// Lo que el servidor aceptó también cumple la petición que el OpenAPI describe.
+			self::assertNull(ContractSchemas::requestErrors($path, $body), $where);
+			// Y la respuesta trae exactamente los campos que el OpenAPI declara obligatorios, en su orden.
+			self::assertSame(ContractSchemas::responseFields($path, 200), array_keys(json_decode($raw, true)), $where);
+		}
+	}
+
 	private function signed(string $action, array $device, string $key = '', ?string $activation = null): array
 	{
 		$challenge = $this->http(
@@ -156,7 +184,10 @@ final class HttpApiTest extends TestCase
 		self::assertTrue(
 			sodium_crypto_sign_verify_detached(Protocol::decode($signature, 64), $header . '.' . $payload, $public),
 		);
-		return json_decode(sodium_base642bin($payload, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING), true);
+		$content = sodium_base642bin($payload, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+		// El contenido firmado cumple el esquema publicado de la licencia.
+		self::assertNull(ContractSchemas::licenseErrors($content));
+		return json_decode($content, true);
 	}
 	public function testOnlineLifecycleThroughRealHttpDoesNotCreatePanelSessions(): void
 	{

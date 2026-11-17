@@ -247,6 +247,22 @@ El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una 
 | 8 | La transferencia forzada y la liberación forzada del panel siguen como estaban, con su confirmación de identidad. Firman `transferred` desde la Fase 4. | Especificación, Fase 6, punto 5. Su relación con el autoservicio es de la etapa 4. |
 | 9 | Sin dependencias nuevas de Composer en esta fase. | — |
 
+### Fase 7 — Archivos del contrato y verificador de referencia
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | **Dos dependencias nuevas, solo de desarrollo** (`require-dev`): `opis/json-schema` 2.6 (Apache-2.0), que valida JSON Schema 2020-12, y `symfony/yaml` 7.4 (MIT), que lee `openapi.yaml`. Traen `opis/string`, `opis/uri` y `symfony/polyfill-ctype`. Ninguna va al servidor: el paquete de despliegue instala con `composer install --no-dev`. | Las pruebas deben comparar el esquema y el OpenAPI publicados con el código y con las respuestas reales. Escribir a mano un validador de JSON Schema y un lector de YAML sería más código que mantener y menos confiable. Las dos son compatibles con PHP 8.3 y no tenían avisos de seguridad al instalarlas (2026-11-16). |
+| 2 | El servidor sigue validando con su propio código (`Domain\LicenseContent`) antes de firmar; no carga el esquema en producción. La «conexión» con `license.schema.json` es una prueba: cada regla del validador está en el esquema, salvo 11 casos que un esquema no puede expresar, y los dos coinciden en todos los archivos de prueba. | Criterio 2 de AVANCE.md, sección E2-0.6. |
+| 3 | Lo que el validador exige y el esquema no: seis decimales exactos en los instantes (el esquema admite de 0 a 9, que es lo que debe aceptar el cliente), fechas de calendario reales, `updates_until` y `expires_at` coherentes entre sí, el orden de los campos, y la diferencia entre `7` y `7.0`, que en JSON no existe. | El esquema describe lo que AD-EL POS debe aceptar; el validador, lo que el servidor se permite firmar. |
+| 4 | El esquema fija `schema_version` en `1.0` y `product_id` en `adel_pos`, y permite campos adicionales. | Contrato, sección 4, y decisión 3 del propietario. El verificador de referencia acepta cualquier versión que empiece con `1.`, como pide el contrato al cliente. |
+| 5 | Las llaves de los archivos de prueba se llaman `adelpos-test-fixture-a`, `adelpos-test-fixture-b`, `adelpos-prod-fixture-a`, `installation-fixture-a` e `installation-fixture-b`. Su semilla es pública: `sha256("ADELPOS LICENSE PUBLIC TEST ONLY V1 " + nombre)`. `SigningKeys::FIXTURE_SEEDS` las rechaza en producción y una prueba comprueba que la lista es la misma. | Contrato, sección 3. `adelpos-prod-fixture-a` solo hace de llave de producción en los casos negativos. |
+| 6 | El generador de archivos de prueba no usa el código del servidor: arma cada contenido a mano, con resultados esperados escritos como constantes. Las pruebas comparan después el servidor contra ellos. | Si el generador usara el servidor, un error del servidor se copiaría a los archivos y nadie lo vería. |
+| 7 | Los casos de fechas los comprueba la suite de PHP, no el verificador en Go. | El contrato dice que las fechas las calcula únicamente el servidor de licencias. |
+| 8 | El verificador de referencia es un módulo de Go independiente, solo con la biblioteca estándar, dividido en `license.go`, `state.go`, `protocol.go` y `main.go`. Devuelve el motivo del rechazo como un texto estable (`unknown_kid`, `stale_revision`…). | Especificación, Fase 7, punto 4. Es la base que la integración de AD-EL POS puede copiar. |
+| 9 | Además de los casos que pide la especificación, hay casos de: encabezado con el tipo anterior o en otro orden, contenido alterado, la misma identidad con otra llave, un cupo vacío, una hora con desfase, una revocada sin motivo y una licencia firmada con una segunda llave de confianza. | Son los errores más probables al integrar. |
+| 10 | Las respuestas reales de la API se validan contra `openapi.yaml` en `HttpApiTest`, en cada petición: el cuerpo cumple el esquema de su ruta y de su código HTTP, la petición aceptada cumple el esquema de petición, y la respuesta trae exactamente los campos obligatorios. | Especificación, Fase 7: «las respuestas reales cumplen el esquema y el OpenAPI». |
+| 11 | La prueba del verificador en Go se omite si Go no está instalado. `composer test:contract` sigue comprobando los archivos de prueba. | El servidor de producción no necesita Go. |
+
 ### Repaso de formato
 
 | # | Decisión | Motivo |

@@ -53,8 +53,8 @@ final class SecretsCheckTest extends TestCase
 				[
 					'keys' => [
 						[
-							'name' => 'lic-test-v1-a',
-							'seed_hex' => hash('sha256', self::PUBLIC_TEST_PREFIX . 'lic-test-v1-a'),
+							'name' => 'adelpos-test-fixture-a',
+							'seed_hex' => hash('sha256', self::PUBLIC_TEST_PREFIX . 'adelpos-test-fixture-a'),
 						],
 					],
 				],
@@ -134,7 +134,7 @@ final class SecretsCheckTest extends TestCase
 		];
 		yield 'Ed25519 unknown seed' => [
 			'contracts/vectors.json',
-			json_encode(['keys' => [['name' => 'lic-test-v1-a', 'seed_hex' => bin2hex(random_bytes(32))]]]),
+			json_encode(['keys' => [['name' => 'adelpos-test-fixture-a', 'seed_hex' => bin2hex(random_bytes(32))]]]),
 			true,
 			'material de llave privada Ed25519',
 		];

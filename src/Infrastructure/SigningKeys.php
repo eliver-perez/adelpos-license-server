@@ -9,12 +9,16 @@ final class SigningKeys
 {
 	/** Etiqueta de cada entorno en el formato sugerido de `kid`: adelpos-<etiqueta>-AAAAMM-n. */
 	private const LABELS = ['test' => 'test', 'production' => 'prod'];
-	/** Semillas públicas y deterministas de los archivos de prueba del contrato. */
-	private const FIXTURE_SEEDS = [
-		'lic-test-v1-a',
-		'lic-test-v1-b',
-		'installation-test-v1-a',
-		'installation-test-v1-b',
+	/**
+	 * Semillas públicas y deterministas de los archivos de prueba del contrato
+	 * (contracts/v1/generate-fixtures.php). Sus llaves nunca firman en producción.
+	 */
+	public const FIXTURE_SEEDS = [
+		'adelpos-test-fixture-a',
+		'adelpos-test-fixture-b',
+		'adelpos-prod-fixture-a',
+		'installation-fixture-a',
+		'installation-fixture-b',
 	];
 
 	public function __construct(

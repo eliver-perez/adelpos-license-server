@@ -5,7 +5,7 @@ namespace AdelPos\License\Tests\Integration;
 use AdelPos\License\App;
 use AdelPos\License\Application\{Actor, LicenseService};
 use AdelPos\License\Domain\{ApiProblem, OfflineRequest, Problem, Protocol, Uuid};
-use AdelPos\License\Tests\{FrozenClock, MySqlFixture};
+use AdelPos\License\Tests\{ContractSchemas, FrozenClock, MySqlFixture};
 use PHPUnit\Framework\TestCase;
 
 final class OfflineTest extends TestCase
@@ -133,12 +133,10 @@ final class OfflineTest extends TestCase
 		self::assertTrue(
 			sodium_crypto_sign_verify_detached(Protocol::decode($signature, 64), $header . '.' . $body, $public),
 		);
-		return json_decode(
-			sodium_base642bin($body, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
-			true,
-			512,
-			JSON_THROW_ON_ERROR,
-		);
+		$content = sodium_base642bin($body, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
+		// El archivo .lic lleva el mismo contenido que la API en línea, y cumple el esquema publicado.
+		self::assertNull(ContractSchemas::licenseErrors($content));
+		return json_decode($content, true, 512, JSON_THROW_ON_ERROR);
 	}
 	private function activate(): array
 	{
