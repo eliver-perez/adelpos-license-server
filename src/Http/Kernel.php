@@ -369,6 +369,7 @@ final class Kernel
 						'title' => 'Revisar solicitud sin internet',
 						'offline' => $offline,
 						'license' => $license,
+						'plan' => $license === null ? null : $this->app->read->plan($license['plan_id']),
 						'candidates' =>
 							$offline['payload']['action'] === 'activate' && $offline['status'] === 'pending'
 								? $this->app->read->offlineCandidates($offline['product_id'], $query)
@@ -481,9 +482,13 @@ final class Kernel
 			);
 			return;
 		}
+		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})/(renew)$~', $this->path, $matches)) {
+			$this->commercial($method, $operationId, $matches[1], $matches[2]);
+			return;
+		}
 		if (
 			preg_match(
-				'~^/admin/licenses/([a-f0-9-]{36})(?:/(features|renew|maintenance|reissue|revoke))?$~',
+				'~^/admin/licenses/([a-f0-9-]{36})(?:/(features|maintenance|reissue|revoke))?$~',
 				$this->path,
 				$matches,
 			)
@@ -492,8 +497,8 @@ final class Kernel
 				if (in_array($matches[2], ['revoke', 'reissue'], true)) {
 					$this->confirmIdentity();
 				}
-				// PENDIENTE etapa 3: renovación y mantenimiento. Sus rutas siguen existiendo para que el servicio
-				// responda que todavía no están disponibles.
+				// PENDIENTE etapa 3: compra de mantenimiento. Su ruta sigue existiendo para que el servicio
+				// responda que todavía no está disponible.
 				$this->licenseResult(
 					$this->app->licenses->change($this->actor, $operationId, $matches[1], $matches[2], $_POST),
 				);
@@ -622,6 +627,34 @@ final class Kernel
 			'secret' => $secret,
 			'qr' => $qr,
 			'error' => $error,
+		]);
+	}
+
+	/**
+	 * Operaciones del ciclo comercial de una licencia (etapa 3). GET muestra la vista previa con las
+	 * fechas nuevas y el monto sugerido; POST confirma. El servicio vuelve a calcular todo.
+	 */
+	private function commercial(string $method, string $operationId, string $licenseId, string $operation): void
+	{
+		$this->actor->requireRole(['superadmin', 'operator']);
+		if ($method === 'POST') {
+			$result = match ($operation) {
+				'renew' => $this->app->commercial->renew($this->actor, $operationId, $licenseId, $_POST),
+			};
+			$this->redirect('/admin/licenses/' . $result['id'] . '?notice=' . $operation);
+			return;
+		}
+		$license = $this->app->read->license($licenseId);
+		$quote = match ($operation) {
+			'renew' => $this->app->commercial->quoteRenewal(
+				$licenseId,
+				$_GET + ['version' => $license['row_version']],
+			),
+		};
+		$this->render('license-' . $operation, [
+			'title' => 'Revisar renovación',
+			'license' => $license,
+			'quote' => $quote,
 		]);
 	}
 

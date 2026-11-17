@@ -285,21 +285,17 @@ final class OfflineTest extends TestCase
 		$this->approve($id);
 	}
 
-	public function testRenewDeliversCurrentRightsAndRecordingARenewalIsNotAvailableYet(): void
+	public function testRenewDeliversCurrentRightsOrRecordsARenewalWithItsPayment(): void
 	{
 		$this->license = $this->issue('subscription');
 		$active = $this->activate();
 		$id = $this->import($this->envelope('renew', $active));
-		// Extending the term while approving belonged to the previous engine; the contract rules arrive in stage 3.
+		// Sin monto no se registra la renovación, y la solicitud sigue pendiente.
 		try {
-			$this->approve($id, [
-				'renewal_mode' => 'extend',
-				'until' => '2027-10-01T00:00',
-				'reference' => 'OFFLINE-PURCHASE',
-			]);
-			self::fail('Renewal recorded with the previous rules');
+			$this->approve($id, ['renewal_mode' => 'extend', 'reference' => 'OFFLINE-PURCHASE']);
+			self::fail('Renewal recorded without its payment');
 		} catch (Problem $error) {
-			self::assertSame(LicenseService::PENDING['renew'], $error->getMessage());
+			self::assertSame('Escribe el monto cobrado.', $error->getMessage());
 		}
 		self::assertSame('pending', $this->app->read->offline($id)['status']);
 		self::assertSame(1, $this->rowCount('license_revisions'));
@@ -326,6 +322,54 @@ final class OfflineTest extends TestCase
 				->execute("SELECT COUNT(*) FROM license_payments WHERE concept<>'issue'")
 				->fetchColumn(),
 		);
+		// Otra solicitud «renew»: el propietario registra ahí mismo la renovación con su pago (§5.3), y la
+		// computadora recibe la revisión nueva de su misma activación.
+		$second = $this->import($this->envelope('renew', $active));
+		$result = $this->approve($second, [
+			'renewal_mode' => 'extend',
+			'billing_period' => 'quarterly',
+			'amount' => '2400',
+			'reference' => 'OFFLINE-PURCHASE',
+		]);
+		$extended = $this->payload($result);
+		self::assertSame(
+			[2, $active['activation_id'], '2026-10-25T12:00:00.000000Z', '2027-01-25T12:00:00.000000Z', 'quarterly'],
+			[
+				$extended['license_revision'],
+				$extended['activation_id'],
+				$extended['period_starts_at'],
+				$extended['expires_at'],
+				$extended['billing_period'],
+			],
+		);
+		$payment = $this->app->db->one("SELECT * FROM license_payments WHERE concept='renewal'");
+		self::assertSame(
+			['quarterly', '2400.00', 'OFFLINE-PURCHASE'],
+			[$payment['term'], $payment['amount'], $payment['reference']],
+		);
+		// Una solicitud de otra acción no puede registrar una renovación.
+		$deactivate = $this->import($this->envelope('deactivate', $active));
+		try {
+			$this->approve($deactivate, [
+				'renewal_mode' => 'extend',
+				'amount' => '2400',
+				'accept_offline_limit' => '1',
+			]);
+			self::fail('A deactivation recorded a renewal');
+		} catch (Problem $error) {
+			self::assertStringContainsString('Solo una solicitud de renovación', $error->getMessage());
+		}
+		// Si la computadora ya liberó la licencia, su solicitud «renew» recibe su cierre, pero no registra una
+		// renovación: esa se registra desde el detalle de la licencia.
+		$this->approve($deactivate, ['accept_offline_limit' => '1']);
+		$late = $this->import($this->envelope('renew', $active));
+		try {
+			$this->approve($late, ['renewal_mode' => 'extend', 'amount' => '2400']);
+			self::fail('A renewal was delivered to a computer that released the license');
+		} catch (Problem $error) {
+			self::assertStringContainsString('ya no tiene la licencia', $error->getMessage());
+		}
+		self::assertSame('deactivated', $this->payload($this->approve($late))['status_reason']);
 	}
 
 	public function testPerpetualRenewUsesCurrentRightsWithoutGrantingMaintenance(): void

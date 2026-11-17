@@ -29,6 +29,7 @@ final class PlanService
 		private Audit $audit,
 		private Clock $clock,
 		private RevisionPublisher $publisher,
+		private LicenseHistory $history,
 	) {}
 
 	/** Crea un plan. No hay licencias que lo sigan, así que no hay nada que propagar. */
@@ -219,28 +220,16 @@ final class PlanService
 		return ['licenses_updated' => $updated, 'revisions_signed' => $signed];
 	}
 
+	/** El aumento queda en el historial de la licencia; la auditoría es la del plan, con el total. */
 	private function recordLicense(Actor $actor, string $licenseId, string $planId, string $planName): void
 	{
-		$license = $this->db->one(
-			'SELECT license_type,plan_id,plan_name,plan_custom,cash_registers,order_takers,kitchen_displays,
-					period_starts_at,expires_at,updates_until,row_version
-				FROM licenses
-				WHERE license_id=?',
-			[$licenseId],
-		);
-		$this->db->execute(
-			'INSERT INTO license_changes(id,license_id,version,action,admin_id,snapshot_json,reason,created_at)
-				VALUES (?,?,?,?,?,?,?,?)',
-			[
-				Uuid::bytes(Uuid::create()),
-				$licenseId,
-				(int) $license['row_version'],
-				'license.plan_propagated',
-				Uuid::bytes($actor->id),
-				json_encode($license, JSON_THROW_ON_ERROR),
-				'Aumento del catálogo: ' . $planName . ' (' . $planId . ')',
-				$this->clock->sql(),
-			],
+		$this->history->record(
+			Uuid::text($licenseId),
+			$actor->id,
+			'license.plan_propagated',
+			'Aumento del catálogo: ' . $planName . ' (' . $planId . ')',
+			'',
+			audited: false,
 		);
 	}
 

@@ -15,6 +15,7 @@ final class OfflineService
 		private Crypto $crypto,
 		private RevisionPublisher $publisher,
 		private LicenseActivator $activator,
+		private CommercialService $commercial,
 	) {}
 
 	public function import(Actor $actor, string $operationId, string $envelope): array
@@ -106,10 +107,11 @@ final class OfflineService
 		$reason = Input::text($input, 'reason', 500);
 		$licenseId = $decision === 'approved' ? Input::text($input, 'license_id', 36) : '';
 		$version = $decision === 'approved' ? (int) ($input['version'] ?? 0) : 0;
-		// PENDIENTE etapa 3: registrar una renovación al aprobar la solicitud (contrato, sección 5.3).
-		// Hasta entonces, «renew» solo entrega los derechos vigentes.
+		// Al aprobar un «renew», el propietario puede registrar ahí mismo la renovación con su pago
+		// (contrato §5.3). Si no, la solicitud recibe los derechos vigentes, tal como están firmados.
+		$renewal = null;
 		if ($decision === 'approved' && Input::choice($input, 'renewal_mode', ['current', 'extend']) === 'extend') {
-			throw new Problem(LicenseService::PENDING['renew']);
+			$renewal = CommercialService::renewalInput(['version' => $version] + $input);
 		}
 		$outgoing = $decision === 'approved' ? Input::text($input, 'force_activation_id', 36, false) : '';
 		$accepted = ($input['accept_offline_limit'] ?? '') === '1';
@@ -131,8 +133,18 @@ final class OfflineService
 			$roles,
 			$operationId,
 			'offline.' . $decision,
-			[$id, $reason, $licenseId, $version, $outgoing, $accepted],
-			function () use ($actor, $id, $decision, $reason, $licenseId, $version, $outgoing): array {
+			[$id, $reason, $licenseId, $version, $outgoing, $accepted, $renewal],
+			function () use (
+				$actor,
+				$operationId,
+				$id,
+				$decision,
+				$reason,
+				$licenseId,
+				$version,
+				$outgoing,
+				$renewal,
+			): array {
 				$offline =
 					$this->db->one('SELECT * FROM offline_requests WHERE id=?', [Uuid::bytes($id)]) ??
 					throw new Problem('No se encontró la solicitud.', 404);
@@ -182,6 +194,9 @@ final class OfflineService
 				if ($outgoing !== '' && $payload['action'] !== 'activate') {
 					throw new Problem('La transferencia requiere una activación de destino.');
 				}
+				if ($renewal !== null && $payload['action'] !== 'renew') {
+					throw new Problem('Solo una solicitud de renovación puede registrar una renovación.');
+				}
 				if ($payload['action'] === 'activate') {
 					$active = $this->db->one(
 						"SELECT *
@@ -230,6 +245,18 @@ final class OfflineService
 					$activation = $this->boundActivation($payload, $license);
 					$activationId = $activation['activation_id'];
 					$this->recordVersion($activation, $payload);
+					if ($renewal !== null) {
+						// La renovación es de la licencia, pero se entrega a esta computadora: debe seguir activa.
+						if ($activation['state'] !== 'active') {
+							throw new Problem(
+								'La computadora de esta solicitud ya no tiene la licencia. Registra la renovación desde ' .
+									'el detalle de la licencia.',
+							);
+						}
+						$this->commercial->applyRenewal($actor, $operationId, $license, $renewal);
+						// La renovación firmó una revisión nueva para esta activación: es la que se entrega.
+						$activation = $this->boundActivation($payload, $license);
+					}
 					if ($payload['action'] === 'deactivate' && $activation['state'] === 'active') {
 						// Libera la licencia y firma la revisión de cierre «deactivated».
 						$revision = $this->retire($license['license_id'], $activationId, false);

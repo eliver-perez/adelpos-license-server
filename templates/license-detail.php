@@ -8,6 +8,14 @@ $revoked = $license['commercial_status'] === 'revoked';
 $notices = [
 	'administrative' => 'Información administrativa actualizada. Los derechos y activaciones se conservaron.',
 	'document' => 'Constancia generada. Disponible en el historial de documentos.',
+	'renew' => 'Renovación registrada con su pago. Se firmó una revisión nueva para la computadora activa.',
+];
+$activated = $license['period_starts_at'] !== null;
+$billingPeriods = [
+	'monthly' => 'Mensual (1 mes)',
+	'quarterly' => 'Trimestral (3 meses)',
+	'semiannual' => 'Semestral (6 meses)',
+	'annual' => 'Anual (12 meses)',
 ];
 $noticeKey = is_string($_GET['notice'] ?? null) ? $_GET['notice'] : '';
 $notice = $notices[$noticeKey] ?? '';
@@ -181,17 +189,49 @@ $termNotes = [
 	</div>
 	<div class="col-xl-4">
 		<?php if ($canChange): ?>
+			<?php if ($license['license_type'] === 'subscription' && $activated): ?>
+				<form
+					class="panel form-panel stack-form mb-4"
+					id="renew-form"
+					method="get"
+					action="/admin/licenses/<?= V::escape($licenseId) ?>/renew"
+				>
+					<span class="eyebrow">RENOVACIÓN</span>
+					<h2>Renovar la suscripción</h2>
+					<p class="text-secondary small mb-0">
+						Si paga antes de que termine la tolerancia, el periodo nuevo empieza en el vencimiento actual. Si no,
+						empieza en la fecha de pago. La licencia conserva sus cupos.
+					</p>
+					<label>
+						Duración
+						<select class="form-select mt-2" name="billing_period">
+							<?php foreach ($billingPeriods as $value => $label): ?>
+								<option value="<?= $value ?>" <?= $value === $license['billing_period'] ? 'selected' : '' ?>>
+									<?= V::escape($label) ?>
+								</option>
+							<?php endforeach; ?>
+						</select>
+					</label>
+					<label>
+						Fecha de pago <span class="optional">vacía: este momento</span>
+						<input class="form-control mt-2" type="datetime-local" name="paid_at">
+					</label>
+					<button class="btn btn-primary">Revisar renovación</button>
+				</form>
+			<?php endif; ?>
 			<?php
-			// PENDIENTE etapa 3: formularios de renovación y de compra de mantenimiento.
+			// PENDIENTE etapa 3: formularios de conversión de una prueba, mantenimiento y periodo inicial.
 			?>
-			<section class="panel form-panel">
-				<span class="eyebrow">RENOVACIÓN Y MANTENIMIENTO</span>
-				<h2 class="mt-3">Disponible próximamente</h2>
-				<p class="text-secondary small mb-0">
-					La renovación de suscripciones con fecha de pago y la compra de mantenimiento todavía no están
-					disponibles. Esta licencia conserva las condiciones con las que se emitió.
-				</p>
-			</section>
+			<?php if ($license['license_type'] !== 'subscription' || !$activated): ?>
+				<section class="panel form-panel mb-4">
+					<span class="eyebrow">CICLO COMERCIAL</span>
+					<h2 class="mt-3">Disponible próximamente</h2>
+					<p class="text-secondary small mb-0">
+						La conversión de una prueba, la compra de mantenimiento y la edición del periodo inicial todavía no
+						están disponibles. Una suscripción se renueva cuando ya está activada.
+					</p>
+				</section>
+			<?php endif; ?>
 			<section class="panel form-panel mt-4">
 				<h2>Clave comercial</h2>
 				<p class="text-secondary small">El código puede consultarse con permiso especial.</p>

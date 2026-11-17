@@ -282,7 +282,8 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		};
 		for (const [operation, message] of [
 			['maintenance', /La compra de mantenimiento estará disponible próximamente/],
-			['renew', /La renovación de suscripciones estará disponible próximamente/],
+			// La renovación ya existe, pero una perpetua no se renueva: no vence.
+			['renew', /Una licencia perpetua no se renueva porque no vence/],
 		]) {
 			const pending = await context.request.post(licenseURL + '/' + operation, {
 				form: { ...pendingForm, operation_id: crypto.randomUUID() },

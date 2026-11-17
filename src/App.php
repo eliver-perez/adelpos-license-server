@@ -8,8 +8,10 @@ use AdelPos\License\Application\{
 	AdminService,
 	AuthService,
 	CatalogService,
+	CommercialService,
 	DocumentService,
 	LicenseActivator,
+	LicenseHistory,
 	LicenseMaterials,
 	LicenseService,
 	OfflineService,
@@ -54,6 +56,7 @@ final class App
 	public readonly DocumentService $documents;
 	public readonly Payments $payments;
 	public readonly PlanService $plans;
+	public readonly CommercialService $commercial;
 
 	public function __construct(public readonly Config $config, public readonly Database $db, ?Clock $clock = null)
 	{
@@ -90,6 +93,7 @@ final class App
 		$operations = new Operations($db, $this->crypto, $this->clock);
 		$this->catalog = new CatalogService($db, $operations, $this->audit, $this->clock);
 		$this->payments = new Payments($db, $this->clock, $this->audit);
+		$history = new LicenseHistory($db, $this->audit, $this->clock);
 		$this->licenses = new LicenseService(
 			$db,
 			$operations,
@@ -98,8 +102,17 @@ final class App
 			$this->crypto,
 			$this->publisher,
 			$this->payments,
+			$history,
 		);
-		$this->plans = new PlanService($db, $operations, $this->audit, $this->clock, $this->publisher);
+		$this->plans = new PlanService($db, $operations, $this->audit, $this->clock, $this->publisher, $history);
+		$this->commercial = new CommercialService(
+			$db,
+			$operations,
+			$this->clock,
+			$this->publisher,
+			$this->payments,
+			$history,
+		);
 		$this->offline = new OfflineService(
 			$db,
 			$operations,
@@ -108,6 +121,7 @@ final class App
 			$this->crypto,
 			$this->publisher,
 			$activator,
+			$this->commercial,
 		);
 		$this->admins = new AdminService(
 			$db,

@@ -1,4 +1,5 @@
 <?php
+use AdelPos\License\Domain\LicenseTerms;
 use AdelPos\License\Http\View as V;
 
 $payload = $offline['payload'];
@@ -20,6 +21,31 @@ $needsTransfer = $payload['action'] === 'activate' && $active !== null && !$same
 $canApprove = $license !== null && ($payload['action'] !== 'activate' || $license['commercial_status'] === 'issued');
 $approveLabel = $needsTransfer ? 'Confirmar transferencia' : 'Aprobar y generar .lic';
 $actionNames = ['activate' => 'Activación', 'renew' => 'Renovación', 'deactivate' => 'Desactivación'];
+// Al aprobar un «renew» de una suscripción activada se puede registrar la renovación con su pago.
+$canRecordRenewal =
+	$payload['action'] === 'renew' &&
+	$license !== null &&
+	$license['commercial_status'] === 'issued' &&
+	$license['license_type'] === 'subscription' &&
+	$license['period_starts_at'] !== null;
+$billingPeriods = [
+	'monthly' => 'Mensual (1 mes)',
+	'quarterly' => 'Trimestral (3 meses)',
+	'semiannual' => 'Semestral (6 meses)',
+	'annual' => 'Anual (12 meses)',
+];
+$catalogPrices = [];
+foreach ($billingPeriods as $value => $label) {
+	if (($plan[LicenseTerms::PRICES[$value]] ?? null) !== null) {
+		$catalogPrices[] = mb_strtolower(LicenseTerms::TERM_LABELS[$value]) . ' ' . V::money($plan[LicenseTerms::PRICES[$value]]);
+	}
+}
+$catalogNote = 'Precios del catálogo para este plan: ' . implode(', ', $catalogPrices) . '.';
+if ($license !== null && $license['plan_custom']) {
+	$catalogNote = 'Una licencia personalizada no tiene precio en el catálogo: el monto se escribe a mano.';
+} elseif ($catalogPrices === []) {
+	$catalogNote = 'El plan no tiene precios en el catálogo: el monto se escribe a mano.';
+}
 $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' => 'Rechazada'];
 ?>
 <div class="page-heading">
@@ -194,11 +220,57 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 					<input type="hidden" name="license_id" value="<?= V::escape($license['id_text']) ?>">
 					<input type="hidden" name="version" value="<?= (int) $license['row_version'] ?>">
 					<h2><?= $needsTransfer ? 'Transferir y aprobar' : 'Autorizar solicitud' ?></h2>
-					<input type="hidden" name="renewal_mode" value="current">
+					<?php if ($canRecordRenewal): ?>
+						<label>
+							Al aprobar
+							<select class="form-select mt-2" name="renewal_mode" id="renewal_mode">
+								<option value="current">Entregar la revisión vigente, sin registrar un pago</option>
+								<option value="extend">Registrar la renovación con su pago y entregarla</option>
+							</select>
+						</label>
+						<fieldset class="stack-form" id="renewal-fields">
+							<label>
+								Duración
+								<select class="form-select mt-2" name="billing_period">
+									<?php foreach ($billingPeriods as $value => $label): ?>
+										<option value="<?= $value ?>" <?= $value === $license['billing_period'] ? 'selected' : '' ?>>
+											<?= V::escape($label) ?>
+										</option>
+									<?php endforeach; ?>
+								</select>
+							</label>
+							<label>
+								Fecha de pago <span class="optional">vacía: este momento, en la zona del cliente</span>
+								<input class="form-control mt-2" type="datetime-local" name="paid_at">
+							</label>
+							<label>
+								Monto cobrado (MXN)
+								<input
+									class="form-control mt-2"
+									name="amount"
+									inputmode="decimal"
+									maxlength="12"
+									pattern="\d{1,8}(\.\d{1,2})?"
+								>
+							</label>
+							<p class="small text-secondary mb-0"><?= V::escape($catalogNote) ?></p>
+							<label>
+								Motivo si el monto no es el precio del catálogo <span class="optional">opcional</span>
+								<input class="form-control mt-2" name="amount_reason" maxlength="500">
+							</label>
+							<label>
+								Referencia comercial <span class="optional">opcional</span>
+								<input class="form-control mt-2" name="reference" maxlength="190">
+							</label>
+						</fieldset>
+					<?php else: ?>
+						<input type="hidden" name="renewal_mode" value="current">
+					<?php endif; ?>
 					<?php if ($payload['action'] === 'renew'): ?>
 						<p class="small text-secondary">
-							Se entregará la revisión vigente de la licencia, tal como está firmada. Registrar una
-							renovación o una compra de mantenimiento al aprobar estará disponible próximamente.
+							Sin registrar una renovación, se entrega la revisión vigente de la licencia, tal como está
+							firmada. La renovación sigue la regla de la tolerancia y firma una revisión nueva para esta
+							computadora.
 						</p>
 					<?php endif; ?>
 					<?php if ($payload['action'] === 'activate' && $sameInstallation): ?>

@@ -27,6 +27,12 @@ final class CalendarPeriod
 	 * Suma meses de calendario al mes local de $start y devuelve el instante del día y la hora ancla.
 	 * Si el día ancla no existe en el mes destino, usa su último día. El ancla no se modifica:
 	 * 31 ene → 28 feb → 31 mar → 30 abr.
+	 *
+	 * Al encadenar periodos, $start es el vencimiento anterior, que salió de este mismo cálculo. Si su
+	 * hora ancla no existía por un cambio de horario, el vencimiento es el primer instante después del
+	 * salto, y ese instante puede tener ya la fecha local del mes siguiente (en Singapur, el 31 de
+	 * diciembre de 1981 a las 23:45 pasó al 1 de enero a las 00:00). En ese caso se cuenta desde el
+	 * mes del ancla, para que el periodo siguiente no se salte un mes.
 	 */
 	public static function addMonths(
 		\DateTimeImmutable $start,
@@ -43,18 +49,85 @@ final class CalendarPeriod
 		}
 		$timeZone = self::zone($zone);
 		$local = $start->setTimezone($timeZone);
-		$index = (int) $local->format('Y') * 12 + (int) $local->format('n') - 1 + $months;
+		$index = (int) $local->format('Y') * 12 + (int) $local->format('n') - 1;
+		if (
+			self::anchoredIn($timeZone, $index, $anchorDay, $anchorTime) != $start &&
+			self::anchoredIn($timeZone, $index - 1, $anchorDay, $anchorTime) == $start
+		) {
+			--$index;
+		}
+		return self::anchoredIn($timeZone, $index + $months, $anchorDay, $anchorTime);
+	}
+
+	/**
+	 * Renovación de una suscripción (sección 5.3):
+	 *
+	 *     límite = expires_at + grace_days × 24 h
+	 *     si fecha_pago < límite: base = expires_at, conserva el día y la hora ancla
+	 *     si no:                  base = fecha_pago, y el ancla pasa a ser la del pago
+	 *     nuevo expires_at = base + meses, con la regla del día ancla
+	 *
+	 * El periodo renovado empieza en la base. En una suscripción, las actualizaciones terminan con él.
+	 *
+	 * @return array{
+	 *     period_starts_at: \DateTimeImmutable,
+	 *     expires_at: \DateTimeImmutable,
+	 *     updates_until: \DateTimeImmutable,
+	 *     anchor_day: int,
+	 *     anchor_local_time: string,
+	 *     in_time: bool
+	 * }
+	 */
+	public static function renewal(
+		\DateTimeImmutable $expiresAt,
+		int $graceDays,
+		\DateTimeImmutable $paidAt,
+		int $months,
+		string $zone,
+		int $anchorDay,
+		string $anchorTime,
+	): array {
+		if (!in_array($months, LicenseTerms::BILLING_MONTHS, true)) {
+			throw new \InvalidArgumentException('Unknown billing period.');
+		}
+		$utc = new \DateTimeZone('UTC');
+		$expiresAt = $expiresAt->setTimezone($utc);
+		$paidAt = $paidAt->setTimezone($utc);
+		// La tolerancia son días de 24 horas exactas, contados en UTC: un cambio de horario no la alarga.
+		$limit = $expiresAt->modify('+' . $graceDays * 24 . ' hours');
+		$inTime = $paidAt < $limit;
+		$base = $expiresAt;
+		if (!$inTime) {
+			$base = $paidAt;
+			$anchor = self::anchor($paidAt, $zone);
+			$anchorDay = $anchor['day'];
+			$anchorTime = $anchor['time'];
+		}
+		$expires = self::addMonths($base, $months, $zone, $anchorDay, $anchorTime);
+		return [
+			'period_starts_at' => $base,
+			'expires_at' => $expires,
+			'updates_until' => $expires,
+			'anchor_day' => $anchorDay,
+			'anchor_local_time' => $anchorTime,
+			'in_time' => $inTime,
+		];
+	}
+
+	/** Instante del día y la hora ancla en el mes número $index (año × 12 + mes − 1), en la zona. */
+	private static function anchoredIn(
+		\DateTimeZone $zone,
+		int $index,
+		int $anchorDay,
+		string $anchorTime,
+	): \DateTimeImmutable {
 		$year = intdiv($index, 12);
 		$month = ($index % 12) + 1;
 		$lastDay = (int) (new \DateTimeImmutable(
 			sprintf('%04d-%02d-01', $year, $month),
 			new \DateTimeZone('UTC'),
 		))->format('t');
-		return self::resolve(
-			$timeZone,
-			sprintf('%04d-%02d-%02d', $year, $month, min($anchorDay, $lastDay)),
-			$anchorTime,
-		);
+		return self::resolve($zone, sprintf('%04d-%02d-%02d', $year, $month, min($anchorDay, $lastDay)), $anchorTime);
 	}
 
 	/** Suma días de calendario a la fecha local de $start, a su misma hora local. */

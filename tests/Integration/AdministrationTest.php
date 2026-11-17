@@ -461,15 +461,22 @@ final class AdministrationTest extends TestCase
 		$app->auth->verifyMfa($pending3, $recovery, '127.0.0.1');
 	}
 
-	public function testRenewalAndMaintenanceAreRejectedUntilTheirStage(): void
+	public function testMaintenanceIsRejectedUntilItsPhaseAndRenewalLeftTheGenericChange(): void
 	{
 		$app = $this->fixture->app;
 		$subscription = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput('subscription'));
 		$perpetual = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput());
 		$trial = $app->licenses->issue($this->actor, Uuid::create(), $this->issueInput('trial'));
-		// The operations of the previous engine are refused whatever the license type, even when called directly.
+		// La compra de mantenimiento del motor anterior se rechaza con cualquier tipo de licencia (llega en la
+		// Fase 6). La renovación ya no es un cambio genérico: la registra CommercialService (Fase 3).
 		foreach ([$subscription, $perpetual, $trial] as $issued) {
-			foreach (['renew', 'maintenance'] as $action) {
+			try {
+				$app->licenses->change($this->actor, Uuid::create(), $issued['id'], 'renew', ['version' => 1]);
+				self::fail('The generic change accepted a renewal');
+			} catch (Problem $error) {
+				self::assertSame(404, $error->status);
+			}
+			foreach (['maintenance'] as $action) {
 				try {
 					$app->licenses->change($this->actor, Uuid::create(), $issued['id'], $action, [
 						'version' => 1,

@@ -185,3 +185,21 @@ document.querySelectorAll('form[data-confirm]').forEach((form) => {
 		if (!window.confirm(form.dataset.confirm)) event.preventDefault();
 	});
 });
+
+// Formularios de cobro: el motivo solo se escribe cuando el monto es distinto del sugerido.
+// El servidor exige lo mismo; esto solo evita enviar un formulario que va a rechazar.
+document.querySelectorAll('[data-amount-form]').forEach((form) => {
+	const amount = form.querySelector('[name="amount"]');
+	const reason = form.querySelector('[name="amount_reason"]');
+	function updateReason() {
+		const suggested = amount.dataset.suggested;
+		const changed = suggested !== '' && Number(amount.value) !== Number(suggested);
+		reason.disabled = !changed;
+		reason.required = changed;
+		if (!changed) {
+			reason.value = '';
+		}
+	}
+	amount.addEventListener('input', updateReason);
+	updateReason();
+});

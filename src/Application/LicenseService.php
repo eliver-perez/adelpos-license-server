@@ -7,11 +7,10 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Crypto, Database};
 
 final class LicenseService
 {
-	// PENDIENTE etapa 3: renovación con fecha de pago y regla de tolerancia, conversión de prueba a pago,
-	// compra de mantenimiento y edición del periodo inicial de una suscripción sin activar (contrato,
-	// secciones 5.2 a 5.5). El editor de planes está en PlanService.
+	// PENDIENTE etapa 3: conversión de prueba a pago, compra de mantenimiento y edición del periodo
+	// inicial de una licencia sin activar (contrato, secciones 5.2, 5.4 y 5.5). El editor de planes
+	// está en PlanService y la renovación, en CommercialService.
 	public const PENDING = [
-		'renew' => 'La renovación de suscripciones estará disponible próximamente.',
 		'maintenance' => 'La compra de mantenimiento estará disponible próximamente.',
 	];
 
@@ -23,6 +22,7 @@ final class LicenseService
 		private Crypto $crypto,
 		private RevisionPublisher $publisher,
 		private Payments $payments,
+		private LicenseHistory $history,
 	) {}
 
 	/**
@@ -450,41 +450,6 @@ final class LicenseService
 
 	private function record(Actor $actor, string $id, string $action, string $reason, string $reference): void
 	{
-		$license = $this->db->one(
-			'SELECT product_id,license_type,billing_period,trial_duration,updates_months,commercial_status,
-					grace_days,plan_id,plan_name,plan_custom,cash_registers,order_takers,kitchen_displays,
-					period_starts_at,expires_at,updates_until,row_version
-				FROM licenses
-				WHERE license_id=?',
-			[Uuid::bytes($id)],
-		);
-		$license['features'] = $this->db->all(
-			'SELECT capability_key,enabled FROM license_features WHERE license_id=? ORDER BY capability_key',
-			[Uuid::bytes($id)],
-		);
-		$license['commercial_reference'] = $reference;
-		$this->db->execute(
-			'INSERT INTO license_changes(id,license_id,version,action,admin_id,snapshot_json,
-					reason,created_at)
-				VALUES (?,?,?,?,?,?,?,?)',
-			[
-				Uuid::bytes(Uuid::create()),
-				Uuid::bytes($id),
-				(int) $license['row_version'],
-				$action,
-				Uuid::bytes($actor->id),
-				json_encode($license, JSON_THROW_ON_ERROR),
-				$reason,
-				$this->clock->sql(),
-			],
-		);
-		$this->audit->append(
-			$actor->id,
-			$action,
-			'license',
-			$id,
-			['version' => (int) $license['row_version']],
-			$reason,
-		);
+		$this->history->record($id, $actor->id, $action, $reason, $reference);
 	}
 }

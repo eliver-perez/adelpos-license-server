@@ -180,29 +180,41 @@ module.exports = async function offlinePanel({
 	await choose(subscriptionId);
 	const subscription = await approve();
 	await upload(request(subDevice, 'renew', subscription.payload));
-	// A renewal request delivers the current rights; recording a renewal while approving is not offered yet.
+	// Una solicitud de renovación puede entregar los derechos vigentes o registrar ahí mismo la renovación.
 	const renewForm = page.locator('form[action$="/approve"]');
-	assert.equal(await renewForm.locator('select[name="renewal_mode"]').count(), 0);
-	assert.match(await renewForm.innerText(), /estará disponible próximamente/);
+	assert.equal(await renewForm.locator('select[name="renewal_mode"]').count(), 1);
 	const renewValues = await renewForm.evaluate((form) => Object.fromEntries(new FormData(form)));
+	// Registrar la renovación exige su monto: sin él, la solicitud sigue pendiente.
 	response = await context.request.post(await renewForm.getAttribute('action'), {
 		form: {
 			...renewValues,
 			renewal_mode: 'extend',
-			until: '2027-01-01T00:00',
-			reference: 'BROWSER-OFFLINE-RENEW',
-			reason: 'Renovación con las reglas anteriores',
+			amount: '',
+			reason: 'Renovación sin monto',
 		},
 		maxRedirects: 0,
 	});
 	assert.equal(response.status(), 422);
-	assert.match(await response.text(), /La renovación de suscripciones estará disponible próximamente/);
+	assert.match(await response.text(), /Escribe el monto cobrado/);
 	const renewed = await approve();
 	assert.equal(renewed.payload.activation_id, subscription.payload.activation_id);
 	// «renew» entrega la revisión vigente: es el mismo archivo firmado, no una revisión nueva.
 	assert.equal(renewed.payload.license_revision, 1);
 	assert.equal(renewed.jws, subscription.jws);
 	assert.equal(renewed.payload.grace_days, 5);
+	// Otra solicitud: esta vez se registra la renovación trimestral con su pago, y el archivo trae la revisión nueva.
+	await upload(request(subDevice, 'renew', subscription.payload));
+	const extendForm = page.locator('form[action$="/approve"]');
+	await extendForm.locator('[name="renewal_mode"]').selectOption('extend');
+	await extendForm.locator('[name="billing_period"]').selectOption('quarterly');
+	await extendForm.locator('[name="amount"]').fill('1200');
+	await extendForm.locator('[name="reference"]').fill('BROWSER-OFFLINE-RENEW');
+	const extended = await approve();
+	assert.equal(extended.payload.activation_id, subscription.payload.activation_id);
+	assert.equal(extended.payload.license_revision, 2);
+	assert.equal(extended.payload.billing_period, 'quarterly');
+	assert.equal(extended.payload.period_starts_at, subscription.payload.expires_at);
+	assert.notEqual(extended.payload.expires_at, subscription.payload.expires_at);
 
 	await upload(request(device()));
 	const rejection = page.locator('form[action$="/reject"]');

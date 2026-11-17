@@ -101,10 +101,10 @@ final class StageClosureTest extends TestCase
 			[
 				// Transferencia por autoservicio.
 				'src/Application/ActivationService.php' => [4],
-				// Renovación, mantenimiento, periodo inicial y editor de planes.
+				// Conversión de prueba, mantenimiento y periodo inicial (etapa 3, fases 4 y 6).
 				'src/Application/LicenseService.php' => [3],
-				// Renovación al aprobar una solicitud sin internet, y alertas de transferencias.
-				'src/Application/OfflineService.php' => [3, 4],
+				// Alertas de transferencias.
+				'src/Application/OfflineService.php' => [4],
 				'src/Domain/Protocol.php' => [4],
 				'src/Http/ApiKernel.php' => [4],
 				'src/Http/Kernel.php' => [3],

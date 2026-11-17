@@ -656,7 +656,7 @@ final class ActivationsTest extends TestCase
 		);
 		self::assertGreaterThan(0, $this->app->audit->verify());
 	}
-	public function testSubscriptionRefreshedLaterKeepsItsRevisionAndSlotAndRenewalIsNotAvailableYet(): void
+	public function testSubscriptionRefreshedLaterKeepsItsRevisionAndSlotUntilARenewalSignsANewOne(): void
 	{
 		$this->issued = $this->issue('subscription');
 		$first = $this->activate();
@@ -672,19 +672,25 @@ final class ActivationsTest extends TestCase
 			409,
 			$this->app->activations->execute('activate', $this->request('activate', $this->device()))->status,
 		);
-		// The renewal of the previous engine is gone; the contract rules arrive in stage 3.
-		try {
-			$this->app->licenses->change($this->actor, Uuid::create(), $this->issued['id'], 'renew', [
-				'version' => 1,
-				'until' => '2026-12-01T00:00',
-				'reason' => 'Purchased renewal',
-			]);
-			self::fail('Renewal accepted');
-		} catch (Problem $e) {
-			self::assertSame(LicenseService::PENDING['renew'], $e->getMessage());
-		}
 		self::assertSame($first, $refresh());
 		self::assertSame(1, (int) $this->app->db->execute('SELECT COUNT(*) FROM license_revisions')->fetchColumn());
+		// Una renovación (contrato §5.3) firma una revisión nueva para la misma activación, y la consulta la entrega.
+		// Vencía el 25 de octubre y la tolerancia terminó el 30: el periodo nuevo empieza en la fecha de pago.
+		$this->app->commercial->renew($this->actor, Uuid::create(), $this->issued['id'], [
+			'version' => 1,
+			'amount' => '0',
+		]);
+		$renewed = $refresh();
+		self::assertSame(
+			[2, $first['activation_id'], '2026-11-01T00:00:00.000000Z', '2026-12-01T00:00:00.000000Z'],
+			[
+				$renewed['license_revision'],
+				$renewed['activation_id'],
+				$renewed['period_starts_at'],
+				$renewed['expires_at'],
+			],
+		);
+		self::assertSame($renewed, $refresh());
 	}
 	public function testMissingSigningFileRollsBackActivationAndCommercialChange(): void
 	{

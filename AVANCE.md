@@ -2221,3 +2221,48 @@ Se quitaron **24 reglas** con `PlanCatalogTest`: permisos de crear, editar y arc
 
 - Los cambios de plan programados (Fase 5) que apunten a un plan con un aumento también deben subir sus números: se agrega en la Fase 5, cuando existan.
 - El recorrido completo del editor con Playwright (editar y propagar) es de la Fase 9.
+
+---
+
+## Etapa 3 · Fase 3 — Renovación de suscripciones (contrato §5.3)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-3.1 Qué cambió
+
+- **`CalendarPeriod::renewal()`:** la regla de la fecha base de §5.3, con la tolerancia en horas exactas y exclusiva.
+- **Límite del motor de fechas, resuelto.** Se buscó en los datos de zonas horarias un cambio de horario que hiciera inexistente la hora ancla del último día de un mes y la llevara al mes siguiente. Hay cinco casos reales (Singapur y Kuala Lumpur en 1981, Sofía en 1979, Kanton y Kiritimati en 1994). `addMonths` cuenta ahora desde el mes del ancla cuando el instante de partida es ese ancla resuelto, y el periodo encadenado ya no se salta un mes.
+- **`Application\CommercialService`:** renovación con vista previa (`quoteRenewal`) y confirmación (`renew`). Registra el pago (`renewal`, con el periodo que cubre), cambia las fechas y, si se elige, la duración, firma una revisión nueva para la activación vigente y deja el cambio en el historial (`license.renewed`).
+- **Sin internet:** al aprobar un `renew`, «Registrar la renovación con su pago y entregarla». Resuelve el `PENDIENTE etapa 3` de `OfflineService`.
+- **Panel:** tarjeta «Renovar la suscripción» en el detalle de una suscripción activada; pantalla «Renovar suscripción» con vencimiento actual, fin de la tolerancia, fecha de pago, periodo nuevo y monto sugerido; y los campos de la renovación en la aprobación sin internet.
+- `LicenseService::PENDING` ya no incluye la renovación; la ruta `/renew` va a `CommercialService`.
+
+### E3-3.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Unit/RenewalDatesTest.php` (nueva) | 5 | Los cuatro ejemplos de §5.3; el límite exacto de la tolerancia (un microsegundo antes, en el límite) y las 120 horas exactas a través de un cambio de horario; renovación encadenada con día ancla 31; cambio de duración; zona del cliente con cambio de horario; y el periodo encadenado que no se salta un mes en Singapur, Kuala Lumpur y Sofía |
+| `tests/Integration/RenewalTest.php` (nueva) | 7 | Los cuatro ejemplos y el límite con la licencia activada, recibidos por la computadora en línea en la misma activación; cupos, marca de personalizada, cambio de duración y pago con su periodo; monto sugerido de la duración elegida y vista previa sin escrituras; cadena de día ancla 31; zona de Tijuana con cambio de horario y pago tardío; rechazos (perpetua, prueba, sin activar, revocada, fecha futura o anterior al último pago, sin monto, cuenta de consulta); reintento idéntico y **dos operadores a la vez** en dos procesos reales: uno renueva y el otro recibe 409 |
+| `tests/Concurrency.php` y `tests/commerce-worker.php` (nuevos) | — | Procesos separados que se bloquean sobre la misma licencia; los usan las pruebas de concurrencia de esta etapa |
+| `OfflineTest` | 1 sustituida | `testRenewDeliversCurrentRightsOrRecordsARenewalWithItsPayment`: sin monto no se registra; con monto se registra y se entrega la revisión 2; una desactivación no puede registrar una renovación; una computadora que liberó la licencia recibe su cierre, no una renovación |
+| `ActivationsTest` | 1 sustituida | La renovación firma una revisión nueva y la consulta en línea la entrega |
+| `AdministrationTest` | 1 sustituida | Solo el mantenimiento sigue rechazado; la renovación dejó de ser un cambio genérico |
+| `StageClosureTest` | — | `OfflineService` ya no tiene marca de etapa 3 |
+| `panel.cjs`, `offline-panel.cjs` | — | Renovar una perpetua se rechaza con el mensaje nuevo; la aprobación sin internet entrega la revisión vigente o registra la renovación trimestral y entrega la revisión 2 |
+
+### E3-3.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **26 reglas**, todas detectadas: tolerancia exclusiva y en horas exactas; base y ancla según la tolerancia; mes del ancla al encadenar; duración elegida y duraciones válidas; cupos y marca de personalizada conservados; rechazo de perpetua, prueba, sin activar y revocada; firma de la revisión; pago del periodo y periodo que cubre; precio de la duración elegida; personalizada sin precio; monto obligatorio; versión de la licencia; permisos; fecha no anterior al último pago; y, sin internet, solo con `renew`, registrar la renovación, entregar la revisión nueva y exigir la computadora activa (esta última tuvo su prueba después de quitarla: no la había).
+
+### E3-3.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 405 pruebas, 27 823 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 405 pruebas, 27 823 aserciones, todas OK |
+| Playwright | Panel, sin internet y dispositivos de confianza OK |
+
+### E3-3.5 Pendientes que deja la fase
+
+- Renovación con un cambio programado pendiente (Fase 7) y renovación con plan nuevo después del vencimiento (Fase 5).
+- El recorrido de renovar desde el detalle con Playwright es de la Fase 9.
