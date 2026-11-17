@@ -2,7 +2,7 @@
 declare(strict_types=1);
 namespace AdelPos\License\Application;
 
-use AdelPos\License\Domain\{CalendarPeriod, Input, LicenseTerms, Money, Problem, Uuid};
+use AdelPos\License\Domain\{CalendarPeriod, Credit, Input, LicenseTerms, Money, Problem, Uuid};
 use AdelPos\License\Infrastructure\{Clock, Database};
 
 /**
@@ -32,6 +32,7 @@ final class CommercialService
 		private RevisionPublisher $publisher,
 		private Payments $payments,
 		private LicenseHistory $history,
+		private ScheduledChanges $scheduled,
 	) {}
 
 	/**
@@ -327,6 +328,417 @@ final class CommercialService
 			'period' => $period,
 			'catalog' => $catalog,
 			'suggested' => $catalog,
+		];
+	}
+
+	/** Datos de un cambio de plan: destino, duración del periodo nuevo, fecha de pago, monto y notas. */
+	public static function planChangeInput(array $input): array
+	{
+		$period = Input::text($input, 'billing_period', 16, false);
+		if ($period !== '' && !in_array($period, LicenseTerms::BILLING_PERIODS, true)) {
+			throw new Problem('Elige la duración del periodo: mensual, trimestral, semestral o anual.');
+		}
+		return [
+			'version' => (int) ($input['version'] ?? 0),
+			'target' => self::targetInput($input),
+			'billing_period' => $period,
+			'reference' => Input::text($input, 'reference', 190, false),
+			'note' => Input::text($input, 'reason', 500, false),
+		] + Payments::input($input);
+	}
+
+	/**
+	 * Cambia el plan o los cupos de una licencia activada (decisiones 6, 7 y 8 del propietario). El
+	 * cambio se compara cupo por cupo con los números vigentes:
+	 * - prueba: cambio libre, inmediato y sin cobro; sus fechas no cambian;
+	 * - perpetua: solo sube, pagando la diferencia de los precios perpetuos; aplica de inmediato;
+	 * - suscripción vigente con algún aumento: periodo nuevo desde la fecha de pago, con bonificación
+	 *   por lo que faltaba del periodo pagado; los aumentos aplican de inmediato y las reducciones se
+	 *   programan para el vencimiento anterior;
+	 * - suscripción vigente sin aumentos: el cambio se programa para el vencimiento, sin cobro;
+	 * - suscripción pagada después del vencimiento: es una renovación con plan nuevo, sin bonificación.
+	 */
+	public function changePlan(Actor $actor, string $operationId, string $licenseId, array $input): array
+	{
+		$request = self::planChangeInput($input);
+		return $this->operations->run(
+			$actor,
+			self::ROLES,
+			$operationId,
+			'license.change_plan',
+			[$licenseId, $request],
+			function () use ($actor, $operationId, $licenseId, $request): array {
+				$license = $this->lock($licenseId, $request['version'], $request['target']['plan_id'], $plan);
+				// Un cambio programado que ya llegó a su instante se aplica primero: el cambio nuevo se
+				// compara con los números vigentes.
+				$license = $this->scheduled->applyDue($license, $actor)['license'];
+				$change = $this->planPlanChange($license, $plan, $request, $this->clock->now());
+				return $this->applyPlanChange($actor, $operationId, $change, $request);
+			},
+		);
+	}
+
+	/**
+	 * Vista previa de changePlan(): la clase de cambio, la bonificación, el monto sugerido y lo que se
+	 * programa. Si hay un cambio programado que ya llegó a su instante, lo da por aplicado.
+	 */
+	public function quotePlanChange(string $licenseId, array $input): array
+	{
+		$request = self::planChangeInput($input);
+		$plan =
+			$this->db->one('SELECT * FROM plans WHERE plan_id=?', [$request['target']['plan_id']]) ??
+			throw new Problem('El plan elegido no existe en el catálogo.');
+		$license = $this->read($licenseId);
+		$due = $this->db->one(
+			"SELECT * FROM license_scheduled_changes WHERE license_id=? AND state='pending' AND effective_at<=?",
+			[$license['license_id'], $this->clock->sql()],
+		);
+		if ($due !== null) {
+			$license = array_replace($license, [
+				'plan_id' => $due['plan_id'],
+				'plan_custom' => $due['plan_custom'],
+				'cash_registers' => $due['cash_registers'],
+				'order_takers' => $due['order_takers'],
+				'kitchen_displays' => $due['kitchen_displays'],
+			]);
+		}
+		return $this->planPlanChange($license, $plan, $request, $this->clock->now());
+	}
+
+	/** Cancela el cambio programado de una licencia. Queda en la auditoría y en el historial. */
+	public function cancelScheduledChange(Actor $actor, string $operationId, string $licenseId, array $input): array
+	{
+		$version = (int) ($input['version'] ?? 0);
+		$note = Input::text($input, 'reason', 500, false);
+		return $this->operations->run(
+			$actor,
+			self::ROLES,
+			$operationId,
+			'license.cancel_scheduled_change',
+			[$licenseId, $version, $note],
+			function () use ($actor, $licenseId, $version, $note): array {
+				$license = $this->lock($licenseId, $version);
+				$cancelled =
+					$this->scheduled->resolve($license['license_id'], 'cancelled', $actor) ??
+					throw new Problem('La licencia no tiene un cambio programado.', 409);
+				$this->db->execute('UPDATE licenses SET row_version=row_version+1,updated_at=? WHERE license_id=?', [
+					$this->clock->sql(),
+					$license['license_id'],
+				]);
+				$this->history->record($licenseId, $actor->id, 'license.scheduled_change_cancelled', $note, '', [
+					'change_id' => Uuid::text($cancelled['change_id']),
+					'plan_id' => $cancelled['plan_id'],
+					'effective_at' => CalendarPeriod::utc(
+						new \DateTimeImmutable($cancelled['effective_at'], self::utc()),
+					),
+				]);
+				return ['id' => $licenseId];
+			},
+		);
+	}
+
+	/** Lo que haría un cambio de plan con esta licencia. No escribe nada. */
+	private function planPlanChange(array $license, array $plan, array $request, \DateTimeImmutable $now): array
+	{
+		if ($license['commercial_status'] !== 'issued') {
+			throw new Problem('Una licencia revocada no puede cambiar de plan.');
+		}
+		$type = $license['license_type'];
+		if ($type !== 'trial' && $license['period_starts_at'] === null) {
+			throw new Problem(
+				'Una licencia sin activar no tiene periodo pagado: cambia su plan editando su periodo inicial.',
+			);
+		}
+		$target = $this->target($request['target'], $plan);
+		$up = [];
+		$down = [];
+		foreach (array_keys(LicenseTerms::LIMITS) as $limit) {
+			$current = (int) $license[$limit];
+			if ($target['limits'][$limit] > $current) {
+				$up[] = $limit;
+			} elseif ($target['limits'][$limit] < $current) {
+				$down[] = $limit;
+			}
+		}
+		$samePlan = $plan['plan_id'] === $license['plan_id'] && $target['custom'] === (bool) $license['plan_custom'];
+		if ($up === [] && $down === [] && $samePlan) {
+			throw new Problem('La licencia ya tiene ese plan y esos cupos.');
+		}
+		$zone = $this->zone($license);
+		$change = [
+			'license' => $license,
+			'time_zone' => $zone,
+			'target' => $target,
+			'up' => $up,
+			'down' => $down,
+			'immediate' => $target['limits'],
+			'paid_at' => null,
+			'billing_period' => null,
+			'period' => null,
+			'scheduled_at' => null,
+			'catalog' => null,
+			'credit' => 0,
+			'credit_basis' => null,
+			'suggested' => null,
+			'charges' => true,
+		];
+		if ($type === 'trial') {
+			// Cambiar de plan durante la prueba es libre, sin cobro, y no cambia sus fechas.
+			return ['kind' => 'trial', 'charges' => false] + $change;
+		}
+		if ($type === 'perpetual') {
+			if ($down !== []) {
+				throw new Problem(
+					$up === []
+						? 'Una perpetua no puede bajar de plan ni reducir cupos.'
+						: 'Una perpetua solo puede subir de plan: este cambio sube unos cupos y baja otros.',
+				);
+			}
+			if ($up === []) {
+				throw new Problem('Una perpetua solo puede subir de plan: este cambio no sube ningún cupo.');
+			}
+			// Se paga la diferencia entre los dos precios perpetuos. Sin alguno de los dos, o con una
+			// licencia personalizada, el monto se escribe a mano.
+			$change['paid_at'] = $this->payments->paidAt($request['paid_at'], $zone, $license['license_id']);
+			$current = $license['plan_custom']
+				? null
+				: LicenseTerms::catalogPrice($this->plan($license['plan_id']), 'perpetual');
+			$new = $target['custom'] ? null : LicenseTerms::catalogPrice($plan, 'perpetual');
+			if ($current !== null && $new !== null) {
+				$change['catalog'] = $new;
+				$change['credit'] = $current;
+				$change['credit_basis'] = ['source' => 'perpetual_price', 'amount' => $current];
+				$change['suggested'] = max(0, $new - $current);
+			}
+			return ['kind' => 'perpetual'] + $change;
+		}
+		$expiresAt = new \DateTimeImmutable($license['expires_at'], self::utc());
+		if ($up === [] && $now < $expiresAt) {
+			// Solo reducción (o el mismo número con otro plan): entra en vigor al vencer lo pagado, sin cobro.
+			return ['kind' => 'reduction', 'charges' => false, 'scheduled_at' => $expiresAt] + $change;
+		}
+		$paidAt = $this->payments->paidAt($request['paid_at'], $zone, $license['license_id']);
+		$period = $request['billing_period'] !== '' ? $request['billing_period'] : $license['billing_period'];
+		$change['paid_at'] = $paidAt;
+		$change['billing_period'] = $period;
+		$catalog = $target['custom'] ? null : LicenseTerms::catalogPrice($plan, $period);
+		if ($paidAt >= $expiresAt || $up === []) {
+			// Pagó después del vencimiento: es una renovación con plan nuevo. Sin bonificación, sin
+			// reducciones programadas, y el periodo nuevo trae los números nuevos.
+			$change['period'] = CalendarPeriod::renewal(
+				$expiresAt,
+				(int) $license['grace_days'],
+				$paidAt,
+				LicenseTerms::BILLING_MONTHS[$period],
+				$zone,
+				(int) $license['anchor_day'],
+				$license['anchor_local_time'],
+			);
+			$change['catalog'] = $catalog;
+			$change['suggested'] = $catalog;
+			return ['kind' => 'renewal'] + $change;
+		}
+		// Aumento o cambio mixto de una suscripción vigente: el periodo nuevo empieza en la fecha de
+		// pago, con su ancla. Los aumentos aplican ya; las reducciones, al vencimiento anterior.
+		$change['period'] = CalendarPeriod::firstPeriod(
+			['license_type' => 'subscription', 'billing_period' => $period],
+			$paidAt,
+			$zone,
+		);
+		foreach ($down as $limit) {
+			$change['immediate'][$limit] = (int) $license[$limit];
+		}
+		if ($down !== []) {
+			$change['scheduled_at'] = $expiresAt;
+		}
+		$basis = $this->creditBasis($license);
+		if ($basis !== null) {
+			$credit = Credit::remaining(
+				$basis['amount'],
+				new \DateTimeImmutable($license['period_starts_at'], self::utc()),
+				$expiresAt,
+				$paidAt,
+			);
+			$change['credit'] = $credit['credit'];
+			$change['credit_basis'] = $basis + $credit;
+			if ($catalog !== null) {
+				$change['catalog'] = $catalog;
+				$change['suggested'] = max(0, $catalog - $credit['credit']);
+			}
+		}
+		return ['kind' => 'increase'] + $change;
+	}
+
+	/**
+	 * Monto pagado del periodo vigente, para la bonificación: el del pago que cubre el periodo. Una
+	 * licencia sin ese pago (emitida antes de la etapa 3) usa el precio del catálogo vigente de su
+	 * plan y su periodo. Si tampoco hay precio, o es personalizada, no se puede calcular.
+	 *
+	 * @return ?array{source: string, amount: int}
+	 */
+	private function creditBasis(array $license): ?array
+	{
+		if ($license['period_payment_id'] !== null) {
+			$amount = $this->db
+				->execute('SELECT amount FROM license_payments WHERE payment_id=? AND license_id=?', [
+					$license['period_payment_id'],
+					$license['license_id'],
+				])
+				->fetchColumn();
+			return ['source' => 'payment', 'amount' => Money::fromSql($amount)];
+		}
+		if ($license['plan_custom']) {
+			return null;
+		}
+		$price = LicenseTerms::catalogPrice($this->plan($license['plan_id']), $license['billing_period']);
+		return $price === null ? null : ['source' => 'catalog', 'amount' => $price];
+	}
+
+	/** Escribe el cambio de plan que calculó planPlanChange(). */
+	private function applyPlanChange(Actor $actor, string $operationId, array $change, array $request): array
+	{
+		$license = $change['license'];
+		$target = $change['target'];
+		$id = Uuid::text($license['license_id']);
+		if ($change['charges'] && $request['amount'] === null) {
+			throw new Problem('Escribe el monto cobrado.');
+		}
+		if (!$change['charges'] && ($request['amount'] !== null || $request['reason'] !== '')) {
+			throw new Problem(
+				$change['kind'] === 'trial'
+					? 'Cambiar de plan durante la prueba no tiene cobro: deja el monto vacío.'
+					: 'Una reducción no se cobra al programarla: el cobro llega con la renovación. Deja el monto vacío.',
+			);
+		}
+		$scheduled = null;
+		if ($change['kind'] === 'reduction') {
+			$scheduled = $this->scheduled->schedule(
+				$actor,
+				$operationId,
+				$license,
+				$change['scheduled_at'],
+				$target,
+				$request['note'],
+			);
+			$this->db->execute('UPDATE licenses SET row_version=row_version+1,updated_at=? WHERE license_id=?', [
+				$this->clock->sql(),
+				$license['license_id'],
+			]);
+			$this->history->record(
+				$id,
+				$actor->id,
+				'license.plan_change_scheduled',
+				$request['note'],
+				$request['reference'],
+				[
+					'change_id' => $scheduled['change_id'],
+					'replaced' =>
+						$scheduled['replaced'] === null ? null : Uuid::text($scheduled['replaced']['change_id']),
+					'plan_id' => $target['plan']['plan_id'],
+					'limits' => $target['limits'],
+					'effective_at' => CalendarPeriod::utc($change['scheduled_at']),
+				],
+			);
+			return [
+				'id' => $id,
+				'kind' => 'reduction',
+				'revisions_signed' => 0,
+				'scheduled_at' => CalendarPeriod::utc($change['scheduled_at']),
+			];
+		}
+		// Los cupos de ahora, con el plan nuevo. En un cambio mixto, los que bajan conservan el número
+		// mayor hasta el vencimiento anterior.
+		$assignments = 'plan_id=?,plan_name=?,plan_custom=?,cash_registers=?,order_takers=?,kitchen_displays=?';
+		$parameters = [
+			$target['plan']['plan_id'],
+			$target['plan']['display_name'],
+			$target['custom'] ? 1 : 0,
+			$change['immediate']['cash_registers'],
+			$change['immediate']['order_takers'],
+			$change['immediate']['kitchen_displays'],
+		];
+		$period = $change['period'];
+		if ($period !== null) {
+			$assignments .=
+				',billing_period=?,period_starts_at=?,expires_at=?,updates_until=?,anchor_day=?,anchor_local_time=?';
+			array_push(
+				$parameters,
+				$change['billing_period'],
+				CalendarPeriod::sql($period['period_starts_at']),
+				CalendarPeriod::sql($period['expires_at']),
+				CalendarPeriod::sql($period['updates_until']),
+				$period['anchor_day'],
+				$period['anchor_local_time'],
+			);
+		}
+		$this->db->execute(
+			'UPDATE licenses SET ' . $assignments . ',row_version=row_version+1,updated_at=? WHERE license_id=?',
+			[...$parameters, $this->clock->sql(), $license['license_id']],
+		);
+		$paymentId = null;
+		if ($change['charges']) {
+			$paymentId = $this->payments->record($actor, $operationId, $license['license_id'], [
+				'concept' => $change['kind'] === 'renewal' ? 'renewal' : 'plan_change',
+				'term' => $license['license_type'] === 'perpetual' ? 'perpetual' : $change['billing_period'],
+				'plan_id' => $target['plan']['plan_id'],
+				'paid_at' => $change['paid_at'],
+				'amount' => $request['amount'],
+				'catalog' => $change['catalog'],
+				'credit' => $change['credit'],
+				'reason' => $request['reason'],
+				'reference' => $request['reference'],
+				'covers' => $period === null ? null : [$period['period_starts_at'], $period['expires_at']],
+			]);
+		}
+		if ($period !== null) {
+			// El pago paga el periodo nuevo: con su monto se calculará una bonificación futura.
+			$this->db->execute('UPDATE licenses SET period_payment_id=? WHERE license_id=?', [
+				$paymentId,
+				$license['license_id'],
+			]);
+		}
+		// Las reducciones de un cambio mixto se programan para el vencimiento anterior. Cualquier otro
+		// cambio programado queda sustituido por este.
+		if ($change['scheduled_at'] !== null) {
+			$scheduled = $this->scheduled->schedule(
+				$actor,
+				$operationId,
+				$license,
+				$change['scheduled_at'],
+				$target,
+				$request['note'],
+			);
+		} else {
+			$this->scheduled->resolve($license['license_id'], 'replaced', $actor);
+		}
+		$signed = $this->publisher->commercialChange($license['license_id'], false);
+		$this->history->record(
+			$id,
+			$actor->id,
+			$change['kind'] === 'renewal' ? 'license.renewed' : 'license.plan_changed',
+			$request['note'],
+			$request['reference'],
+			[
+				'kind' => $change['kind'],
+				'plan_id' => $target['plan']['plan_id'],
+				'custom' => $target['custom'],
+				'increases' => $change['up'],
+				'reductions' => $change['down'],
+				'limits' => $change['immediate'],
+				'paid_at' => $change['paid_at'] === null ? null : CalendarPeriod::utc($change['paid_at']),
+				'credit' => Money::toSql($change['credit']),
+				'credit_basis' => $change['credit_basis']['source'] ?? null,
+				'scheduled_change_id' => $scheduled['change_id'] ?? null,
+				'scheduled_at' =>
+					$change['scheduled_at'] === null ? null : CalendarPeriod::utc($change['scheduled_at']),
+				'revisions_signed' => $signed,
+			],
+		);
+		return [
+			'id' => $id,
+			'kind' => $change['kind'],
+			'revisions_signed' => $signed,
+			'scheduled_at' => $change['scheduled_at'] === null ? null : CalendarPeriod::utc($change['scheduled_at']),
 		];
 	}
 

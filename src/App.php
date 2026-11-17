@@ -19,6 +19,7 @@ use AdelPos\License\Application\{
 	Payments,
 	PlanService,
 	RevisionPublisher,
+	ScheduledChanges,
 	TrustedDevices,
 };
 use AdelPos\License\Infrastructure\{
@@ -112,6 +113,7 @@ final class App
 			$this->publisher,
 			$this->payments,
 			$history,
+			new ScheduledChanges($db, $this->clock, $this->publisher, $history),
 		);
 		$this->offline = new OfflineService(
 			$db,

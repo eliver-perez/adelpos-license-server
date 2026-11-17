@@ -106,7 +106,7 @@ final class PlanService
 						$increases[$limit] = $values[$limit];
 					}
 				}
-				$result = ['licenses_updated' => 0, 'revisions_signed' => 0];
+				$result = ['licenses_updated' => 0, 'revisions_signed' => 0, 'scheduled_updated' => 0];
 				if ($applyTo === 'existing' && $increases !== []) {
 					$result = $this->propagate($actor, $planId, $values['display_name'], $increases);
 				}
@@ -217,7 +217,20 @@ final class PlanService
 			$signed += $this->publisher->commercialChange($license['license_id'], false);
 			$this->recordLicense($actor, $license['license_id'], $planId, $planName);
 		}
-		return ['licenses_updated' => $updated, 'revisions_signed' => $signed];
+		// Un cambio programado hacia este plan también sube: al aplicarse, la licencia seguirá el plan con
+		// sus números nuevos. Solo los aumentos, y solo si su destino no es personalizado.
+		$scheduled = 0;
+		foreach ($increases as $limit => $count) {
+			$scheduled += $this->db
+				->execute(
+					"UPDATE license_scheduled_changes
+						SET {$limit}=?
+						WHERE plan_id=? AND plan_custom=0 AND state='pending' AND {$limit}<?",
+					[$count, $planId, $count],
+				)
+				->rowCount();
+		}
+		return ['licenses_updated' => $updated, 'revisions_signed' => $signed, 'scheduled_updated' => $scheduled];
 	}
 
 	/** El aumento queda en el historial de la licencia; la auditoría es la del plan, con el total. */

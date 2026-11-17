@@ -295,6 +295,25 @@ final class ReadRepository
 				ORDER BY h.version DESC,h.field_name',
 			[Uuid::bytes($id)],
 		);
+		// Cambio de plan programado, si lo hay, y los anteriores (aplicados, cancelados o sustituidos).
+		$license['scheduled_changes'] = $this->db->all(
+			'SELECT BIN_TO_UUID(s.change_id) AS id_text,s.effective_at,s.plan_id,p.display_name AS plan_name,
+					s.plan_custom,s.cash_registers,s.order_takers,s.kitchen_displays,s.state,s.reason,s.created_at,
+					s.resolved_at,u.display_name AS actor_name
+				FROM license_scheduled_changes s
+				JOIN plans p ON p.plan_id=s.plan_id
+				JOIN admin_users u ON u.id=s.admin_id
+				WHERE s.license_id=?
+				ORDER BY s.created_at DESC
+				LIMIT 20',
+			[Uuid::bytes($id)],
+		);
+		$license['scheduled'] = null;
+		foreach ($license['scheduled_changes'] as $change) {
+			if ($change['state'] === 'pending') {
+				$license['scheduled'] = $change;
+			}
+		}
 		// Historial comercial: cada pago tal como se registró, del más reciente al más antiguo.
 		$license['payments'] = $this->db->all(
 			'SELECT BIN_TO_UUID(p.payment_id) AS id_text,p.concept,p.term,p.plan_id,p.paid_at,p.currency,

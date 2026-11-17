@@ -38,8 +38,9 @@ final class AuditLabelsTest extends TestCase
 		];
 		foreach ($files as $file) {
 			$source = (string) file_get_contents($file->getPathname());
-			// Literal operations passed to append() or failed(), including both branches of a ternary.
-			preg_match_all('/->(?:append|failed)\([^;]*?\)/s', $source, $calls);
+			// Literal operations passed to append(), failed() or the license history's record(), up to the end of
+			// the statement, including both branches of a ternary.
+			preg_match_all('/->(?:append|failed|record)\([^;]*;/s', $source, $calls);
 			foreach ($calls[0] as $call) {
 				preg_match_all("/'([a-z_]+\.[a-z_]+)'/", $call, $names);
 				array_push($operations, ...$names[1]);

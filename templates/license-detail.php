@@ -10,7 +10,10 @@ $notices = [
 	'document' => 'Constancia generada. Disponible en el historial de documentos.',
 	'renew' => 'Renovación registrada con su pago. Se firmó una revisión nueva para la computadora activa.',
 	'convert' => 'Conversión registrada con su pago. Si la prueba estaba activada, la computadora recibe una revisión nueva.',
+	'plan' => 'Cambio de plan registrado. Si se programó una reducción, se muestra en «Cambio programado».',
+	'scheduled-cancel' => 'Cambio programado cancelado. La licencia conserva su plan y sus cupos.',
 ];
+$scheduled = $license['scheduled'];
 $activated = $license['period_starts_at'] !== null;
 $billingPeriods = [
 	'monthly' => 'Mensual (1 mes)',
@@ -265,6 +268,75 @@ $termNotes = [
 						<input class="form-control mt-2" type="datetime-local" name="paid_at">
 					</label>
 					<button class="btn btn-primary">Revisar conversión</button>
+				</form>
+			<?php endif; ?>
+			<?php if ($scheduled !== null): ?>
+				<section class="panel form-panel mb-4" id="scheduled-change">
+					<span class="eyebrow">CAMBIO PROGRAMADO</span>
+					<h2>
+						<?= V::escape($scheduled['plan_name']) ?>
+						<?php if ($scheduled['plan_custom']): ?>
+							<span class="tag">Personalizada</span>
+						<?php endif; ?>
+					</h2>
+					<p class="small mb-2">
+						Entra en vigor el <?= V::escape(V::date($scheduled['effective_at'], $license['time_zone'])) ?>:
+						<?= (int) $scheduled['cash_registers'] ?> cajas ·
+						<?= (int) $scheduled['order_takers'] ?> comanderos ·
+						<?= (int) $scheduled['kitchen_displays'] ?> KDS.
+					</p>
+					<p class="text-secondary small">
+						Hasta entonces la licencia conserva sus cupos. Programó: <?= V::escape($scheduled['actor_name']) ?>.
+					</p>
+					<form method="post" action="/admin/licenses/<?= V::escape($licenseId) ?>/scheduled-cancel">
+						<?php V::fields($csrf); ?>
+						<input type="hidden" name="version" value="<?= (int) $license['row_version'] ?>">
+						<button class="btn btn-outline-danger">Cancelar el cambio programado</button>
+					</form>
+				</section>
+			<?php endif; ?>
+			<?php if ($activated || $license['license_type'] === 'trial'): ?>
+				<form
+					class="panel form-panel stack-form mb-4"
+					id="plan-change-form"
+					method="get"
+					action="/admin/licenses/<?= V::escape($licenseId) ?>/plan"
+				>
+					<span class="eyebrow">CAMBIO DE PLAN</span>
+					<h2>Cambiar de plan o de cupos</h2>
+					<p class="text-secondary small mb-0">
+						<?php if ($license['license_type'] === 'subscription'): ?>
+							Subir aplica de inmediato con un periodo nuevo desde la fecha de pago y una bonificación por lo que
+							faltaba. Bajar entra en vigor al vencer lo pagado.
+						<?php elseif ($license['license_type'] === 'perpetual'): ?>
+							Una perpetua solo sube de plan, pagando la diferencia de los precios perpetuos.
+						<?php else: ?>
+							Durante la prueba, el cambio es libre y sin cobro.
+						<?php endif; ?>
+					</p>
+					<?php
+					$selectedPlan = $license['plan_id'];
+					require __DIR__ . '/target-fields.php';
+					?>
+					<?php if ($license['license_type'] === 'subscription'): ?>
+						<label>
+							Duración del periodo nuevo
+							<select class="form-select mt-2" name="billing_period">
+								<?php foreach ($billingPeriods as $value => $label): ?>
+									<option value="<?= $value ?>" <?= $value === $license['billing_period'] ? 'selected' : '' ?>>
+										<?= V::escape($label) ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</label>
+					<?php endif; ?>
+					<?php if ($license['license_type'] !== 'trial'): ?>
+						<label>
+							Fecha de pago <span class="optional">vacía: este momento</span>
+							<input class="form-control mt-2" type="datetime-local" name="paid_at">
+						</label>
+					<?php endif; ?>
+					<button class="btn btn-primary">Revisar cambio de plan</button>
 				</form>
 			<?php endif; ?>
 			<?php

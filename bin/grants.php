@@ -31,6 +31,8 @@ consoleRun(function (): void {
 		'license_credentials' => 'SELECT,INSERT,UPDATE',
 		'license_changes' => 'SELECT,INSERT',
 		'license_payments' => 'SELECT,INSERT',
+		'license_scheduled_changes' =>
+			'SELECT,INSERT,UPDATE (state,resolved_at,resolved_by,cash_registers,order_takers,kitchen_displays)',
 		'signing_keys' => 'SELECT',
 		'signing_scopes' => 'SELECT',
 		'activations' => 'SELECT,INSERT,UPDATE (state,ended_at,current_revision_id,app_version)',

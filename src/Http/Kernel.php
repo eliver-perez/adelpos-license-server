@@ -482,7 +482,13 @@ final class Kernel
 			);
 			return;
 		}
-		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})/(renew|convert)$~', $this->path, $matches)) {
+		if (
+			preg_match(
+				'~^/admin/licenses/([a-f0-9-]{36})/(renew|convert|plan|scheduled-cancel)$~',
+				$this->path,
+				$matches,
+			)
+		) {
 			$this->commercial($method, $operationId, $matches[1], $matches[2]);
 			return;
 		}
@@ -642,6 +648,13 @@ final class Kernel
 			$result = match ($operation) {
 				'renew' => $this->app->commercial->renew($this->actor, $operationId, $licenseId, $_POST),
 				'convert' => $this->app->commercial->convert($this->actor, $operationId, $licenseId, $_POST),
+				'plan' => $this->app->commercial->changePlan($this->actor, $operationId, $licenseId, $_POST),
+				'scheduled-cancel' => $this->app->commercial->cancelScheduledChange(
+					$this->actor,
+					$operationId,
+					$licenseId,
+					$_POST,
+				),
 			};
 			$this->redirect('/admin/licenses/' . $result['id'] . '?notice=' . $operation);
 			return;
@@ -650,8 +663,14 @@ final class Kernel
 		$quote = match ($operation) {
 			'renew' => $this->app->commercial->quoteRenewal($licenseId, $_GET),
 			'convert' => $this->app->commercial->quoteConversion($licenseId, $_GET),
+			'plan' => $this->app->commercial->quotePlanChange($licenseId, $_GET),
+			default => throw new Problem('La página solicitada no existe.', 404),
 		};
-		$titles = ['renew' => 'Revisar renovación', 'convert' => 'Revisar conversión'];
+		$titles = [
+			'renew' => 'Revisar renovación',
+			'convert' => 'Revisar conversión',
+			'plan' => 'Revisar cambio de plan',
+		];
 		$this->render('license-' . $operation, [
 			'title' => $titles[$operation],
 			'license' => $license,

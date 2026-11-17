@@ -2303,3 +2303,56 @@ Se quitaron **16 reglas** con `ConversionTest`: solo una prueba, no revocada, de
 ### E3-4.5 Pendientes que deja la fase
 
 - El recorrido de convertir una prueba con Playwright es de la Fase 9.
+
+---
+
+## Etapa 3 · Fase 5 — Cambio de plan con bonificación (decisiones 6, 7 y 8)
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E3-5.1 Qué cambió
+
+- **`Domain\Credit`:** la bonificación exacta, al centavo, con enteros.
+- **Migración `007_cambios_programados.sql`:** tabla `license_scheduled_changes`, con un pendiente como máximo por licencia.
+- **`Application\ScheduledChanges`:** programa, sustituye, cancela y aplica un cambio programado (al llegar su instante).
+- **`CommercialService::changePlan()`, `quotePlanChange()` y `cancelScheduledChange()`.** Se clasifica cupo por cupo:
+
+  | Licencia | Cambio | Qué pasa |
+  | --- | --- | --- |
+  | Prueba | Cualquiera | Inmediato, sin cobro, sin cambiar fechas |
+  | Perpetua | Sube | Inmediato; se sugiere la diferencia de los precios perpetuos; `updates_until` no cambia |
+  | Perpetua | Baja o mixto | Se rechaza |
+  | Suscripción vigente | Aumento o mixto | Periodo nuevo desde la fecha de pago, con bonificación; aumentos inmediatos; reducciones programadas para el vencimiento anterior |
+  | Suscripción vigente | Solo reducción | Programado para el vencimiento, sin cobro |
+  | Suscripción pagada después del vencimiento | Cualquiera | Renovación con plan nuevo, sin bonificación, con los números nuevos |
+
+- **Editor de planes:** un aumento del catálogo también sube los cambios programados hacia ese plan.
+- **Panel:** tarjeta «Cambiar de plan o de cupos» en el detalle; pantalla de revisión con días restantes, monto pagado, bonificación, precio nuevo, monto sugerido y fecha de las reducciones; tarjeta «Cambio programado» con «Cancelar el cambio programado».
+- **Auditoría:** «Plan cambiado», «Cambio de plan programado», «Cambio programado cancelado» y «Cambio programado aplicado», y `AuditLabelsTest` las vigila.
+
+### E3-5.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Unit/CreditTest.php` (nueva) | 2 | Bonificación de 900.00 y 850.00 con 16 de 31 días; inicio y fin del periodo; redondeo de la mitad hacia arriba; segundos completos; pago antes del periodo o después del vencimiento; el monto más alto con un año bisiesto; montos y periodos inválidos |
+| `tests/Integration/PlanChangeTest.php` (nueva) | 8 | Aumento con bonificación exacta con el monto pagado registrado (438.71) y con el precio de catálogo (464.52); monto modificado con motivo; bonificación mayor que el precio nuevo, cobro 0; cambio mixto con aumento inmediato, número mayor conservado y reducción programada al vencimiento anterior, que sube con la propagación y se aplica antes del siguiente cambio; reducción pura programada sin cobro, sustituida, cancelada y única en la base; pago en tolerancia y después de ella tratados como renovación; perpetua que sube con la diferencia y rechaza bajar, el cambio mixto y otro plan con los mismos números; prueba sin cobro en los dos sentidos; personalizada sin precio y que pierde la marca al elegir un plan; rechazos; **dos operadores a la vez** |
+| `AuditLabelsTest` | — | También las operaciones del historial comercial |
+
+Los montos esperados de las bonificaciones se calcularon por separado, con enteros, fuera del código del servidor.
+
+### E3-5.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **28 reglas**, todas detectadas a la primera: redondeo, límites y segundos completos de la bonificación; monto pagado como base y precio del catálogo sin pago; sugerido nunca menor que 0; destino personalizado sin precio; periodo desde la fecha de pago; en el mixto, el número mayor y la reducción al vencimiento anterior; reducción programada y sin cobro; un solo pendiente (en el servicio y en la base); cancelar; pago después del vencimiento como renovación, con los números nuevos; perpetua que no baja, que tiene que subir algo y que paga la diferencia; prueba sin cobro; aplicar antes el cambio vencido; propagación a lo programado; mismo plan y cupos; sin activar; revocada; y el pago del cambio como pago del periodo. Además, dos etiquetas de auditoría: la segunda no se detectaba por un límite de la prueba de etiquetas, que se corrigió.
+
+### E3-5.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.5.7 | 419 pruebas, 27 951 aserciones, todas OK |
+| PHPUnit, PHP 8.3.36 | 419 pruebas, 27 951 aserciones, todas OK |
+| Playwright | Panel, sin internet y dispositivos de confianza OK |
+
+### E3-5.5 Pendientes que deja la fase
+
+- La tarea programada que aplica los cambios al llegar su instante, y su relación con la renovación, son de la Fase 7.
+- El recorrido de subir de plan con bonificación y de programar y cancelar una reducción con Playwright es de la Fase 9.
