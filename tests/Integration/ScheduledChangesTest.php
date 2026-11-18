@@ -279,9 +279,9 @@ final class ScheduledChangesTest extends TestCase
 		} finally {
 			\AdelPos\License\Tests\NativeStackFixture::remove($directory);
 		}
-		// La tarea diaria de mantenimiento lo ejecuta.
+		// La tarea diaria de mantenimiento lo ejecuta (con PHP 8.3, la del VPS, desde la etapa 5).
 		self::assertStringContainsString(
-			'php bin/apply-scheduled-changes.php',
+			'php8.3 bin/apply-scheduled-changes.php',
 			(string) file_get_contents(dirname(__DIR__, 2) . '/deploy/adelpos-license-maintenance.sh'),
 		);
 	}

@@ -3496,3 +3496,44 @@ Se quitaron **10 reglas**, todas detectadas: el límite de la API, el formato de
 | Playwright de dispositivos de confianza (sobre la pila con el ejemplo) | OK |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+## Etapa 5 · Fase 6 — Instrucciones de despliegue
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-6.1 Qué cambió
+
+`DEPLOY_UBUNTU_24_04.md` se reescribió para `licensing.sicrat.com`, en el mismo VPS que AIDEX, con 16 secciones y cada orden en su bloque:
+
+| Sección | Contenido |
+| --- | --- |
+| 1–2 | DNS, versiones y reloj; remoto privado y llave de despliegue; extensiones de PHP 8.3; usuario `adelpos-license` y carpetas `shared/` y `backup/` fuera del clon |
+| 3 | Llave de despliegue de solo lectura en `/root/.ssh/adelpos_license_deploy` con el alias `github-adelpos-license`; clon en `/srv/adelpos-license/app` con `git checkout --detach v1.0.0`; `composer install --no-dev --optimize-autoloader --no-interaction --no-scripts --no-plugins` como `root` |
+| 4–7 | Base y cuentas de MySQL con `IDENTIFIED BY RANDOM PASSWORD` (ninguna contraseña escrita en la guía); configuración con `bin/configure.php`; migraciones, permisos y `bin/preflight.php`; primer administrador |
+| 8 | Llave de firma de prueba: generar, listar, exportar a `shared/llaves-publicas-test.json` y activar |
+| 9–10 | Pool propio de PHP-FPM; certificado con Certbot (`webroot`, sitio temporal de solo HTTP), sitio definitivo y gancho de renovación que recarga Nginx solo si `nginx -t` pasa |
+| 11–12 | Tarea diaria con systemd; respaldos: clave de recuperación en el gestor de contraseñas, copia fuera del VPS con `rsync`, restauración de prueba |
+| 13–16 | Verificación final y primer acceso; actualizar por etiqueta y volver a la anterior; convivencia con AIDEX; tabla de problemas comunes |
+
+`deploy/adelpos-license-maintenance.sh` entra al clon (`cd /srv/adelpos-license/app`) y llama a `php8.3`. Las decisiones están en `DECISIONS.md`, sección 18, Fase 6.
+
+### E5-6.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Unit/DeployGuideTest.php` | 3, nuevo | Cada herramienta (`bin/`) y archivo (`deploy/`) que nombra la guía existe (con una excepción temporal para `bin/verify-deployment.php`, que llega en la Fase 7); las 16 secciones; clon con el alias de la llave y en una etiqueta, nunca `main`; **cada** `composer install` (la instalación, la actualización y la vuelta a la versión anterior) lleva `--no-dev`; sin `npm`, sin `current` ni `releases/`; contraseñas generadas por MySQL; las rutas de la guía son las de los ejemplos de Nginx, del pool y de la tarea diaria; la tarea entra al clon y usa `php8.3` |
+| `tests/Integration/ScheduledChangesTest.php` | — | La línea de la tarea diaria es ahora `php8.3 bin/apply-scheduled-changes.php` |
+| `tests/Integration/CommercialDeliveryTest.php` | — | **Prueba intermitente corregida**: el monto de prueba «850» podía aparecer por azar en el UUID aleatorio de la licencia (ocurrió en la primera corrida de esta fase: `9f5c788f-850a-…`). Ahora el monto es `850.37`, que no puede formar parte de un identificador hexadecimal ni base64url; la regla (ni montos ni pagos en la constancia) no cambió |
+
+### E5-6.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **7 reglas**: que las herramientas nombradas existan, que se desplieguen etiquetas, que no haya dependencias de desarrollo, que las contraseñas las genere MySQL, que la tarea entre al clon, que use `php8.3` y las 16 secciones. Todas detectadas. La de las dependencias de desarrollo **no se detectaba** al principio (la prueba solo buscaba `--no-dev` una vez y la guía lo tiene en tres instalaciones); se reforzó para revisar cada `composer install` y después sí se detectó.
+
+### E5-6.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | **498 pruebas, 29 400 aserciones**, todas OK |
+| Playwright | No aplica: el panel no cambió |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |

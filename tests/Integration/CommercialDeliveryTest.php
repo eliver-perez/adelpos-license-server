@@ -333,7 +333,7 @@ final class CommercialDeliveryTest extends TestCase
 				'customer_id' => $customer['id'],
 				'product_id' => 'adel_pos',
 				...MySqlFixture::terms($type),
-				'amount' => $type === 'subscription' ? '850' : '0',
+				'amount' => $type === 'subscription' ? '850.37' : '0',
 				'amount_reason' => $type === 'subscription' ? 'Descuento de prueba' : '',
 			]);
 			$offline = $this->offline();
@@ -360,8 +360,9 @@ final class CommercialDeliveryTest extends TestCase
 			) {
 				self::assertStringContainsString($fragment, $text, $type);
 			}
-			// Se entregan al cliente: ni montos ni pagos.
-			foreach (['$', 'MXN', '850', 'Descuento de prueba', 'Pago'] as $amount) {
+			// Se entregan al cliente: ni montos ni pagos. El monto lleva decimales para que no coincida por azar
+			// con los dígitos del UUID de la licencia o del folio.
+			foreach (['$', 'MXN', '850.37', '850,37', 'Descuento de prueba', 'Pago'] as $amount) {
 				self::assertStringNotContainsString($amount, $text, $type);
 			}
 		}
