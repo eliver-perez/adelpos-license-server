@@ -348,4 +348,74 @@ final class PanelQueriesTest extends TestCase
 		self::assertSame(['2500.00', '100.00'], array_column($payments, 'amount'));
 		self::assertSame([$pending, $active], array_column($payments, 'license_text'));
 	}
+
+	public function testPropagationPreviewMatchesWhatSavingThePlanDoes(): void
+	{
+		$customer = $this->customer('Restaurante del catálogo', 'America/Monterrey');
+		// Siguen el plan elemental (3, 3, 3): una suscripción y una perpetua activadas y una prueba sin activar.
+		$this->license($customer);
+		$this->license($customer, 'perpetual');
+		$this->license($customer, 'trial', false);
+		// No las alcanza la propagación: una personalizada, una revocada y una vencida sin tolerancia.
+		$this->license($customer, 'subscription', true, ['cash_registers' => '7']);
+		$this->revoke($this->license($customer)['id'], 'Fuera del catálogo');
+		$this->license($customer, 'trial', true);
+		$this->at('2027-01-26T07:30:00Z');
+		$groups = $this->app->panel->propagationGroups('elemental');
+		self::assertSame(
+			[['cash_registers' => 3, 'order_takers' => 3, 'kitchen_displays' => 3, 'licenses' => 3, 'active' => 2]],
+			$groups,
+		);
+		$current = ['cash_registers' => 3, 'order_takers' => 3, 'kitchen_displays' => 3];
+		$impact = fn(array $limits): array => \AdelPos\License\Infrastructure\PanelQueries::propagationImpact(
+			$groups,
+			$current,
+			$limits + $current,
+		);
+		// Solo los aumentos cuentan: bajar un cupo, o dejarlo igual, no cambia ninguna licencia.
+		self::assertSame(['licenses' => 0, 'revisions' => 0], $impact(['cash_registers' => 2]));
+		self::assertSame(['licenses' => 0, 'revisions' => 0], $impact([]));
+		self::assertSame(['licenses' => 3, 'revisions' => 2], $impact(['kitchen_displays' => 4, 'order_takers' => 1]));
+		// Una licencia que se quedó abajo (el plan subió antes solo para las nuevas) no cambia si ese cupo no sube
+		// ahora; una que espera su reducción (cupos mayores que el plan) no cambia si el aumento no la supera.
+		$pure = fn(
+			array $group,
+			array $now,
+			array $limits,
+		): array => \AdelPos\License\Infrastructure\PanelQueries::propagationImpact(
+			[$group + ['licenses' => 1, 'active' => 1]],
+			$now,
+			$limits,
+		);
+		$below = ['cash_registers' => 3, 'order_takers' => 3, 'kitchen_displays' => 3];
+		$plan = ['cash_registers' => 4, 'order_takers' => 3, 'kitchen_displays' => 3];
+		self::assertSame(['licenses' => 0, 'revisions' => 0], $pure($below, $plan, $plan));
+		self::assertSame(['licenses' => 1, 'revisions' => 1], $pure($below, $plan, ['order_takers' => 4] + $plan));
+		$waiting = ['cash_registers' => 6, 'order_takers' => 3, 'kitchen_displays' => 3];
+		self::assertSame(
+			['licenses' => 0, 'revisions' => 0],
+			$pure($waiting, $current, ['cash_registers' => 5] + $current),
+		);
+		self::assertSame(
+			['licenses' => 1, 'revisions' => 1],
+			$pure($waiting, $current, ['cash_registers' => 7] + $current),
+		);
+		self::assertCount(3, $this->app->panel->propagationExamples('elemental'));
+		self::assertSame([], $this->app->panel->propagationGroups('premium'));
+		// Guardar con «también las existentes» hace exactamente lo que dijo la vista previa.
+		$saved = $this->app->plans->update($this->actor, Uuid::create(), 'elemental', [
+			'display_name' => 'Plan elemental',
+			'cash_registers' => '3',
+			'order_takers' => '1',
+			'kitchen_displays' => '4',
+			'apply_to' => 'existing',
+			'version' => (int) $this->app->read->plan('elemental')['row_version'],
+		]);
+		self::assertSame([3, 2], [$saved['licenses_updated'], $saved['revisions_signed']]);
+		// La auditoría se busca también por las operaciones cuyo nombre en español coincide (Kernel las calcula).
+		$audit = fn(array $filters): int => $this->app->read->page('audit', $filters, 1)['total'];
+		self::assertSame(0, $audit(['q' => 'Licencia emitida']));
+		self::assertSame(6, $audit(['q' => 'Licencia emitida', 'operations' => ['license.issued']]));
+		self::assertSame(1, $audit(['q' => 'plan.updated']));
+	}
 }

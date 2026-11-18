@@ -140,6 +140,109 @@ final class ProductionHttpTest extends TestCase
 		);
 	}
 
+	/**
+	 * Un formulario rechazado vuelve a su pantalla en la misma respuesta (etapa 5; docs/PANEL.md, sección 7):
+	 * con 422, el mensaje y lo escrito, sin contraseñas ni códigos; con 409, los datos actuales sin lo escrito;
+	 * sin la pantalla de origen, la página de error de siempre.
+	 */
+	public function testRejectedFormsComeBackToTheirScreenWithWhatWasTyped(): void
+	{
+		$app = $this->stack->app;
+		$actor = new \AdelPos\License\Application\Actor(
+			$app->auth->bootstrap('http-form@example.test', 'Responsable', 'Synthetic-Http-Only-2026!'),
+			'superadmin',
+		);
+		// Una sesión autenticada exige la verificación en dos pasos configurada.
+		$app->db->execute('UPDATE admin_users SET mfa_secret_encrypted=? WHERE id=?', [
+			$app->crypto->encrypt('JBSWY3DPEHPK3PXP', 'mfa:' . $actor->id),
+			\AdelPos\License\Domain\Uuid::bytes($actor->id),
+		]);
+		$customer = $app->catalog->saveCustomer($actor, \AdelPos\License\Domain\Uuid::create(), null, [
+			'name' => 'Cliente original',
+			'contact_name' => 'Contacto',
+			'email' => '',
+			'state' => 'active',
+		]);
+		$token = $app->sessions->create('authenticated', $actor->id);
+		$headers = ['Content-Type: application/x-www-form-urlencoded', 'Cookie: __Host-license_admin=' . $token];
+		$form = [
+			'csrf' => $app->sessions->csrf($token),
+			'operation_id' => \AdelPos\License\Domain\Uuid::create(),
+			'form_origin' => '/admin/customers/' . $customer['id'] . '/edit',
+			'version' => '1',
+			'name' => 'Nombre escrito <b>a mano</b>',
+			'contact_name' => 'Contacto escrito',
+			'email' => 'no-es-un-correo',
+			'state' => 'active',
+			'time_zone' => 'America/Tijuana',
+			'password' => 'Nunca-Se-Devuelve-2026',
+		];
+		$post = fn(array $values): array => $this->stack->request(
+			'/admin/customers/' . $customer['id'],
+			http_build_query($values),
+			'POST',
+			$headers,
+		);
+		$rejected = $post($form);
+		self::assertSame(422, $rejected['status']);
+		self::assertStringContainsString('El correo electrónico no es válido.', $rejected['body']);
+		self::assertStringContainsString('data-testid="form-error"', $rejected['body']);
+		// Lo escrito vuelve, escapado, y la zona elegida sigue elegida.
+		self::assertStringContainsString('value="Nombre escrito &lt;b&gt;a mano&lt;/b&gt;"', $rejected['body']);
+		self::assertStringContainsString('value="no-es-un-correo"', $rejected['body']);
+		self::assertMatchesRegularExpression('/value="America\/Tijuana"\s+selected/', $rejected['body']);
+		self::assertStringNotContainsString('Nunca-Se-Devuelve-2026', $rejected['body']);
+		self::assertSame('Cliente original', $app->read->customer($customer['id'])['display_name']);
+		// Un conflicto (otro administrador guardó antes) muestra los datos actuales, sin lo escrito.
+		$conflict = $post(['version' => '7', 'email' => ''] + $form);
+		self::assertSame(409, $conflict['status']);
+		self::assertStringContainsString('Otro operador cambió el cliente', $conflict['body']);
+		self::assertStringContainsString('value="Cliente original"', $conflict['body']);
+		self::assertStringNotContainsString('Nombre escrito', $conflict['body']);
+		// La identidad no se confirmó (401): vuelve a su pantalla con el mensaje, sin ninguna contraseña.
+		$identity = $this->stack->request(
+			'/admin/security',
+			http_build_query([
+				'csrf' => $form['csrf'],
+				'operation_id' => \AdelPos\License\Domain\Uuid::create(),
+				'form_origin' => '/admin/security',
+				'password' => 'Contraseña-Incorrecta-2026',
+				'code' => '000000',
+				'new_password' => 'Contraseña-Nueva-Larga-2026',
+				'confirmation' => 'Contraseña-Nueva-Larga-2026',
+			]),
+			'POST',
+			$headers,
+		);
+		self::assertSame(401, $identity['status']);
+		self::assertStringContainsString('data-testid="form-error"', $identity['body']);
+		self::assertStringContainsString('Cambiar contraseña', $identity['body']);
+		self::assertStringNotContainsString('Contraseña-Incorrecta-2026', $identity['body']);
+		self::assertStringNotContainsString('Contraseña-Nueva-Larga-2026', $identity['body']);
+		// Otro error (aquí, un cliente que no existe) muestra la página de error aunque haya pantalla de origen.
+		$missing = $this->stack->request(
+			'/admin/customers/' . \AdelPos\License\Domain\Uuid::create(),
+			http_build_query(['email' => ''] + $form),
+			'POST',
+			$headers,
+		);
+		self::assertSame(404, $missing['status']);
+		self::assertStringContainsString('No se encontró el cliente.', $missing['body']);
+		self::assertStringNotContainsString('data-testid="form-error"', $missing['body']);
+		// Sin pantalla de origen (o con una de fuera del panel), la página de error de siempre.
+		foreach ([null, 'https://otro.example/admin', '/admin/../login'] as $origin) {
+			$values = $form;
+			unset($values['form_origin']);
+			if ($origin !== null) {
+				$values['form_origin'] = $origin;
+			}
+			$plain = $post($values);
+			self::assertSame(422, $plain['status']);
+			self::assertStringContainsString('No se pudo completar la operación', $plain['body']);
+			self::assertStringNotContainsString('Nombre escrito', $plain['body']);
+		}
+	}
+
 	public function testProductionCookiesBrandAssetsAndAccessControls(): void
 	{
 		$login = $this->stack->request('/login', '', 'GET');

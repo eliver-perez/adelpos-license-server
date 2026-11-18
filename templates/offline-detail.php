@@ -1,5 +1,5 @@
 <?php
-use AdelPos\License\Domain\LicenseTerms;
+use AdelPos\License\Domain\{LicenseState, LicenseTerms};
 use AdelPos\License\Http\View as V;
 
 $payload = $offline['payload'];
@@ -47,6 +47,50 @@ if ($license !== null && $license['plan_custom']) {
 	$catalogNote = 'El plan no tiene precios en el catálogo: el monto se escribe a mano.';
 }
 $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' => 'Rechazada'];
+$statusTones = ['pending' => 'amber', 'approved' => 'green', 'rejected' => 'gray'];
+$crumbs = [['Sin internet', '/admin/offline'], [$actionNames[$payload['action']] . ' sin internet', null]];
+// Qué pasará al aprobar (docs/PANEL.md, sección 3.7): el caso exacto, con lo que el propietario necesita
+// para decidir. La activación de la solicitud (renew o deactivate) se busca entre las de la licencia.
+$requestActivation = null;
+foreach ($license['activations'] ?? [] as $activation) {
+	if (strtolower($activation['id_text']) === strtolower($payload['activation_id'] ?? '')) {
+		$requestActivation = $activation;
+	}
+}
+$outcome = '';
+if ($offline['status'] === 'pending') {
+	if ($license === null) {
+		$outcome = 'Elige la licencia comercial que se asigna a esta computadora. Hasta entonces no se puede aprobar.';
+	} elseif ($payload['action'] === 'activate' && $license['commercial_status'] !== 'issued') {
+		$outcome = 'La licencia elegida está revocada: no se puede activar. Rechaza la solicitud o elige otra licencia.';
+	} elseif ($payload['action'] === 'activate' && $sameInstallation) {
+		$outcome = 'Esta computadora ya tiene activa la licencia: recibirá su archivo vigente, sin otra activación ' .
+			'ni otras fechas.';
+	} elseif ($payload['action'] === 'activate' && $needsTransfer) {
+		$outcome = 'La licencia está activa en otra computadora (' . $active['server_id_text'] . '). Solo el ' .
+			'superadministrador puede aprobarla como transferencia del propietario: retira la anterior, que recibe ' .
+			'su cierre al volver a conectarse, y activa esta con las mismas fechas.';
+	} elseif ($payload['action'] === 'activate') {
+		$outcome = $license['period_starts_at'] === null
+			? 'Se activa la licencia en esta computadora. Es su primera activación: sus fechas empiezan al aprobar, ' .
+				'en la zona horaria del cliente (' . $license['time_zone'] . ').'
+			: 'Se activa la licencia en esta computadora, con las fechas que ya tiene.';
+	} elseif ($requestActivation !== null && $requestActivation['state'] !== 'active') {
+		$outcome = 'La activación de esta computadora ya terminó: recibe su revisión de cierre y deja de operar con la ' .
+			'licencia. Si salió de ella una transferencia por autoservicio pendiente, queda confirmada.';
+	} elseif ($payload['action'] === 'renew') {
+		$outcome = 'Se entrega la revisión vigente de la licencia, tal como está firmada.' .
+			($canRecordRenewal ? ' También puedes registrar aquí la renovación con su pago.' : '');
+	} else {
+		$outcome = 'Se libera la licencia de esta computadora y se le entrega su cierre. La plaza queda libre para ' .
+			'activarla en otra computadora.';
+	}
+}
+$licenseState = $license === null ? null : LicenseState::of($license, $now);
+$rejectForm = $requestPath . '/reject';
+$approveForm = $requestPath . '/approve';
+$approveReason = V::old('reason', '', $approveForm);
+$rejectReason = V::old('reason', '', $rejectForm);
 ?>
 <div class="page-heading">
 	<div>
@@ -56,8 +100,14 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 		</h1>
 		<p>Revisa la instalación y la autorización comercial antes de decidir.</p>
 	</div>
-	<span class="tag large-tag"><?= V::escape($statusNames[$offline['status']]) ?></span>
+	<?= V::badge($statusNames[$offline['status']], $statusTones[$offline['status']]) ?>
 </div>
+<?php if ($outcome !== ''): ?>
+	<section class="panel form-panel mb-4 result-panel" aria-labelledby="outcome-title" data-testid="offline-outcome">
+		<h2 id="outcome-title">Qué pasará al aprobar</h2>
+		<p class="mb-0"><?= V::escape($outcome) ?></p>
+	</section>
+<?php endif; ?>
 <div class="row g-4">
 	<div class="col-xl-7">
 		<section class="panel form-panel">
@@ -169,10 +219,7 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 		<?php if ($license !== null): ?>
 			<section class="panel form-panel mb-4">
 				<h2><?= V::escape($license['customer_name']) ?></h2>
-				<p>
-					<?= V::escape(V::licenseType($license['license_type'])) ?> ·
-						<?= $license['commercial_status'] === 'issued' ? 'Emitida' : 'Revocada' ?>
-				</p>
+				<p><?= V::stateBadge($licenseState, $license['license_type']) ?></p>
 				<dl class="detail-grid">
 					<div class="wide">
 						<dt>Licencia</dt>
@@ -302,7 +349,13 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 					<?php endif; ?>
 					<label>
 						Motivo / autorización
-						<textarea class="form-control mt-2" name="reason" maxlength="500" rows="2" required></textarea>
+						<textarea
+							class="form-control mt-2"
+							name="reason"
+							maxlength="500"
+							rows="2"
+							required
+						><?= V::escape($approveReason) ?></textarea>
 					</label>
 					<button class="btn btn-primary"><?= $approveLabel ?></button>
 				</form>
@@ -317,7 +370,13 @@ $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' =
 				<h2>Rechazar solicitud</h2>
 				<label>
 					Motivo del rechazo
-					<textarea class="form-control mt-2" name="reason" maxlength="500" rows="2" required></textarea>
+					<textarea
+						class="form-control mt-2"
+						name="reason"
+						maxlength="500"
+						rows="2"
+						required
+					><?= V::escape($rejectReason) ?></textarea>
 				</label>
 				<button class="btn btn-outline-danger">Registrar rechazo</button>
 			</form>

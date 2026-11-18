@@ -28,11 +28,13 @@ final class ReadRepository
 		$parameters = [];
 		$query = trim((string) ($filters['q'] ?? ''));
 		if ($kind === 'offline') {
-			$from = 'offline_requests o
+			// El cliente de la licencia decidida o, si todavía no hay decisión, el de la licencia de la solicitud.
+			$from = "offline_requests o
 					JOIN license_requests r ON r.product_id=o.product_id AND r.request_id=o.request_id
 					LEFT JOIN offline_decisions d ON d.offline_id=o.id
-					LEFT JOIN licenses l ON l.license_id=d.license_id
-					LEFT JOIN customers c ON c.id=l.customer_id';
+					LEFT JOIN licenses l ON l.license_id=COALESCE(d.license_id,
+						UUID_TO_BIN(JSON_UNQUOTE(JSON_EXTRACT(o.projection_json,'$.license_id'))))
+					LEFT JOIN customers c ON c.id=l.customer_id";
 			$select = "BIN_TO_UUID(o.id) AS id_text,BIN_TO_UUID(o.request_id) AS request_text,o.product_id,
 						o.imported_at,r.action,COALESCE(d.decision,'pending') AS status,c.display_name AS customer_name";
 			$order = 'o.imported_at DESC,o.id';
@@ -68,8 +70,16 @@ final class ReadRepository
 			$select = 'a.*,u.display_name AS actor_name';
 			$order = 'a.sequence DESC';
 			if ($query !== '') {
-				$where[] = '(a.operation LIKE ? OR a.target_id LIKE ?)';
-				$parameters = ['%' . $query . '%', '%' . $query . '%'];
+				// Por la operación, su objeto o el nombre en español de la operación (que llega como sus claves).
+				$like = '%' . addcslashes($query, '%_\\') . '%';
+				$conditions = ['a.operation LIKE ?', 'a.target_id LIKE ?'];
+				$parameters = [$like, $like];
+				$operations = array_values(array_filter($filters['operations'] ?? [], 'is_string'));
+				if ($operations !== []) {
+					$conditions[] = 'a.operation IN (' . implode(',', array_fill(0, count($operations), '?')) . ')';
+					array_push($parameters, ...$operations);
+				}
+				$where[] = '(' . implode(' OR ', $conditions) . ')';
 			}
 		} else {
 			throw new \InvalidArgumentException('Unknown listing.');

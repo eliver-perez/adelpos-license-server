@@ -32,6 +32,8 @@ $navigation['Control'][] = ['/admin/security', 'Mi seguridad', 'security', 0];
 // Ruta de la barra superior: la que defina la pantalla ($crumbs), o «Licencias / título».
 $crumbs = $crumbs ?? [['Licencias', null], [$title, null]];
 $showIssue = $actor !== null && $actor->canWrite() && $path !== '/admin/licenses/new';
+// Mensaje de un formulario que no se pudo completar y volvió a su pantalla con lo escrito.
+$formError = V::formError();
 ?>
 <!doctype html>
 <html lang="es">
@@ -161,7 +163,14 @@ $showIssue = $actor !== null && $actor->canWrite() && $path !== '/admin/licenses
 						</form>
 					</div>
 				</header>
-				<main id="main-content" class="main-content"><?= $content ?></main>
+				<main id="main-content" class="main-content">
+					<?php if ($formError !== ''): ?>
+						<div class="alert alert-danger" role="alert" data-testid="form-error">
+							<strong>No se pudo completar.</strong> <?= V::escape($formError) ?>
+						</div>
+					<?php endif; ?>
+					<?= $content ?>
+				</main>
 				<footer class="workspace-footer">
 					AD-EL POS — Licencias
 					<span>

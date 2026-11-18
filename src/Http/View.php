@@ -49,16 +49,47 @@ final class View
 		return (string) self::$old[$name];
 	}
 
+	/** Valores de una lista del formulario rechazado (por ejemplo, las casillas features[]); si no, $default. */
+	public static function oldList(string $name, array $default, string $form): array
+	{
+		if (self::$oldForm !== $form) {
+			return $default;
+		}
+		$values = self::$old[$name] ?? [];
+		return array_values(array_filter(is_array($values) ? $values : [], 'is_string'));
+	}
+
 	/** Si el formulario rechazado ($form) traía el campo; para casillas y opciones. */
 	public static function hasOld(string $form): bool
 	{
 		return self::$oldForm === $form && self::$old !== [];
 	}
 
+	private static string $formError = '';
+	private static string $origin = '';
+
+	/** Mensaje del formulario que no se pudo completar; sin argumento, lo devuelve. */
+	public static function formError(?string $message = null): string
+	{
+		if ($message !== null) {
+			self::$formError = $message;
+		}
+		return self::$formError;
+	}
+
+	/** Dirección de la pantalla que se muestra: cada formulario la envía para volver a ella si falla. */
+	public static function origin(string $origin): void
+	{
+		self::$origin = $origin;
+	}
+
 	public static function fields(string $csrf): void
 	{
 		echo '<input type="hidden" name="csrf" value="' . self::escape($csrf) . '">';
 		echo '<input type="hidden" name="operation_id" value="' . Uuid::create() . '">';
+		if (self::$origin !== '') {
+			echo '<input type="hidden" name="form_origin" value="' . self::escape(self::$origin) . '">';
+		}
 	}
 
 	/**
@@ -329,77 +360,80 @@ final class View
 		] ?? $role;
 	}
 
+	/** Nombre en español de cada operación de la auditoría. */
+	public const ACTIONS = [
+		'license.administrative_updated' => 'Información administrativa actualizada',
+		'credential.revealed' => 'Código consultado',
+		'document.generated' => 'Constancia generada',
+		'document.downloaded' => 'Constancia descargada',
+		'offline.downloaded' => 'Archivo firmado descargado',
+		'license.issued' => 'Licencia emitida',
+		'payment.recorded' => 'Pago registrado',
+		'license.features' => 'Módulos actualizados',
+		'license.renewed' => 'Suscripción renovada',
+		'license.converted' => 'Prueba convertida en licencia de pago',
+		'license.plan_changed' => 'Plan cambiado',
+		'license.plan_change_scheduled' => 'Cambio de plan programado',
+		'license.scheduled_change_cancelled' => 'Cambio programado cancelado',
+		'license.scheduled_change_applied' => 'Cambio programado aplicado',
+		'license.maintenance_bought' => 'Mantenimiento comprado',
+		'license.initial_terms_edited' => 'Periodo inicial editado',
+		'license.reissue' => 'Clave comercial reemplazada',
+		'license.revoke' => 'Licencia revocada',
+		'offline.imported' => 'Solicitud sin internet importada',
+		'offline.approved' => 'Solicitud sin internet aprobada',
+		'offline.rejected' => 'Solicitud sin internet rechazada',
+		'offline.transferred' => 'Transferencia sin internet autorizada',
+		'license.force_release' => 'Recuperación de equipo averiado',
+		'license.transferred' => 'Transferencia por autoservicio',
+		'license.transfer_blocked' => 'Transferencia por autoservicio bloqueada',
+		'license.transfer_confirmed' => 'Transferencia confirmada por la computadora anterior',
+		'license.transfer_released' => 'Transferencia pendiente liberada a mano',
+		'alert.reviewed' => 'Alerta revisada',
+		'activation.transfer' => 'Transferencia en línea',
+		'customer.created' => 'Cliente registrado',
+		'customer.updated' => 'Cliente actualizado',
+		'product.created' => 'Producto registrado',
+		'product.updated' => 'Producto actualizado',
+		'plan.created' => 'Plan creado',
+		'plan.updated' => 'Plan actualizado',
+		'plan.archived' => 'Plan archivado',
+		'plan.restored' => 'Plan ofrecido de nuevo',
+		'license.plan_propagated' => 'Aumento del catálogo aplicado',
+		'session.login' => 'Inicio de sesión',
+		'session.logout' => 'Cierre de sesión',
+		'trusted_device.authorized' => 'Dispositivo de confianza autorizado',
+		'session.trusted_device_login' => 'Inicio de sesión con dispositivo de confianza',
+		'trusted_device.revoked' => 'Confianza de dispositivo revocada',
+		'trusted_device.revoked_all' => 'Confianza de todos los dispositivos revocada',
+		'trusted_device.invalidated' => 'Autorización de confianza vencida o invalidada',
+		'admin.mfa_enrolled' => 'Verificación en dos pasos configurada',
+		'admin.created' => 'Administrador registrado',
+		'admin.bootstrap' => 'Cuenta inicial creada',
+		'session.password_verified' => 'Contraseña verificada',
+		'admin.updated' => 'Administrador actualizado',
+		'admin.password_changed' => 'Contraseña cambiada',
+		'admin.operation_failed' => 'Operación administrativa no completada',
+		'session.recovery_login' => 'Inicio de sesión con código de recuperación',
+		'session.reauthenticated' => 'Identidad confirmada de nuevo',
+		'session.login_failed' => 'Inicio de sesión fallido',
+		'session.mfa_failed' => 'Código de verificación incorrecto',
+		'session.reauth_failed' => 'Confirmación de identidad fallida',
+		'activation.activate' => 'Activación en línea',
+		'activation.refresh' => 'Consulta de actualización en línea',
+		'activation.deactivate' => 'Desactivación en línea',
+		'capability.updated' => 'Módulo actualizado',
+		'credential.disclosed_on_issue' => 'Código mostrado al emitir',
+		'material.access_denied' => 'Acceso a material sensible denegado',
+		'signing_key.generated' => 'Llave de firma generada',
+		'signing_key.activated' => 'Llave de firma activada',
+		'maintenance.cleanup' => 'Limpieza de mantenimiento',
+		'maintenance.scheduled_changes' => 'Cambios programados aplicados por la tarea diaria',
+		'admin.recovered_via_cli' => 'Acceso de administrador recuperado desde la terminal',
+	];
+
 	public static function action(string $action): string
 	{
-		return [
-			'license.administrative_updated' => 'Información administrativa actualizada',
-			'credential.revealed' => 'Código consultado',
-			'document.generated' => 'Constancia generada',
-			'document.downloaded' => 'Constancia descargada',
-			'offline.downloaded' => 'Archivo firmado descargado',
-			'license.issued' => 'Licencia emitida',
-			'payment.recorded' => 'Pago registrado',
-			'license.features' => 'Módulos actualizados',
-			'license.renewed' => 'Suscripción renovada',
-			'license.converted' => 'Prueba convertida en licencia de pago',
-			'license.plan_changed' => 'Plan cambiado',
-			'license.plan_change_scheduled' => 'Cambio de plan programado',
-			'license.scheduled_change_cancelled' => 'Cambio programado cancelado',
-			'license.scheduled_change_applied' => 'Cambio programado aplicado',
-			'license.maintenance_bought' => 'Mantenimiento comprado',
-			'license.initial_terms_edited' => 'Periodo inicial editado',
-			'license.reissue' => 'Clave comercial reemplazada',
-			'license.revoke' => 'Licencia revocada',
-			'offline.imported' => 'Solicitud sin internet importada',
-			'offline.approved' => 'Solicitud sin internet aprobada',
-			'offline.rejected' => 'Solicitud sin internet rechazada',
-			'offline.transferred' => 'Transferencia sin internet autorizada',
-			'license.force_release' => 'Recuperación de equipo averiado',
-			'license.transferred' => 'Transferencia por autoservicio',
-			'license.transfer_blocked' => 'Transferencia por autoservicio bloqueada',
-			'license.transfer_confirmed' => 'Transferencia confirmada por la computadora anterior',
-			'license.transfer_released' => 'Transferencia pendiente liberada a mano',
-			'alert.reviewed' => 'Alerta revisada',
-			'activation.transfer' => 'Transferencia en línea',
-			'customer.created' => 'Cliente registrado',
-			'customer.updated' => 'Cliente actualizado',
-			'product.created' => 'Producto registrado',
-			'product.updated' => 'Producto actualizado',
-			'plan.created' => 'Plan creado',
-			'plan.updated' => 'Plan actualizado',
-			'plan.archived' => 'Plan archivado',
-			'plan.restored' => 'Plan ofrecido de nuevo',
-			'license.plan_propagated' => 'Aumento del catálogo aplicado',
-			'session.login' => 'Inicio de sesión',
-			'session.logout' => 'Cierre de sesión',
-			'trusted_device.authorized' => 'Dispositivo de confianza autorizado',
-			'session.trusted_device_login' => 'Inicio de sesión con dispositivo de confianza',
-			'trusted_device.revoked' => 'Confianza de dispositivo revocada',
-			'trusted_device.revoked_all' => 'Confianza de todos los dispositivos revocada',
-			'trusted_device.invalidated' => 'Autorización de confianza vencida o invalidada',
-			'admin.mfa_enrolled' => 'Verificación en dos pasos configurada',
-			'admin.created' => 'Administrador registrado',
-			'admin.bootstrap' => 'Cuenta inicial creada',
-			'session.password_verified' => 'Contraseña verificada',
-			'admin.updated' => 'Administrador actualizado',
-			'admin.password_changed' => 'Contraseña cambiada',
-			'admin.operation_failed' => 'Operación administrativa no completada',
-			'session.recovery_login' => 'Inicio de sesión con código de recuperación',
-			'session.reauthenticated' => 'Identidad confirmada de nuevo',
-			'session.login_failed' => 'Inicio de sesión fallido',
-			'session.mfa_failed' => 'Código de verificación incorrecto',
-			'session.reauth_failed' => 'Confirmación de identidad fallida',
-			'activation.activate' => 'Activación en línea',
-			'activation.refresh' => 'Consulta de actualización en línea',
-			'activation.deactivate' => 'Desactivación en línea',
-			'capability.updated' => 'Módulo actualizado',
-			'credential.disclosed_on_issue' => 'Código mostrado al emitir',
-			'material.access_denied' => 'Acceso a material sensible denegado',
-			'signing_key.generated' => 'Llave de firma generada',
-			'signing_key.activated' => 'Llave de firma activada',
-			'maintenance.cleanup' => 'Limpieza de mantenimiento',
-			'maintenance.scheduled_changes' => 'Cambios programados aplicados por la tarea diaria',
-			'admin.recovered_via_cli' => 'Acceso de administrador recuperado desde la terminal',
-		][$action] ?? $action;
+		return self::ACTIONS[$action] ?? $action;
 	}
 }

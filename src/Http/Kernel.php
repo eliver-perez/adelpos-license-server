@@ -15,6 +15,7 @@ final class Kernel
 	private ?Actor $actor = null;
 	private string $token = '';
 	private string $path = '/';
+	private bool $formRetried = false;
 
 	public function __construct(private App $app) {}
 
@@ -39,6 +40,9 @@ final class Kernel
 					),
 				);
 			}
+			if ($this->showFormAgain($problem)) {
+				return;
+			}
 			http_response_code($problem->status);
 			if ($problem->status === 429) {
 				header('Retry-After: 900');
@@ -49,6 +53,59 @@ final class Kernel
 				'status' => $problem->status,
 			]);
 		}
+	}
+
+	/**
+	 * Un formulario del panel que no se pudo completar se vuelve a mostrar en su pantalla, con el mensaje
+	 * (docs/PANEL.md, sección 7; DECISIONS.md, sección 18, Fase 1, n.º 7):
+	 *
+	 * - 422 (un dato) o 401 (la identidad): con lo escrito, sin contraseñas ni códigos;
+	 * - 409 (otro administrador cambió algo): con los datos actuales y sin lo escrito, para no pisar el cambio.
+	 *
+	 * El formulario trae la dirección de su pantalla (form_origin, de View::fields). La pantalla se vuelve a
+	 * pintar en la misma respuesta, con el mismo código HTTP: no se guarda nada. Devuelve false si no aplica
+	 * (otro código, sin pantalla de origen o la pantalla también falla), y entonces se muestra la página de
+	 * error de siempre.
+	 */
+	private function showFormAgain(Problem $problem): bool
+	{
+		$origin = $_POST['form_origin'] ?? null;
+		if (
+			$this->actor === null ||
+			$this->formRetried ||
+			($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST' ||
+			!in_array($problem->status, [401, 409, 422], true) ||
+			!is_string($origin) ||
+			!preg_match('~\A/admin(?:/[A-Za-z0-9/_-]*)?(?:\?[A-Za-z0-9_=&%.:+-]*)?\z~', $origin)
+		) {
+			return false;
+		}
+		$this->formRetried = true;
+		$form = $this->path;
+		$posted = $_POST;
+		View::remember($problem->status === 409 ? '' : $form, $problem->status === 409 ? [] : $posted);
+		View::formError($problem->getMessage());
+		$query = [];
+		parse_str((string) parse_url($origin, PHP_URL_QUERY), $query);
+		$_GET = $query;
+		$_POST = [];
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$this->path = (string) parse_url($origin, PHP_URL_PATH);
+		ob_start();
+		try {
+			$this->dispatch();
+		} catch (Problem) {
+			ob_end_clean();
+			View::remember('', []);
+			View::formError('');
+			$this->path = $form;
+			$_POST = $posted;
+			$_SERVER['REQUEST_METHOD'] = 'POST';
+			return false;
+		}
+		http_response_code($problem->status);
+		ob_end_flush();
+		return true;
 	}
 
 	private function dispatch(): void
@@ -816,7 +873,14 @@ final class Kernel
 			throw new Problem('La página solicitada no existe.', 404);
 		}
 		if ($method === 'GET' && !isset($matches[2])) {
-			$this->render('plan-form', ['title' => 'Detalle del plan', 'plan' => $this->app->read->plan($matches[1])]);
+			$plan = $this->app->read->plan($matches[1]);
+			$this->render('plan-form', [
+				'title' => $plan['display_name'],
+				'plan' => $plan,
+				// Lo que alcanzaría la propagación, para el conteo previo a guardar (docs/PANEL.md, sección 3.6).
+				'propagation' => $this->app->panel->propagationGroups($matches[1]),
+				'examples' => $this->app->panel->propagationExamples($matches[1]),
+			]);
 			return;
 		}
 		if ($method !== 'POST') {
@@ -848,9 +912,18 @@ final class Kernel
 		foreach (['q', 'product_id', 'status', 'type'] as $key) {
 			$filters[$key] = Input::text($_GET, $key, 100, false);
 		}
+		$operations = [];
+		if ($kind === 'audit' && $filters['q'] !== '') {
+			// La auditoría también se busca por el nombre en español de la operación.
+			foreach (View::ACTIONS as $operation => $label) {
+				if (mb_stripos($label, $filters['q']) !== false) {
+					$operations[] = $operation;
+				}
+			}
+		}
 		$this->render($kind, [
 			'title' => $title,
-			'listing' => $this->app->read->page($kind, $filters, self::page()),
+			'listing' => $this->app->read->page($kind, $filters + ['operations' => $operations], self::page()),
 			'filters' => $filters,
 			'products' => $kind === 'offline' ? $this->app->read->products() : [],
 		]);
@@ -964,6 +1037,10 @@ final class Kernel
 
 	private function render(string $template, array $data): void
 	{
+		// La pantalla que se muestra: sus formularios la envían para volver a ella si no se completan.
+		if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+			View::origin($this->path . ($_GET === [] ? '' : '?' . http_build_query($_GET)));
+		}
 		(new View())->render(
 			$template,
 			$data + [

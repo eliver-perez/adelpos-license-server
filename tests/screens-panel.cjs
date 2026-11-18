@@ -12,6 +12,16 @@ module.exports = async function screensPanel({ page, screenshot }) {
 		page
 			.locator(selector + ' tbody tr')
 			.evaluateAll((items) => items.map((item) => item.querySelector('td').innerText.trim()));
+	// Todo campo tiene una etiqueta: <label>, aria-label o aria-labelledby (docs/PANEL.md, sección 8).
+	async function allLabeled(where) {
+		const missing = await page.evaluate(() =>
+			[...document.querySelectorAll('input:not([type="hidden"]), select, textarea')]
+				.filter((field) => field.labels.length === 0)
+				.filter((field) => !field.getAttribute('aria-label') && !field.getAttribute('aria-labelledby'))
+				.map((field) => field.name || field.id),
+		);
+		assert.deepEqual(missing, [], where + ': campos sin etiqueta');
+	}
 	// Ninguna pantalla desborda a lo ancho en un teléfono de 390 px.
 	async function fitsPhone(where) {
 		const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -139,7 +149,60 @@ module.exports = async function screensPanel({ page, screenshot }) {
 	const customerURL = page.url();
 	await screenshot('customer-detail-desktop');
 
-	// 5. Las mismas pantallas en un teléfono: sin desbordamiento, tablas como tarjetas y secciones en una lista.
+	// 5. Un formulario rechazado vuelve con el mensaje y con lo escrito (el correo se valida en el servidor). Va en
+	// otra pestaña de la misma sesión: el 422 esperado aparece en la consola del navegador y el recorrido principal
+	// exige una consola sin errores.
+	const form = await page.context().newPage();
+	await form.goto(customerURL + '/edit');
+	await form.locator('#contact_name').fill('Contacto escrito a mano');
+	await form.locator('#email').evaluate((input) => {
+		input.type = 'text';
+	});
+	await form.locator('#email').fill('no-es-un-correo');
+	const [rejected] = await Promise.all([
+		form.waitForNavigation({ waitUntil: 'load' }),
+		form.getByRole('button', { name: 'Guardar cliente' }).click(),
+	]);
+	assert.equal(rejected.status(), 422);
+	assert.match(await form.locator('[data-testid="form-error"]').innerText(), /El correo electrónico no es válido/);
+	assert.equal(await form.locator('#contact_name').inputValue(), 'Contacto escrito a mano');
+	assert.equal(await form.locator('#email').inputValue(), 'no-es-un-correo');
+	await form.screenshot({ path: 'var/screenshots/form-error-desktop.png', fullPage: true });
+	await form.close();
+
+	// 6. Etiquetas en todos los campos y navegación con teclado.
+	for (const route of [
+		'/admin',
+		'/admin/licenses',
+		licenseURL,
+		licenseURL + '?section=documents',
+		licenseURL + '/renew',
+		licenseURL + '/plan',
+		licenseURL + '/revoke',
+		'/admin/licenses/new',
+		'/admin/customers',
+		customerURL + '/edit',
+		'/admin/plans',
+		'/admin/plans/elemental',
+		'/admin/alerts',
+		'/admin/offline',
+		'/admin/audit',
+		'/admin/users',
+		'/admin/security',
+	]) {
+		await page.goto(route);
+		await allLabeled(route);
+	}
+	await page.goto('/admin');
+	await page.keyboard.press('Tab');
+	assert.equal(await page.evaluate(() => document.activeElement.textContent.trim()), 'Saltar al contenido');
+	await page.keyboard.press('Enter');
+	assert.equal(new URL(page.url()).hash, '#main-content');
+	// La auditoría también se busca por el nombre en español de la operación.
+	await page.goto('/admin/audit?q=' + encodeURIComponent('Licencia emitida'));
+	assert.equal(await page.locator('[data-testid="audit-list"] tbody tr').count(), 3);
+
+	// 7. Las mismas pantallas en un teléfono: sin desbordamiento, tablas como tarjetas y secciones en una lista.
 	await page.setViewportSize({ width: 390, height: 844 });
 	for (const [route, name] of [
 		['/admin', 'dashboard-mobile'],
@@ -152,6 +215,14 @@ module.exports = async function screensPanel({ page, screenshot }) {
 		[licenseURL + '/revoke', 'revoke-confirm-mobile'],
 		['/admin/customers', 'customers-mobile'],
 		[customerURL, 'customer-detail-mobile'],
+		['/admin/plans', 'plans-mobile'],
+		['/admin/plans/elemental', 'plan-mobile'],
+		['/admin/alerts', 'alerts-mobile'],
+		['/admin/offline', 'offline-mobile'],
+		['/admin/audit', 'audit-mobile'],
+		['/admin/users', 'users-mobile'],
+		['/admin/security', 'security-mobile'],
+		['/admin/licenses/new', 'license-form-mobile'],
 	]) {
 		await page.goto(route);
 		await fitsPhone(route);

@@ -1,4 +1,8 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Http\View as V;
+
+$crumbs = [['Productos', null]];
+?>
 <div class="page-heading">
 	<div>
 		<span class="eyebrow">CATÁLOGO</span>

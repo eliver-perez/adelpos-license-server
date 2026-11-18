@@ -1,22 +1,30 @@
 <?php
 use AdelPos\License\Http\View as V;
 
+// Solicitudes sin internet (contrato §9; docs/PANEL.md, sección 3.7): importar arriba y la lista con la
+// acción, el cliente, el estado y la fecha. Recibir una solicitud no concede nada: se decide en su revisión.
+$crumbs = [['Sin internet', null]];
 $actionNames = ['activate' => 'Activación', 'renew' => 'Renovación', 'deactivate' => 'Desactivación'];
 $statusNames = ['pending' => 'Pendiente', 'approved' => 'Aprobada', 'rejected' => 'Rechazada'];
-$statusTags = ['approved' => 'tag-green', 'rejected' => 'tag-red'];
+$statusTones = ['pending' => 'amber', 'approved' => 'green', 'rejected' => 'gray'];
+$filtered = $filters['q'] !== '' || $filters['status'] !== '';
+$resultLabel = $listing['total'] === 1 ? '1 solicitud' : $listing['total'] . ' solicitudes';
 ?>
 <div class="page-heading">
 	<div>
-		<span class="eyebrow">OPERACIÓN SIN CONEXIÓN</span>
 		<h1>Solicitudes sin internet</h1>
-		<p>Importa la solicitud del equipo, revisa sus derechos y entrega el archivo autorizado.</p>
+		<p>
+			Una computadora sin internet pide activar, renovar o liberar su licencia con un archivo .licreq. Impórtalo,
+			revisa qué pasará y entrega el archivo .lic autorizado.
+		</p>
 	</div>
 </div>
 <?php if ($actor->canWrite()): ?>
-	<section class="panel form-panel mb-4">
-		<h2>Importar .licreq</h2>
+	<section class="panel form-panel mb-4" aria-labelledby="import-title">
+		<h2 id="import-title">Importar una solicitud</h2>
 		<p class="text-secondary">
-			Importar verifica la firma y deja la solicitud pendiente de una decisión. No activa ni renueva la licencia.
+			Importar comprueba la firma de la computadora y deja la solicitud pendiente de tu decisión. No activa ni
+			renueva nada.
 		</p>
 		<form
 			method="post"
@@ -28,7 +36,7 @@ $statusTags = ['approved' => 'tag-green', 'rejected' => 'tag-red'];
 			<input type="hidden" name="MAX_FILE_SIZE" value="65536">
 			<div class="flex-grow-1">
 				<label class="form-label" for="request_file">
-					Archivo de solicitud <span class="optional">máximo 64 KiB</span>
+					Archivo de solicitud (.licreq) <span class="optional">máximo 64 KiB</span>
 				</label>
 				<input
 					class="form-control"
@@ -44,67 +52,72 @@ $statusTags = ['approved' => 'tag-green', 'rejected' => 'tag-red'];
 	</section>
 <?php endif; ?>
 <section class="panel">
-	<form class="filter-bar" method="get">
-		<input
-			class="form-control"
-			name="q"
-			value="<?= V::escape($filters['q']) ?>"
-			placeholder="Cliente o identificador de solicitud"
-			aria-label="Buscar solicitud"
-		>
-		<select class="form-select" name="status" aria-label="Estado">
-			<option value="">Todos los estados</option>
-			<?php foreach ($statusNames as $value => $label): ?>
-				<option value="<?= $value ?>" <?= $filters['status'] === $value ? 'selected' : '' ?>><?= $label ?></option>
-			<?php endforeach; ?>
-		</select>
-		<select class="form-select" name="product_id" aria-label="Producto">
-			<option value="">Todos los productos</option>
-			<?php foreach ($products as $product): ?>
-				<option
-					value="<?= V::escape($product['product_id']) ?>"
-					<?= $filters['product_id'] === $product['product_id'] ? 'selected' : '' ?>
-				><?= V::escape($product['display_name']) ?></option>
-			<?php endforeach; ?>
-		</select>
-		<button class="btn btn-outline-primary">Filtrar</button>
-	</form>
-	<div class="table-responsive">
-		<table class="table">
-			<thead>
-				<tr>
-					<th>Solicitud</th>
-					<th>Acción</th>
-					<th>Estado</th>
-					<th>Importada</th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php foreach ($listing['rows'] as $row): ?>
-					<tr>
-						<td>
-							<a
-								href="/admin/offline/<?= V::escape($row['id_text']) ?>"
-								class="text-link mono"
-							><?= V::escape($row['request_text']) ?></a>
-							<small class="cell-sub"><?= V::escape($row['customer_name'] ?? $row['product_id']) ?></small>
-						</td>
-						<td><?= V::escape($actionNames[$row['action']]) ?></td>
-						<td>
-							<span class="tag <?= $statusTags[$row['status']] ?? '' ?>">
-								<?= V::escape($statusNames[$row['status']]) ?>
-							</span>
-						</td>
-						<td><?= V::escape(V::date($row['imported_at'])) ?></td>
-					</tr>
+	<form class="filter-bar filter-grid filter-grid-compact" method="get" role="search" aria-label="Buscar solicitudes">
+		<div class="filter-search">
+			<label class="form-label" for="offline-q">Buscar</label>
+			<input
+				class="form-control"
+				id="offline-q"
+				name="q"
+				type="search"
+				value="<?= V::escape($filters['q']) ?>"
+				placeholder="Cliente o identificador de la solicitud"
+			>
+		</div>
+		<div>
+			<label class="form-label" for="offline-status">Estado</label>
+			<select class="form-select" id="offline-status" name="status">
+				<option value="">Todos</option>
+				<?php foreach ($statusNames as $value => $label): ?>
+					<option value="<?= $value ?>" <?= $filters['status'] === $value ? 'selected' : '' ?>><?= $label ?></option>
 				<?php endforeach; ?>
-				<?php if (!$listing['rows']): ?>
+			</select>
+		</div>
+		<div class="filter-buttons">
+			<button class="btn btn-primary">Filtrar</button>
+			<?php if ($filtered): ?>
+				<a class="btn btn-outline-secondary" href="/admin/offline">Limpiar filtros</a>
+			<?php endif; ?>
+		</div>
+	</form>
+	<?php if (!$listing['rows']): ?>
+		<div class="empty-state">
+			<h3>No hay solicitudes<?= $filtered ? ' con estos filtros' : '' ?></h3>
+			<p>Las solicitudes importadas aparecen aquí, de la más reciente a la más antigua.</p>
+		</div>
+	<?php else: ?>
+		<p class="result-count"><?= V::escape($resultLabel) ?></p>
+		<div class="table-responsive">
+			<table class="table table-stack" data-testid="offline-list">
+				<thead>
 					<tr>
-						<td colspan="4" class="text-secondary">No hay solicitudes con estos filtros.</td>
+						<th>Solicitud</th>
+						<th>Cliente</th>
+						<th>Estado</th>
+						<th>Importada</th>
 					</tr>
-				<?php endif; ?>
-			</tbody>
-		</table>
-	</div>
+				</thead>
+				<tbody>
+					<?php foreach ($listing['rows'] as $row): ?>
+						<tr>
+							<td data-label="Solicitud">
+								<a class="row-title" href="/admin/offline/<?= V::escape($row['id_text']) ?>">
+									<?= V::escape($actionNames[$row['action']]) ?>
+								</a>
+								<small class="cell-sub mono"><?= V::escape($row['request_text']) ?></small>
+							</td>
+							<td data-label="Cliente">
+								<?= V::escape($row['customer_name'] ?? 'Por asignar') ?>
+							</td>
+							<td data-label="Estado">
+								<?= V::badge($statusNames[$row['status']], $statusTones[$row['status']]) ?>
+							</td>
+							<td data-label="Importada"><?= V::escape(V::date($row['imported_at'])) ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+	<?php endif; ?>
 	<?php require __DIR__ . '/pagination.php'; ?>
 </section>

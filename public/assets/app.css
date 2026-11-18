@@ -1759,6 +1759,30 @@ summary:focus-visible {
 	justify-content: flex-end;
 }
 
+/* Filtros cortos (alertas, solicitudes, auditoría): búsqueda y uno o dos selectores. */
+.filter-grid-compact {
+	grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(150px, 1fr)) auto;
+}
+.filter-grid-compact .filter-buttons {
+	grid-column: auto;
+}
+
+/* Contraste de al menos 4.5:1 en los grises heredados (docs/PANEL.md, sección 8). */
+.workspace-footer,
+.table th,
+.detail-grid dt,
+.activity-list span,
+.activity-list small,
+.user-role-line,
+.eyebrow,
+.empty-state,
+.form-text {
+	color: var(--help);
+}
+.form-control::placeholder {
+	color: #667085;
+}
+
 @media (max-width: 1200px) {
 	.filter-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1,4 +1,5 @@
 <?php
+use AdelPos\License\Domain\LicenseTerms;
 use AdelPos\License\Http\View as V;
 
 $licenseId = $license['id_text'];
@@ -17,6 +18,15 @@ $periods = [
 $durations = ['15d' => '15 días', '1m' => '1 mes', '3m' => '3 meses'];
 $months = ['0' => 'Sin actualizaciones', '6' => '6 meses', '12' => '12 meses'];
 $currentMonths = (string) ($license['updates_months'] ?? '6');
+$licenseUrl = '/admin/licenses/' . $licenseId;
+$formUrl = $licenseUrl . '/terms';
+$crumbs = [['Licencias', '/admin/licenses'], [$license['customer_name'], $licenseUrl], ['Periodo inicial', null]];
+$selectedPlan = V::old('plan_id', $license['plan_id'], $formUrl);
+$limitValues = [];
+foreach (array_keys(LicenseTerms::LIMITS) as $limit) {
+	$limitValues[$limit] = V::old($limit, '', $formUrl);
+}
+$noteValue = V::old('reason', '', $formUrl);
 ?>
 <div class="page-heading">
 	<div>
@@ -32,7 +42,8 @@ $currentMonths = (string) ($license['updates_months'] ?? '6');
 	<div class="col-xl-8">
 		<form class="panel form-panel stack-form mb-4" method="get" action="/admin/licenses/<?= V::escape($licenseId) ?>/terms">
 			<h2>Tipo de licencia</h2>
-			<select class="form-select" name="license_type" aria-label="Tipo de licencia">
+			<label class="form-label" for="terms_type">Tipo</label>
+			<select class="form-select" id="terms_type" name="license_type">
 				<?php foreach ($types as $value => $label): ?>
 					<option value="<?= $value ?>" <?= $value === $type ? 'selected' : '' ?>><?= V::escape($label) ?></option>
 				<?php endforeach; ?>
@@ -83,13 +94,10 @@ $currentMonths = (string) ($license['updates_months'] ?? '6');
 					</select>
 				</label>
 			<?php endif; ?>
-			<?php
-			$selectedPlan = $license['plan_id'];
-			require __DIR__ . '/target-fields.php';
-			?>
+			<?php require __DIR__ . '/target-fields.php'; ?>
 			<label>
 				Nota <span class="optional">opcional</span>
-				<input class="form-control mt-2" name="reason" maxlength="500">
+				<input class="form-control mt-2" name="reason" maxlength="500" value="<?= V::escape($noteValue) ?>">
 			</label>
 			<p class="small text-secondary mb-0">
 				Editar el periodo inicial no registra un pago. Si el cliente paga una diferencia, anótala en la referencia

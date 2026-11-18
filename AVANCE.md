@@ -3344,3 +3344,68 @@ En `var/screenshots/` (no se versiona): `dashboard-desktop`, `licenses-desktop`,
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
 
 Dos pruebas existentes se ajustaron a cambios esperados de esta fase: la de la migración `008` aplicaba «todas menos la última» y ahora aplica las anteriores a la `008` (ya existe la `009`), y la del botón de notificaciones cuenta los enlaces a la sección de computadoras de la licencia.
+
+---
+
+## Etapa 5 · Fase 3 — Panel definitivo: operaciones, catálogo y acabado
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-3.1 Qué cambió
+
+| Punto de la especificación | Qué hay ahora |
+| --- | --- |
+| 1. Operaciones comerciales | Las cuatro operaciones con vista previa quedaron en la Fase 2 (datos, resultado con antes y después, desde cuándo, monto sugerido y desglose de la bonificación, y confirmación). El periodo inicial suma su etiqueta visible y conserva lo escrito. Las confirmaciones explícitas: revocar, liberar el contador, revelar el código y reemplazar la clave en su página (Fase 2); la transferencia forzada sin internet, en la revisión de su solicitud, con la casilla y la nueva autenticación |
+| 2. Planes | Catálogo con un precio por columna; formulario en cuatro bloques; la propagación explicada con un ejemplo con los números del plan, hasta cinco licencias que la seguirían y **cuántas cambiarían y cuántas revisiones se firmarían**, recalculado mientras se escriben los cupos, antes de guardar |
+| 3. Alertas | Filtros con etiqueta, «Limpiar filtros», tarjeta de alerta con insignia, fechas en la zona del cliente y estado vacío que explica cuándo aparecen; la campana de la barra superior lleva a la sección de computadoras de la licencia |
+| 4. Sin internet | Importar arriba; lista con la acción, **el cliente** (también de una renovación o liberación pendiente), el estado y la fecha; la revisión empieza por **«Qué pasará al aprobar»**, con el caso exacto, y la licencia elegida con su estado |
+| 5. Seguridad y administradores | Mismas reglas; ruta en la barra superior, insignias y lo escrito al crear una cuenta |
+| 6. Acabado | Estados vacíos con qué hacer; **un formulario rechazado vuelve a su pantalla con el mensaje y lo escrito** (sin contraseñas ni códigos); mensajes de validación con el nombre del campo en español; fechas en la zona del cliente con su nombre; montos `$1,500.00 MXN`; etiquetas en todos los campos; contraste de al menos 4.5:1 también en los grises heredados; sin desbordamiento a 390 px; la auditoría se busca también por el nombre en español de la operación |
+| 7. Dependencias | Ninguna nueva: ni de Composer ni de npm. Bootstrap sigue servido localmente |
+
+### E5-3.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/PanelQueriesTest.php` | +1 (11) | El conteo previo es lo que hace guardar: agrupa solo las licencias que la propagación alcanza (no las personalizadas, revocadas ni vencidas), cuenta las revisiones de las computadoras activas, ignora los cupos que no suben y los que no superan a la licencia (una que se quedó abajo o espera una reducción), y coincide con `licenses_updated` y `revisions_signed` al guardar. La auditoría se busca por las operaciones cuyo nombre coincide |
+| `tests/Integration/ProductionHttpTest.php` | +1 | Por HTTP real (TLS, Nginx, PHP-FPM y MySQL): 422 vuelve al formulario con lo escrito (escapado) y sin contraseña; 401 (identidad) vuelve sin ninguna contraseña; 409 muestra los datos actuales sin lo escrito; 404, o una pantalla de origen ausente o fuera del panel, dan la página de error |
+| `tests/Unit/InputTest.php` | 1, nuevo | Mensajes con el nombre del campo en español: obligatorio, largo y caracteres de control, valor inválido y opción inválida |
+| `tests/screens-panel.cjs` | — | El formulario rechazado en el navegador (422, mensaje y lo escrito); etiquetas en todos los campos de 17 pantallas; el enlace «Saltar al contenido» con el teclado; la búsqueda de la auditoría en español; y planes, plan, alertas, sin internet, auditoría, administradores, seguridad y emisión a 390 px sin desbordamiento |
+| `tests/commercial-panel.cjs` | — | El ejemplo de la propagación y el conteo previo (0 con los cupos actuales; 2 licencias y 2 revisiones con una caja más), igual al resultado de guardar |
+| `tests/offline-panel.cjs` | — | El cliente de una renovación pendiente en la lista y «Qué pasará al aprobar» en su revisión |
+
+### E5-3.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **11 reglas**. En la primera pasada **tres no se detectaban** y una mutación no aplicaba (la expresión no coincidía); se rehizo y se detectó.
+
+| Regla | Resultado |
+| --- | --- |
+| Propagación: sin personalizadas, sin revocadas, sin vencidas; revisiones solo de computadoras activas | Detectadas |
+| El conteo solo cuenta los cupos que suben en el catálogo | **Faltaba un caso:** una licencia que se quedó abajo porque el plan subió antes solo para las nuevas. Se agregó; detectada |
+| El conteo solo cuenta una licencia si el aumento la supera | **Faltaba un caso:** una licencia que espera su reducción, con cupos mayores que el plan. Se agregó; detectada |
+| Con 409 vuelve sin lo escrito | Detectada |
+| La pantalla de origen debe ser del panel | Detectada |
+| Solo 401, 409 y 422 vuelven al formulario | **Faltaba un caso:** un 404 con pantalla de origen. Se agregó; detectada. El 401 se agregó también (cambio de contraseña con la actual incorrecta) |
+| Lo escrito nunca trae contraseñas ni códigos | Detectada por `ViewTest`; por HTTP no se observa, porque ninguna plantilla escribe una contraseña |
+| El campo obligatorio tiene su propio mensaje | Detectada |
+
+### E5-3.4 Contraste corregido
+
+| Elemento heredado | Antes | Ahora |
+| --- | --- | --- |
+| Pie de página | 2.47:1 | 5.41:1 |
+| Encabezados de las tablas | 3.56:1 | 5.61:1 |
+| Etiquetas de los datos (`dt`) | 3.11:1 | 5.81:1 |
+| Fechas de la actividad reciente | 2.62:1 | 5.81:1 |
+| Línea del rol de un administrador | 3.64:1 | 5.81:1 |
+| Texto de ejemplo de los campos | 2.65:1 | 4.97:1 |
+
+### E5-3.5 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | **486 pruebas, 29 220 aserciones**, todas OK |
+| Playwright (panel, ciclo comercial, transferencias, sin internet, pantallas nuevas y dispositivos de confianza) | OK, en escritorio y a 390 px; datos sintéticos eliminados |
+| Dependencias de producción | Sin cambios en `composer.json` ni en `package.json` |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |

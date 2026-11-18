@@ -368,6 +368,79 @@ final class PanelQueries
 		);
 	}
 
+	/**
+	 * Licencias que alcanzaría la propagación de un plan (contrato §11.1; PlanService::propagate), agrupadas
+	 * por sus cupos: cuántas hay y cuántas tienen una computadora activa (una revisión firmada cada una). Con
+	 * esto la pantalla del plan calcula, antes de guardar, cuántas cambiarían con los cupos que se escriben.
+	 * Las condiciones son las mismas de PlanService::propagate.
+	 *
+	 * @return list<array{cash_registers: int, order_takers: int, kitchen_displays: int, licenses: int, active: int}>
+	 */
+	public function propagationGroups(string $planId): array
+	{
+		$rows = $this->db->all(
+			"SELECT l.cash_registers,l.order_takers,l.kitchen_displays,COUNT(*) AS licenses,
+					COALESCE(SUM(a.activation_id IS NOT NULL),0) AS active
+				FROM licenses l
+				LEFT JOIN activations a ON a.license_id=l.license_id AND a.state='active'
+				WHERE l.plan_id=? AND l.plan_custom=0 AND l.commercial_status='issued'
+					AND (
+						l.license_type='perpetual'
+						OR l.period_starts_at IS NULL
+						OR DATE_ADD(l.expires_at,INTERVAL l.grace_days*24 HOUR)>?
+					)
+				GROUP BY l.cash_registers,l.order_takers,l.kitchen_displays
+				ORDER BY l.cash_registers,l.order_takers,l.kitchen_displays",
+			[$planId, $this->clock->sql()],
+		);
+		return array_map(static fn(array $row): array => array_map('intval', $row), $rows);
+	}
+
+	/**
+	 * Lo que cambiaría la propagación con los cupos $limits del plan: una licencia cambia si algún cupo sube en
+	 * el catálogo y queda por encima del suyo. Es la misma regla que aplica el navegador mientras se escriben
+	 * los cupos (public/assets/app.js) y que aplica PlanService al guardar.
+	 *
+	 * @return array{licenses: int, revisions: int}
+	 */
+	public static function propagationImpact(array $groups, array $current, array $limits): array
+	{
+		$licenses = 0;
+		$revisions = 0;
+		foreach ($groups as $group) {
+			$changes = false;
+			foreach (array_keys(LicenseTerms::LIMITS) as $limit) {
+				$changes = $changes || ($limits[$limit] > $current[$limit] && $limits[$limit] > $group[$limit]);
+			}
+			if ($changes) {
+				$licenses += $group['licenses'];
+				$revisions += $group['active'];
+			}
+		}
+		return ['licenses' => $licenses, 'revisions' => $revisions];
+	}
+
+	/** Hasta $limit licencias que seguirían el aumento, con su cliente, para el ejemplo de la pantalla del plan. */
+	public function propagationExamples(string $planId, int $limit = 5): array
+	{
+		return $this->db->all(
+			"SELECT BIN_TO_UUID(l.license_id) AS id_text,c.display_name AS customer_name,l.license_type,
+					l.billing_period,l.trial_duration,l.updates_months,l.cash_registers,l.order_takers,
+					l.kitchen_displays
+				FROM licenses l
+				JOIN customers c ON c.id=l.customer_id
+				WHERE l.plan_id=? AND l.plan_custom=0 AND l.commercial_status='issued'
+					AND (
+						l.license_type='perpetual'
+						OR l.period_starts_at IS NULL
+						OR DATE_ADD(l.expires_at,INTERVAL l.grace_days*24 HOUR)>?
+					)
+				ORDER BY c.display_name,l.license_id
+				LIMIT ?",
+			[$planId, $this->clock->sql(), $limit],
+		);
+	}
+
 	/** Una fila de licencia con su estado calculado. */
 	private static function license(array $row, \DateTimeImmutable $now): array
 	{

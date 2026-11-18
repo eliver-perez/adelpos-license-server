@@ -10,8 +10,36 @@ foreach ($availableProducts as $product) {
 		$selectedProduct = 'adel_pos';
 	}
 }
+// Si el formulario no pasó la validación, vuelve con lo escrito (docs/PANEL.md, sección 7).
+$form = '/admin/licenses/create';
+$restored = V::hasOld($form);
 // Cliente elegido: el del detalle del cliente («Emitir licencia para este cliente») o el escrito antes.
-$chosenCustomer = V::old('customer_id', $selectedCustomer ?? '', '/admin/licenses/create');
+$chosenCustomer = V::old('customer_id', $selectedCustomer ?? '', $form);
+$chosenType = V::old('license_type', 'perpetual', $form);
+$chosenMonths = V::old('updates_months', '6', $form);
+$chosenPeriod = V::old('billing_period', 'monthly', $form);
+$chosenDuration = V::old('trial_duration', '15d', $form);
+$chosenPlan = V::old('plan_id', $plans[0]['plan_id'] ?? '', $form);
+$chosenFeatures = V::oldList('features', [], $form);
+$planLimits = $plans[0] ?? [];
+foreach ($plans as $plan) {
+	if ($plan['plan_id'] === $chosenPlan) {
+		$planLimits = $plan;
+	}
+}
+$limitValues = [];
+foreach (array_keys(LicenseTerms::LIMITS) as $limit) {
+	$limitValues[$limit] = V::old($limit, (string) (int) ($planLimits[$limit] ?? 0), $form);
+}
+$text = [];
+foreach (['amount', 'paid_at', 'amount_reason', 'reference', 'reason'] as $field) {
+	$text[$field] = V::old($field, '', $form);
+}
+$typeCards = [
+	'perpetual' => ['Perpetua', 'Pago único · Uso sin vencimiento'],
+	'subscription' => ['Suscripción', 'Se paga por periodo · 5 días de tolerancia'],
+	'trial' => ['Prueba', 'Tiempo limitado · Sin tolerancia'],
+];
 $crumbs = [['Licencias', '/admin/licenses'], ['Emitir licencia', null]];
 // Precio del catálogo de cada plazo, para que el formulario sugiera el monto de alta.
 $priceAttributes = function (array $plan): string {
@@ -35,7 +63,7 @@ $priceAttributes = function (array $plan): string {
 		<a href="/admin/customers/new">Registrar cliente</a>
 	</div>
 <?php else: ?>
-	<form method="post" action="/admin/licenses/create" id="license-form">
+	<form method="post" action="<?= $form ?>" id="license-form" <?= $restored ? 'data-restored' : '' ?>>
 		<div class="row g-4">
 			<div class="col-xl-8">
 				<section class="panel form-panel">
@@ -74,40 +102,29 @@ $priceAttributes = function (array $plan): string {
 						<h2>Tipo de licencia</h2>
 					</div>
 					<div class="row g-3">
-						<div class="col-md-4">
-							<label class="choice-card">
-								<input type="radio" name="license_type" value="perpetual" checked>
-								<span>
-									<strong>Perpetua</strong>
-									<small>Pago único · Uso sin vencimiento</small>
-								</span>
-							</label>
-						</div>
-						<div class="col-md-4">
-							<label class="choice-card">
-								<input type="radio" name="license_type" value="subscription">
-								<span>
-									<strong>Suscripción</strong>
-									<small>Se paga por periodo · 5 días de tolerancia</small>
-								</span>
-							</label>
-						</div>
-						<div class="col-md-4">
-							<label class="choice-card">
-								<input type="radio" name="license_type" value="trial">
-								<span>
-									<strong>Prueba</strong>
-									<small>Tiempo limitado · Sin tolerancia</small>
-								</span>
-							</label>
-						</div>
+						<?php foreach ($typeCards as $value => [$typeName, $typeNote]): ?>
+							<div class="col-md-4">
+								<label class="choice-card">
+									<input
+										type="radio"
+										name="license_type"
+										value="<?= $value ?>"
+										<?= $value === $chosenType ? 'checked' : '' ?>
+									>
+									<span>
+										<strong><?= $typeName ?></strong>
+										<small><?= $typeNote ?></small>
+									</span>
+								</label>
+							</div>
+						<?php endforeach; ?>
 					</div>
 					<div class="mt-4" data-license-type="perpetual">
 						<label for="updates_months" class="form-label">Actualizaciones incluidas</label>
 						<select class="form-select" id="updates_months" name="updates_months">
-							<option value="0">Sin actualizaciones</option>
-							<option value="6" selected>6 meses</option>
-							<option value="12">12 meses</option>
+							<option value="0" <?= $chosenMonths === '0' ? 'selected' : '' ?>>Sin actualizaciones</option>
+							<option value="6" <?= $chosenMonths === '6' ? 'selected' : '' ?>>6 meses</option>
+							<option value="12" <?= $chosenMonths === '12' ? 'selected' : '' ?>>12 meses</option>
 						</select>
 						<div class="form-text">
 							Se cuentan desde la activación. Al terminar, la versión instalada sigue funcionando.
@@ -116,10 +133,10 @@ $priceAttributes = function (array $plan): string {
 					<div class="mt-4" data-license-type="subscription" hidden>
 						<label for="billing_period" class="form-label">Periodo de la suscripción</label>
 						<select class="form-select" id="billing_period" name="billing_period" disabled>
-							<option value="monthly">Mensual</option>
-							<option value="quarterly">Trimestral</option>
-							<option value="semiannual">Semestral</option>
-							<option value="annual">Anual</option>
+							<option value="monthly" <?= $chosenPeriod === 'monthly' ? 'selected' : '' ?>>Mensual</option>
+							<option value="quarterly" <?= $chosenPeriod === 'quarterly' ? 'selected' : '' ?>>Trimestral</option>
+							<option value="semiannual" <?= $chosenPeriod === 'semiannual' ? 'selected' : '' ?>>Semestral</option>
+							<option value="annual" <?= $chosenPeriod === 'annual' ? 'selected' : '' ?>>Anual</option>
 						</select>
 						<div class="form-text">
 							Se cuenta en meses de calendario. Después del vencimiento hay 5 días de tolerancia.
@@ -128,9 +145,9 @@ $priceAttributes = function (array $plan): string {
 					<div class="mt-4" data-license-type="trial" hidden>
 						<label for="trial_duration" class="form-label">Duración de la prueba</label>
 						<select class="form-select" id="trial_duration" name="trial_duration" disabled>
-							<option value="15d">15 días</option>
-							<option value="1m">1 mes</option>
-							<option value="3m">3 meses</option>
+							<option value="15d" <?= $chosenDuration === '15d' ? 'selected' : '' ?>>15 días</option>
+							<option value="1m" <?= $chosenDuration === '1m' ? 'selected' : '' ?>>1 mes</option>
+							<option value="3m" <?= $chosenDuration === '3m' ? 'selected' : '' ?>>3 meses</option>
 						</select>
 						<div class="form-text">Al terminar la prueba no hay días de tolerancia.</div>
 					</div>
@@ -151,6 +168,7 @@ $priceAttributes = function (array $plan): string {
 								data-order_takers="<?= (int) $plan['order_takers'] ?>"
 								data-kitchen_displays="<?= (int) $plan['kitchen_displays'] ?>"
 								<?= $priceAttributes($plan) ?>
+								<?= $plan['plan_id'] === $chosenPlan ? 'selected' : '' ?>
 							>
 								<?= V::escape($plan['display_name']) ?> · <?= (int) $plan['cash_registers'] ?>
 									<?= (int) $plan['cash_registers'] === 1 ? 'caja' : 'cajas' ?> ·
@@ -176,7 +194,7 @@ $priceAttributes = function (array $plan): string {
 									min="0"
 									max="<?= LicenseTerms::MAX_LIMIT ?>"
 									step="1"
-									value="<?= (int) $plans[0][$limit] ?>"
+									value="<?= V::escape($limitValues[$limit]) ?>"
 									data-plan-limit
 									required
 								>
@@ -212,6 +230,7 @@ $priceAttributes = function (array $plan): string {
 										value="<?= V::escape($feature['capability_key']) ?>"
 										data-requires="<?= V::escape($feature['requires_keys']) ?>"
 										<?= $product['product_id'] !== $selectedProduct ? 'disabled' : '' ?>
+										<?= in_array($feature['capability_key'], $chosenFeatures, true) ? 'checked' : '' ?>
 									>
 									<span>
 										<?= V::escape($feature['display_name']) ?>
@@ -238,6 +257,7 @@ $priceAttributes = function (array $plan): string {
 								maxlength="12"
 								pattern="\d{1,8}(\.\d{1,2})?"
 								placeholder="1500.00"
+								value="<?= V::escape($text['amount']) ?>"
 								required
 							>
 						</div>
@@ -245,7 +265,13 @@ $priceAttributes = function (array $plan): string {
 							<label for="paid_at" class="form-label">
 								Fecha de pago <span class="optional">opcional</span>
 							</label>
-							<input class="form-control" type="datetime-local" id="paid_at" name="paid_at">
+							<input
+								class="form-control"
+								type="datetime-local"
+								id="paid_at"
+								name="paid_at"
+								value="<?= V::escape($text['paid_at']) ?>"
+							>
 							<div class="form-text">
 								En la zona horaria del cliente. Si la dejas vacía, se usa este momento.
 							</div>
@@ -254,7 +280,14 @@ $priceAttributes = function (array $plan): string {
 					<div class="note-box mt-3" id="price-note" role="status"></div>
 					<div class="mt-3">
 						<label for="amount_reason" class="form-label">Motivo del cambio de monto</label>
-						<input class="form-control" id="amount_reason" name="amount_reason" maxlength="500" disabled>
+						<input
+							class="form-control"
+							id="amount_reason"
+							name="amount_reason"
+							maxlength="500"
+							value="<?= V::escape($text['amount_reason']) ?>"
+							disabled
+						>
 						<div class="form-text">
 							Solo si cobras un monto distinto del sugerido. No se calcula IVA ni se emiten facturas.
 						</div>
@@ -274,6 +307,7 @@ $priceAttributes = function (array $plan): string {
 								id="reference"
 								maxlength="190"
 								placeholder="Pedido, factura o acuerdo"
+								value="<?= V::escape($text['reference']) ?>"
 							>
 						</div>
 						<div>
@@ -286,14 +320,12 @@ $priceAttributes = function (array $plan): string {
 								id="reason"
 								rows="2"
 								maxlength="500"
-							></textarea>
+							><?= V::escape($text['reason']) ?></textarea>
 						</div>
 					</div>
 					<div class="form-footer">
-						<a
-							class="btn btn-outline-secondary"
-							href="/admin/licenses"
-						>Cancelar</a><button class="btn btn-primary" type="submit">Emitir y mostrar clave</button>
+						<a class="btn btn-outline-secondary" href="/admin/licenses">Cancelar</a>
+						<button class="btn btn-primary" type="submit">Emitir y mostrar clave</button>
 					</div>
 				</section>
 			</div>

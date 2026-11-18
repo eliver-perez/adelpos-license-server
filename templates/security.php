@@ -1,11 +1,15 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Http\View as V;
+
+$crumbs = [['Mi seguridad', null]];
+?>
 <div class="page-heading">
 	<div>
 		<span class="eyebrow">MI CUENTA</span>
 		<h1>Seguridad de tu cuenta</h1>
 		<p>Tu acceso utiliza contraseña y verificación en dos pasos.</p>
 	</div>
-	<span class="tag tag-green">Verificación en dos pasos activa</span>
+	<?= V::badge('Verificación en dos pasos activa', 'green') ?>
 </div>
 <form class="panel form-panel security-form" method="post" action="/admin/security">
 	<?php V::fields($csrf); ?>

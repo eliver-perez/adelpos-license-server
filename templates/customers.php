@@ -56,7 +56,7 @@ $resultLabel = $listing['total'] === 1 ? '1 cliente' : $listing['total'] . ' cli
 			<?php endif; ?>
 		</div>
 	<?php else: ?>
-		<p class="result-count" role="status"><?= V::escape($resultLabel) ?></p>
+		<p class="result-count"><?= V::escape($resultLabel) ?></p>
 		<div class="table-responsive">
 			<table class="table table-stack" data-testid="customer-list">
 				<thead>

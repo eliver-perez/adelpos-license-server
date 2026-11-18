@@ -1,4 +1,8 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Http\View as V;
+
+$crumbs = [['Productos', '/admin/products'], [$product['display_name'] ?? 'Nuevo producto', null]];
+?>
 <div class="page-heading">
 	<div>
 		<a href="/admin/products" class="text-link">← Productos</a>

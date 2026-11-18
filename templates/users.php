@@ -1,4 +1,12 @@
-<?php use AdelPos\License\Http\View as V; ?>
+<?php
+use AdelPos\License\Http\View as V;
+
+$crumbs = [['Administradores', null]];
+$createForm = '/admin/users/create';
+$newName = V::old('name', '', $createForm);
+$newLogin = V::old('login', '', $createForm);
+$newRole = V::old('role', 'operator', $createForm);
+?>
 <div class="page-heading">
 	<div>
 		<span class="eyebrow">ACCESO AL PANEL</span>
@@ -20,7 +28,7 @@
 							<small class="cell-sub"><?= V::escape($user['login']) ?></small>
 						</div>
 						<?php $isActive = $user['state'] === 'active'; ?>
-						<span class="tag <?= $isActive ? 'tag-green' : '' ?>"><?= $isActive ? 'Activa' : 'Deshabilitada' ?></span>
+						<?= V::badge($isActive ? 'Activa' : 'Deshabilitada', $isActive ? 'green' : 'gray') ?>
 					</div>
 					<div class="user-role-line">
 						<?= V::escape(V::role($user['role'])) ?> <span>·</span>
@@ -96,7 +104,7 @@
 			<div class="stack-form mt-3">
 				<label>
 					Nombre
-					<input class="form-control mt-2" name="name" maxlength="190" required>
+					<input class="form-control mt-2" name="name" maxlength="190" value="<?= V::escape($newName) ?>" required>
 				</label>
 				<label>
 					Correo de acceso
@@ -106,15 +114,16 @@
 						name="login"
 						maxlength="190"
 						autocomplete="off"
+						value="<?= V::escape($newLogin) ?>"
 						required
 					>
 				</label>
 				<label>
 					Rol
 					<select class="form-select mt-2" name="role">
-						<option value="operator">Operador de licencias</option>
-						<option value="viewer">Consulta</option>
-						<option value="superadmin">Superadministrador</option>
+						<option value="operator" <?= $newRole === 'operator' ? 'selected' : '' ?>>Operador de licencias</option>
+						<option value="viewer" <?= $newRole === 'viewer' ? 'selected' : '' ?>>Consulta</option>
+						<option value="superadmin" <?= $newRole === 'superadmin' ? 'selected' : '' ?>>Superadministrador</option>
 					</select>
 				</label>
 				<?php $permissionValues = []; ?>

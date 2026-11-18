@@ -128,7 +128,12 @@ licenseForm?.querySelectorAll('[data-plan-limit]').forEach((input) =>
 		updateIssueAmount();
 	}),
 );
-updatePlanLimits(true);
+// Un formulario que volvió con lo escrito (data-restored) conserva sus cupos y su monto.
+const restoredForm = licenseForm?.hasAttribute('data-restored');
+if (restoredForm && licenseForm.querySelector('#amount').value !== '') {
+	licenseForm.querySelector('#amount').dataset.touched = '1';
+}
+updatePlanLimits(!restoredForm);
 licenseForm?.querySelector('[name="product_id"]').addEventListener('change', updateLicenseForm);
 licenseForm?.querySelectorAll('[name="license_type"]').forEach((input) =>
 	input.addEventListener('change', () => {
@@ -203,3 +208,34 @@ document.querySelectorAll('[data-amount-form]').forEach((form) => {
 	amount.addEventListener('input', updateReason);
 	updateReason();
 });
+
+// Catálogo de planes: antes de guardar, cuántas licencias cambiarían si se eligen «también las existentes».
+// Misma regla que PlanService al guardar y que PanelQueries::propagationImpact: una licencia cambia si algún
+// cupo sube en el catálogo y queda por encima del suyo. El servidor vuelve a aplicarla al guardar.
+const propagation = document.querySelector('[data-propagation]');
+const planForm = document.querySelector('#plan-form');
+if (propagation && planForm) {
+	const groups = JSON.parse(propagation.dataset.groups);
+	const current = JSON.parse(propagation.dataset.current);
+	const limits = ['cash_registers', 'order_takers', 'kitchen_displays'];
+	function updatePropagation() {
+		const values = {};
+		for (const limit of limits) {
+			values[limit] = Number(planForm.querySelector('[name="' + limit + '"]').value);
+		}
+		let licenses = 0;
+		let revisions = 0;
+		for (const group of groups) {
+			if (limits.some((limit) => values[limit] > current[limit] && values[limit] > group[limit])) {
+				licenses += group.licenses;
+				revisions += group.active;
+			}
+		}
+		propagation.querySelector('[data-impact-licenses]').textContent = String(licenses);
+		propagation.querySelector('[data-impact-revisions]').textContent = String(revisions);
+	}
+	planForm
+		.querySelectorAll('[data-plan-limit]')
+		.forEach((input) => input.addEventListener('input', updatePropagation));
+	updatePropagation();
+}

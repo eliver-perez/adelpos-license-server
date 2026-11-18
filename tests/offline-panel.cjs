@@ -180,6 +180,15 @@ module.exports = async function offlinePanel({
 	await choose(subscriptionId);
 	const subscription = await approve();
 	await upload(request(subDevice, 'renew', subscription.payload));
+	// La lista dice de qué cliente es la solicitud pendiente: la de la licencia que trae la solicitud.
+	const pendingURL = page.url();
+	await page.goto('/admin/offline?status=pending');
+	assert.match(
+		await page.locator('[data-testid="offline-list"] tbody tr').first().innerText(),
+		/Renovación[\s\S]*Restaurante de Pruebas[\s\S]*Pendiente/,
+	);
+	await page.goto(pendingURL);
+	assert.match(await page.locator('[data-testid="offline-outcome"]').innerText(), /Se entrega la revisión vigente/);
 	// Una solicitud de renovación puede entregar los derechos vigentes o registrar ahí mismo la renovación.
 	const renewForm = page.locator('form[action$="/approve"]');
 	assert.equal(await renewForm.locator('select[name="renewal_mode"]').count(), 1);

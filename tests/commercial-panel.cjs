@@ -146,9 +146,17 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 	await page.goto('/admin/plans');
 	assert.match(await page.locator('#plan-catalog').innerText(), /Plan premium[\s\S]*\$15,000\.00 MXN/);
 	await page.goto('/admin/plans/elemental');
+	// Con los cupos actuales no cambia nada; el ejemplo explica qué pasaría.
+	assert.match(await page.locator('[data-propagation]').innerText(), /Si subes las cajas de 3 a 4/);
+	assert.match(await page.locator('[data-testid="propagation-impact"]').innerText(), /cambiarían 0 licencias/);
 	await page.locator('#cash_registers').fill('4');
 	await page.locator('#plan-form [name="apply_to"][value="existing"]').check();
 	await page.locator('#plan-form [name="reason"]').fill('Una caja más para todos');
+	// Antes de guardar, la pantalla dice cuántas licencias cambiarían y cuántas revisiones se firmarían.
+	assert.match(
+		await page.locator('[data-testid="propagation-impact"]').innerText(),
+		/cambiarían 2 licencias y se firmarían 2 revisiones/,
+	);
 	await screenshot('plan-editor-desktop');
 	await submit(page.getByRole('button', { name: 'Guardar plan' }));
 	// La perpetua y la suscripción convertida siguen el plan elemental y tienen una computadora activa.
