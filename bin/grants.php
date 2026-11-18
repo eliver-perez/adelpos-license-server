@@ -2,6 +2,8 @@
 declare(strict_types=1);
 require __DIR__ . '/console.php';
 
+// Imprime los GRANT de la cuenta de la aplicación. La lista está en RuntimeGrants, que también usa
+// bin/verify-deployment.php para comprobar que la cuenta no tenga ni más ni menos.
 consoleRun(function (): void {
 	$options = getopt('', ['database:', 'user:']);
 	$database = $options['database'] ?? 'adelpos_license';
@@ -9,45 +11,7 @@ consoleRun(function (): void {
 	if (!preg_match('/\A[a-zA-Z0-9_]+\z/', $database) || !preg_match('/\A[a-zA-Z0-9_]+\z/', $user)) {
 		throw new AdelPos\License\Domain\Problem('Usa identificadores SQL simples.');
 	}
-	$permissions = [
-		'schema_migrations' => 'SELECT',
-		'security_state' => 'SELECT,UPDATE',
-		'admin_users' => 'SELECT,INSERT,UPDATE',
-		'admin_sessions' => 'SELECT,INSERT,UPDATE,DELETE',
-		'admin_recovery_codes' => 'SELECT,INSERT,UPDATE',
-		'admin_trusted_devices' => 'SELECT,INSERT,UPDATE',
-		'rate_limit_buckets' => 'SELECT,INSERT,UPDATE,DELETE',
-		'audit_heads' => 'SELECT,UPDATE',
-		'audit_events' => 'SELECT,INSERT',
-		'admin_operations' => 'SELECT,INSERT,UPDATE',
-		'customers' => 'SELECT,INSERT,UPDATE',
-		'customer_contacts' => 'SELECT,INSERT,UPDATE',
-		'products' => 'SELECT,INSERT,UPDATE',
-		'product_capabilities' => 'SELECT,INSERT,UPDATE',
-		'capability_dependencies' => 'SELECT,INSERT,DELETE',
-		'plans' => 'SELECT,INSERT,UPDATE',
-		'licenses' => 'SELECT,INSERT,UPDATE',
-		'license_features' => 'SELECT,INSERT,UPDATE',
-		'license_credentials' => 'SELECT,INSERT,UPDATE',
-		'license_changes' => 'SELECT,INSERT',
-		'license_payments' => 'SELECT,INSERT',
-		'license_scheduled_changes' =>
-			'SELECT,INSERT,UPDATE (state,resolved_at,resolved_by,cash_registers,order_takers,kitchen_displays)',
-		'signing_keys' => 'SELECT',
-		'signing_scopes' => 'SELECT',
-		'activations' => 'SELECT,INSERT,UPDATE (state,ended_at,current_revision_id,app_version)',
-		'license_revisions' => 'SELECT,INSERT',
-		'activation_challenges' => 'SELECT,INSERT,UPDATE,DELETE',
-		'license_requests' => 'SELECT,INSERT,UPDATE',
-		'offline_requests' => 'SELECT,INSERT',
-		'offline_decisions' => 'SELECT,INSERT',
-		'license_transfers' => 'SELECT,INSERT,UPDATE (state,confirmed_at,confirmation,released_by,release_reason)',
-		'license_alerts' => 'SELECT,INSERT,UPDATE (attempts,detail_json,last_seen_at,reviewed_at,reviewed_by)',
-		'admin_permission_grants' => 'SELECT,INSERT,DELETE',
-		'license_administrative_changes' => 'SELECT,INSERT',
-		'license_documents' => 'SELECT,INSERT',
-	];
-	foreach ($permissions as $table => $privileges) {
-		fwrite(STDOUT, "GRANT $privileges ON `$database`.`$table` TO '$user'@'localhost';\n");
+	foreach (AdelPos\License\Infrastructure\RuntimeGrants::statements($database, $user) as $statement) {
+		fwrite(STDOUT, $statement . "\n");
 	}
 });

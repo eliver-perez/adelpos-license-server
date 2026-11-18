@@ -3537,3 +3537,66 @@ Se quitaron **7 reglas**: que las herramientas nombradas existan, que se desplie
 | Playwright | No aplica: el panel no cambió |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+## Etapa 5 · Fase 7 — Verificación del despliegue e integración
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-7.1 Qué cambió
+
+**`bin/verify-deployment.php`** (clase `Infrastructure\DeploymentCheck`). El propietario lo ejecuta en el VPS después de instalar (`DEPLOY_UBUNTU_24_04.md`, paso 13) y **no modifica nada**:
+
+| Comprobación | OK cuando | Si no |
+| --- | --- | --- |
+| PHP y extensiones | PHP 8.3 o superior, las siete extensiones y Argon2id | Error |
+| Permisos | Configuración 0600, llaves 0700 y 0600, `shared/log` y `shared/tmp` 0700, de `adelpos-license`; respaldos 0700 y `recovery.key` 0600, de `root`; todo el código de `root` y sin escritura para nadie más; configuración y llaves fuera del clon | Error; Advertencia si sin `sudo` no se puede revisar la carpeta de respaldos |
+| MySQL | Conecta con la cuenta de la configuración, MySQL 8 | Error, sin mostrar el mensaje de PDO |
+| Permisos de la cuenta | Exactamente los de `bin/grants.php`, tabla por tabla y columna por columna; nada global, sobre toda la base, sobre otra base ni por un rol | Error con cada diferencia («audit_events: sobra DELETE») |
+| Migraciones | Todas aplicadas, completas, sin cambios y ninguna desconocida | Error |
+| Llave de firma | El entorno es el esperado (`test`) y su llave activa se puede leer | Error |
+| Tarea diaria | Timer cargado, activo y habilitado; última ejecución correcta hace menos de 36 horas | Error si no está instalado o la última falló; Advertencia si no ha corrido, está atrasada o no hay systemd |
+| Certificado | TLS verificado para el dominio, con más de 14 días | Error; Advertencia si vence pronto |
+| Redirección | `http://…/login` responde 301 (o 308) a `https://<dominio>/login` | Error |
+| Archivos ocultos | `/.htaccess` responde 404 | Error |
+| API | El desafío con `text/plain` responde 415 con el formato exacto del contrato (`request_id: null`, `details: {}`) | Error |
+| Cabeceras | HSTS, `nosniff` y `no-store` en `/assets/app.css` y en la API; Nginx sin versión | Error |
+
+Imprime una línea por comprobación, «Qué hacer» en cada Advertencia o Error, y el resumen; termina con código 1 si hay algún Error.
+
+**`Infrastructure\RuntimeGrants`**: la lista de permisos de la cuenta de la aplicación sale de `bin/grants.php` para compartirla. La salida de `grants.php` es idéntica byte por byte (comparada antes y después, con los valores por omisión y con otros).
+
+**`docs/INTEGRACION_ADEL_POS.md`**: guía de orientación para la integración en AD-EL POS: qué leer del contrato, dónde están el OpenAPI, el esquema, los archivos de prueba y el verificador Go, los tres juegos de llaves y cómo exportar las de `test`, los flujos en línea y sin internet, estados y cupos, y 14 pruebas contra `licensing.sicrat.com`. Remite siempre al contrato.
+
+`DEPLOY_UBUNTU_24_04.md`, paso 13: el resumen esperado y qué significan las advertencias normales. `DeployGuideTest` ya no tiene la excepción de la Fase 6. Las decisiones están en `DECISIONS.md`, sección 18, Fase 7.
+
+### E5-7.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/DeploymentCheckTest.php` | 6, nuevo | Sobre la pila real (TLS, Nginx con el ejemplo, PHP-FPM y MySQL con la cuenta de la aplicación), con la disposición de carpetas de la guía y un systemd de prueba: **una instalación sana da OK en todo** (salvo el certificado de la pila, que dura dos días: Advertencia) **y no cambia ninguna tabla** (`CHECKSUM TABLE` antes y después); cada problema de permisos (modo, dueño, código modificable, dentro del clon, sin `SIGNING_KEY_DIR`, respaldos sin `sudo`); privilegios de más, de menos y sobre toda la base; migraciones cambiada, incompleta, sin aplicar y desconocida; otro entorno y sin llave activa; sin conexión, sin mostrar el mensaje de PDO; los seis estados de la tarea diaria; certificado no confiable; y un sitio mal configurado (`php -S`) que sirve los ocultos, redirige mal, responde la API con otro código o con `request_id` y no pone las cabeceras o muestra la versión de Nginx. El comando completo: resumen en español, código 0 con advertencias y 1 con errores, y la dirección inválida |
+| `tests/Unit/RuntimeGrantsTest.php` | 2, nuevo | Las sentencias de `grants.php` comparadas con su propia lista no tienen diferencias; columnas en otro orden; cada tipo de diferencia; las tablas de historia solo con SELECT e INSERT |
+| `tests/Unit/DeployGuideTest.php` | — | Sin la excepción: `bin/verify-deployment.php` existe |
+
+### E5-7.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **42 reglas**, todas detectadas (y se comprobó que cada mutación dejaba PHP válido, para que la falla viniera de la regla y no de un error de sintaxis):
+
+| Grupo | Reglas |
+| --- | --- |
+| Permisos (10) | modo exacto; dueño exacto; registro y temporales; `SIGNING_KEY_DIR` configurado; archivos de llaves; configuración y llaves fuera del código; código sin escritura de otros; código de `root`; respaldos sin `sudo` como Advertencia; clave de recuperación |
+| Base (8) | mensaje de PDO oculto; migración sin aplicar, incompleta, cambiada y desconocida; entorno de firma esperado; llave activa legible; y la comparación de permisos entera |
+| Permisos de la cuenta (6) | privilegio de más; de menos; global o sobre toda la base; roles; tablas no previstas; columnas de los UPDATE limitados |
+| Tarea diaria (5) | timer instalado y activo; habilitado; última ejecución sin error; atrasada; sin ejecuciones |
+| HTTPS (11) | certificado verificado; por vencer; redirección permanente; al mismo sitio por HTTPS; ocultos con 404; API con 415; `request_id` null; cabeceras de seguridad; versión de Nginx oculta; sin abrir el panel (con `/login` cambia `admin_sessions` y lo detecta la comparación de tablas); API con tipo inválido |
+| Comando (2) | código de salida 1 con errores; dirección `https://` |
+
+No se quitaron las de PHP 8.3, las extensiones y MySQL 8: son las de `preflight` y comprobarlas necesitaría otro PHP u otro servidor de base de datos (`DECISIONS.md`, Fase 7, n.º 8).
+
+### E5-7.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | **506 pruebas, 29 561 aserciones**, todas OK |
+| Playwright | No aplica: el panel no cambió |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |

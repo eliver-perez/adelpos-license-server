@@ -26,10 +26,6 @@ final class DeployGuideTest extends TestCase
 		preg_match_all('~(?<![\w/!])(?:bin|deploy)/[A-Za-z0-9._-]+~', self::guide(), $matches);
 		$missing = [];
 		foreach (array_unique($matches[0]) as $path) {
-			// El comando de verificación del despliegue llega en la Fase 7, que quita esta excepción.
-			if ($path === 'bin/verify-deployment.php') {
-				continue;
-			}
 			if (!is_file(self::root() . '/' . $path)) {
 				$missing[] = $path;
 			}

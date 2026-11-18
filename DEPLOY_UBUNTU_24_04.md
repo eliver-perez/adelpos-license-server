@@ -492,7 +492,12 @@ sudo rm /srv/adelpos-license/shared/maintenance.flag
 sudo env ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php php8.3 bin/verify-deployment.php
 ```
 
-**Debes ver:** `preflight` correcto y, en `verify-deployment`, una línea **OK** por comprobación (PHP y extensiones, permisos, base y permisos de la cuenta, migraciones, llave de firma, tarea diaria, certificado, redirección, cabeceras, archivos ocultos y API). Cada **Advertencia** o **Error** dice qué hacer. El comando no modifica nada y termina con código 1 si hay algún error.
+**Debes ver:** `preflight` correcto y, en `verify-deployment`, una línea **OK** por comprobación (PHP y extensiones, permisos, base y permisos de la cuenta, migraciones, llave de firma, tarea diaria, certificado, redirección, cabeceras, archivos ocultos y API). Cada **Advertencia** o **Error** dice qué hacer. El comando no modifica nada y termina con código 1 si hay algún error. La última línea es el resumen, por ejemplo `Resumen: 20 OK, 0 advertencias y 0 errores. No se modificó nada.`
+
+- Corre con `sudo`: sin él no puede leer la configuración ni revisar la carpeta de respaldos.
+- Comprueba que el sitio firme en el entorno `test`; para otro entorno, `--license-environment=production`. Las demás opciones están en `--help`.
+- La tarea diaria queda en **Advertencia** («todavía no ha corrido») hasta su primera ejecución; puedes adelantarla con `sudo systemctl start adelpos-license-maintenance.service`.
+- El certificado da **Advertencia** si vence en menos de 14 días: la renovación automática no está funcionando (paso 10.3).
 
 Después, en tu navegador:
 
