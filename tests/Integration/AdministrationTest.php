@@ -660,9 +660,11 @@ final class AdministrationTest extends TestCase
 	{
 		$app = $this->fixture->app;
 		$this->customer();
-		$result = $app->read->page('customers', ['q' => "' OR 1=1 --"], 1);
+		$result = $app->panel->customers(['q' => "' OR 1=1 --"], 1);
 		self::assertSame(0, $result['total']);
-		self::assertSame(1, $app->read->dashboard()['customers']);
+		// Los comodines de LIKE también se buscan como texto.
+		self::assertSame(0, $app->panel->customers(['q' => '%'], 1)['total']);
+		self::assertSame(1, $app->panel->customers([], 1)['total']);
 	}
 
 	public function testTwoProcessesSendingTheSameChangeCommitOnlyOnce(): void

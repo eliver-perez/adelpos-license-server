@@ -5,6 +5,7 @@ namespace AdelPos\License\Http;
 use AdelPos\License\App;
 use AdelPos\License\Application\{Actor, TrustedDevices};
 use AdelPos\License\Domain\{Input, Problem};
+use AdelPos\License\Infrastructure\ReadRepository;
 use BaconQrCode\Renderer\{ImageRenderer, Image\SvgImageBackEnd, RendererStyle\RendererStyle};
 use BaconQrCode\Writer;
 
@@ -280,7 +281,17 @@ final class Kernel
 			return;
 		}
 		if ($this->path === '/admin' && $method === 'GET') {
-			$this->render('dashboard', ['title' => 'Resumen', 'stats' => $this->app->read->dashboard()]);
+			// «Por vencer» en 7, 15 o 30 días de calendario (30 por omisión).
+			$due = Input::text($_GET, 'due', 2, false);
+			$dueDays = in_array($due, ['7', '15', '30'], true) ? (int) $due : 30;
+			$this->render('dashboard', [
+				'title' => 'Resumen',
+				'counts' => $this->app->panel->counts(),
+				'due' => $this->app->panel->dueSoon($dueDays),
+				'dueDays' => $dueDays,
+				'collections' => $this->app->panel->collections(),
+				'events' => $this->app->read->recentEvents(),
+			]);
 			return;
 		}
 		if ($this->path === '/admin/alerts' && $method === 'GET') {
@@ -291,11 +302,13 @@ final class Kernel
 			// Marcar como revisada: el operador y el superadministrador; el servicio lo vuelve a comprobar.
 			$this->actor->requireRole(['superadmin', 'operator']);
 			$this->app->alerts->review($this->actor, $operationId, $matches[1]);
-			$return = Input::text($_POST, 'return_to', 64, false);
-			if (!preg_match('~\A/admin(?:/alerts|/licenses/[a-f0-9-]{36})?\z~', $return)) {
+			// Vuelve a la pantalla de donde se pidió: el resumen, las alertas o la licencia (también su sección
+			// de computadoras y transferencias).
+			$return = Input::text($_POST, 'return_to', 90, false);
+			if (!preg_match('~\A/admin(?:/alerts|/licenses/[a-f0-9-]{36}(?:\?section=computers)?)?\z~', $return)) {
 				$return = '/admin/alerts';
 			}
-			$this->redirect($return . '?notice=alert-reviewed');
+			$this->redirect($return . (str_contains($return, '?') ? '&' : '?') . 'notice=alert-reviewed');
 			return;
 		}
 		if ($this->path === '/admin/offline' && $method === 'GET') {
@@ -396,6 +409,17 @@ final class Kernel
 			}
 		}
 		if (
+			preg_match(
+				'~^/admin/licenses/([a-f0-9-]{36})/(reveal|reissue|revoke|release|transfer-release)$~',
+				$this->path,
+				$matches,
+			) &&
+			$method === 'GET'
+		) {
+			$this->confirmation($matches[1], $matches[2]);
+			return;
+		}
+		if (
 			preg_match('~^/admin/licenses/([a-f0-9-]{36})/transfer-release$~', $this->path, $matches) &&
 			$method === 'POST'
 		) {
@@ -414,11 +438,19 @@ final class Kernel
 		if (preg_match('~^/admin/licenses/([a-f0-9-]{36})/release$~', $this->path, $matches) && $method === 'POST') {
 			$this->actor->requireRole(['superadmin']);
 			$this->confirmIdentity();
-			$this->licenseResult($this->app->offline->release($this->actor, $operationId, $matches[1], $_POST));
+			$this->licenseResult(
+				$this->app->offline->release($this->actor, $operationId, $matches[1], $_POST),
+				'release',
+			);
 			return;
 		}
 		if ($this->path === '/admin/customers' && $method === 'GET') {
-			$this->listing('customers', 'Clientes');
+			$filters = ['q' => Input::text($_GET, 'q', 100, false), 'state' => Input::text($_GET, 'state', 16, false)];
+			$this->render('customers', [
+				'title' => 'Clientes',
+				'listing' => $this->app->panel->customers($filters, self::page()),
+				'filters' => $filters,
+			]);
 			return;
 		}
 		if ($this->path === '/admin/customers/new' && $method === 'GET') {
@@ -426,17 +458,31 @@ final class Kernel
 			$this->render('customer-form', ['title' => 'Nuevo cliente', 'customer' => null]);
 			return;
 		}
-		if (preg_match('~^/admin/customers/([a-f0-9-]{36}|create)$~', $this->path, $matches)) {
+		if (preg_match('~^/admin/customers/([a-f0-9-]{36}|create)(/edit)?$~', $this->path, $matches)) {
 			$id = $matches[1] === 'create' ? null : $matches[1];
-			if ($method === 'POST') {
+			if ($method === 'POST' && !isset($matches[2])) {
 				$result = $this->app->catalog->saveCustomer($this->actor, $operationId, $id, $_POST);
-				$this->redirect('/admin/customers/' . $result['id']);
+				$this->redirect(
+					'/admin/customers/' . $result['id'] . '?notice=' . ($id === null ? 'created' : 'saved'),
+				);
 				return;
 			}
-			if ($id !== null) {
+			if ($id !== null && $method === 'GET' && isset($matches[2])) {
+				$this->actor->requireRole(['superadmin', 'operator']);
+				$customer = $this->app->read->customer($id);
 				$this->render('customer-form', [
-					'title' => 'Detalle del cliente',
-					'customer' => $this->app->read->customer($id),
+					'title' => 'Editar ' . $customer['display_name'],
+					'customer' => $customer,
+				]);
+				return;
+			}
+			if ($id !== null && $method === 'GET') {
+				$customer = $this->app->read->customer($id);
+				$this->render('customer-detail', [
+					'title' => $customer['display_name'],
+					'customer' => $customer,
+					'licenses' => $this->app->panel->customerLicenses($id),
+					'payments' => $this->app->panel->customerPayments($id),
 				]);
 				return;
 			}
@@ -473,13 +519,26 @@ final class Kernel
 			return;
 		}
 		if ($this->path === '/admin/licenses' && $method === 'GET') {
-			$this->listing('licenses', 'Licencias');
+			$filters = [];
+			foreach (
+				['q' => 100, 'type' => 16, 'state' => 16, 'plan' => 64, 'custom' => 1, 'transfer' => 16, 'sort' => 16]
+				as $key => $length
+			) {
+				$filters[$key] = Input::text($_GET, $key, $length, false);
+			}
+			$this->render('licenses', [
+				'title' => 'Licencias',
+				'listing' => $this->app->panel->licenses($filters, self::page()),
+				'filters' => $filters,
+				'plans' => $this->app->read->plans(true),
+			]);
 			return;
 		}
 		if ($this->path === '/admin/licenses/new' && $method === 'GET') {
 			$this->actor->requireRole(['superadmin', 'operator']);
 			$this->render('license-form', [
 				'title' => 'Emitir licencia',
+				'selectedCustomer' => Input::text($_GET, 'customer_id', 36, false),
 				'customers' => $this->app->read->customers(),
 				'products' => $this->app->read->products(),
 				'plans' => $this->app->read->plans(),
@@ -530,19 +589,25 @@ final class Kernel
 				}
 				$this->licenseResult(
 					$this->app->licenses->change($this->actor, $operationId, $matches[1], $matches[2], $_POST),
+					$matches[2],
 				);
 				return;
 			}
 			if ($method === 'GET' && !isset($matches[2])) {
+				// Una sección por dirección (docs/PANEL.md, sección 3.3): solo se consulta lo que se muestra.
+				$section = Input::text($_GET, 'section', 16, false);
+				$section = array_key_exists($section, ReadRepository::LICENSE_SECTIONS) ? $section : 'summary';
 				$revisionPage = Input::text($_GET, 'revision_page', 8, false);
+				$license = $this->app->read->license(
+					$matches[1],
+					ctype_digit($revisionPage) ? (int) $revisionPage : 1,
+					$section,
+				);
 				$this->render('license-detail', [
-					'title' => 'Detalle de licencia',
-					'license' => $this->app->read->license(
-						$matches[1],
-						ctype_digit($revisionPage) ? (int) $revisionPage : 1,
-					),
-					'capabilities' => $this->app->read->capabilities(),
-					'plans' => $this->app->read->plans(),
+					'title' => $license['customer_name'] . ' · ' . ReadRepository::LICENSE_SECTIONS[$section],
+					'license' => $license,
+					'section' => $section,
+					'capabilities' => $section === 'summary' ? $this->app->read->capabilities() : [],
 				]);
 				return;
 			}
@@ -685,25 +750,45 @@ final class Kernel
 			return;
 		}
 		$license = $this->app->read->license($licenseId);
-		$quote = match ($operation) {
-			'renew' => $this->app->commercial->quoteRenewal($licenseId, $_GET),
-			'convert' => $this->app->commercial->quoteConversion($licenseId, $_GET),
-			'plan' => $this->app->commercial->quotePlanChange($licenseId, $_GET),
-			'maintenance' => $this->app->commercial->quoteMaintenance($licenseId, $_GET),
-			'terms' => ['plans' => $this->app->read->plans()],
-			default => throw new Problem('La página solicitada no existe.', 404),
-		};
+		if (!in_array($operation, ['renew', 'convert', 'plan', 'maintenance', 'terms'], true)) {
+			throw new Problem('La página solicitada no existe.', 404);
+		}
+		// La conversión y el cambio de plan piden primero su destino; la renovación y el mantenimiento se
+		// calculan de inmediato con sus valores por omisión (docs/PANEL.md, sección 3.4). Un dato que no se
+		// puede calcular se muestra junto al formulario, con lo elegido.
+		$quote = null;
+		$quoteError = '';
+		$needsTarget = in_array($operation, ['convert', 'plan'], true) && !isset($_GET['plan_id']);
+		if (!$needsTarget) {
+			try {
+				$quote = match ($operation) {
+					'renew' => $this->app->commercial->quoteRenewal($licenseId, $_GET),
+					'convert' => $this->app->commercial->quoteConversion($licenseId, $_GET),
+					'plan' => $this->app->commercial->quotePlanChange($licenseId, $_GET),
+					'maintenance' => $this->app->commercial->quoteMaintenance($licenseId, $_GET),
+					'terms' => ['plans' => $this->app->read->plans()],
+				};
+			} catch (Problem $problem) {
+				if ($problem->status !== 422) {
+					throw $problem;
+				}
+				http_response_code(422);
+				$quoteError = $problem->getMessage();
+			}
+		}
 		$titles = [
-			'renew' => 'Revisar renovación',
-			'convert' => 'Revisar conversión',
-			'plan' => 'Revisar cambio de plan',
-			'maintenance' => 'Revisar mantenimiento',
+			'renew' => 'Renovar la suscripción',
+			'convert' => 'Convertir la prueba',
+			'plan' => 'Cambiar de plan',
+			'maintenance' => 'Comprar mantenimiento',
 			'terms' => 'Editar el periodo inicial',
 		];
 		$this->render('license-' . $operation, [
 			'title' => $titles[$operation],
 			'license' => $license,
 			'quote' => $quote,
+			'quoteError' => $quoteError,
+			'plans' => $this->app->read->plans(),
 		]);
 	}
 
@@ -756,25 +841,64 @@ final class Kernel
 		);
 	}
 
+	/** Listas de solicitudes sin internet, alertas y auditoría. */
 	private function listing(string $kind, string $title): void
 	{
 		$filters = [];
-		foreach (['q', 'state', 'product_id', 'status', 'type', 'expiry'] as $key) {
+		foreach (['q', 'product_id', 'status', 'type'] as $key) {
 			$filters[$key] = Input::text($_GET, $key, 100, false);
 		}
-		$page =
-			isset($_GET['page']) && is_string($_GET['page']) && ctype_digit($_GET['page'])
-				? min(1000000, (int) $_GET['page'])
-				: 1;
 		$this->render($kind, [
 			'title' => $title,
-			'listing' => $this->app->read->page($kind, $filters, $page),
+			'listing' => $this->app->read->page($kind, $filters, self::page()),
 			'filters' => $filters,
-			'products' => in_array($kind, ['licenses', 'offline'], true) ? $this->app->read->products() : [],
+			'products' => $kind === 'offline' ? $this->app->read->products() : [],
 		]);
 	}
 
-	private function licenseResult(array $result): void
+	/** Página pedida de una lista; 1 si no viene o no es un número. */
+	private static function page(): int
+	{
+		return isset($_GET['page']) && is_string($_GET['page']) && ctype_digit($_GET['page'])
+			? max(1, min(1000000, (int) $_GET['page']))
+			: 1;
+	}
+
+	/**
+	 * Confirmación explícita de una operación sensible de una licencia (docs/PANEL.md, sección 3.3). La
+	 * página exige el mismo rol o permiso que la operación; el servicio lo vuelve a comprobar al enviar.
+	 */
+	private function confirmation(string $licenseId, string $operation): void
+	{
+		match ($operation) {
+			'reveal' => $this->actor->requirePermission('credentials.reveal'),
+			'reissue' => $this->actor->requireRole(['superadmin', 'operator']),
+			default => $this->actor->requireRole(['superadmin']),
+		};
+		$license = $this->app->read->license($licenseId, 1, 'computers');
+		$available = match ($operation) {
+			'release' => $license['active'] !== null && $license['commercial_status'] === 'issued',
+			'transfer-release' => $license['pending_transfer'],
+			default => $license['commercial_status'] === 'issued',
+		};
+		if (!$available) {
+			throw new Problem('Esta operación no aplica a la licencia en su estado actual.', 409);
+		}
+		$titles = [
+			'reveal' => 'Revelar el código de activación',
+			'reissue' => 'Reemplazar la clave comercial',
+			'revoke' => 'Revocar la licencia',
+			'release' => 'Recuperar plaza por computadora averiada',
+			'transfer-release' => 'Liberar el contador de autoservicio',
+		];
+		$this->render('license-confirm', [
+			'title' => $titles[$operation],
+			'license' => $license,
+			'operation' => $operation,
+		]);
+	}
+
+	private function licenseResult(array $result, string $notice = ''): void
 	{
 		if (isset($result['secret'])) {
 			$this->render('issued', [
@@ -784,7 +908,7 @@ final class Kernel
 			]);
 			return;
 		}
-		$this->redirect('/admin/licenses/' . $result['id']);
+		$this->redirect('/admin/licenses/' . $result['id'] . ($notice === '' ? '' : '?notice=' . $notice));
 	}
 
 	private function confirmIdentity(): void
@@ -849,6 +973,8 @@ final class Kernel
 				'now' => $this->app->clock->now(),
 				// Botón de notificaciones de la barra superior, en todas las pantallas del panel.
 				'alerts' => $this->actor === null ? null : $this->app->read->alertSummary(),
+				// Solicitudes sin internet pendientes, con su número en la navegación.
+				'pendingOffline' => $this->actor === null ? 0 : $this->app->panel->offlinePending(),
 			],
 		);
 	}

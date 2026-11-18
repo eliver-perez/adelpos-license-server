@@ -46,48 +46,55 @@ module.exports = async function transfersPanel({ page, secret, freshCode, screen
 	assert.match(summary, /Transferencias frecuentes[\s\S]*Mariscos del Golfo/);
 	await screenshot('dashboard-alerts-desktop');
 
-	// 2. El menú de notificaciones lleva al detalle de la licencia, con la transferencia pendiente.
+	// 2. El menú de notificaciones lleva a «Computadoras y transferencias» de la licencia, con la pendiente.
 	await page.locator('[data-testid="notifications"]').click();
 	const menu = page.locator('.notification-menu');
 	await menu.waitFor({ state: 'visible' });
 	await screenshot('notifications-menu-desktop');
 	await Promise.all([
-		page.waitForURL(new RegExp('/admin/licenses/' + licenses.blocked + '$')),
+		page.waitForURL(new RegExp('/admin/licenses/' + licenses.blocked + '\\?section=computers$')),
 		menu.getByRole('link', { name: /Transferencia por autoservicio bloqueada[\s\S]*Taquería del Puerto/ }).click(),
 	]);
-	const transfers = page.locator('#transfers');
-	assert.match(await transfers.locator('[data-testid="pending-transfer"]').innerText(), /pendiente de confirmar/);
-	const history = await transfers.locator('[data-testid="transfer-history"] tbody').innerText();
+	// La cabecera avisa de la transferencia pendiente y de la alerta en cualquier sección.
+	assert.match(await page.locator('.record-notes').innerText(), /Transferencia pendiente[\s\S]*1 alerta/);
+	assert.match(await page.locator('[data-testid="pending-transfer"]').innerText(), /pendiente de confirmar/);
+	const history = await page.locator('[data-testid="transfer-history"] tbody').innerText();
 	assert.match(history, /Autoservicio[\s\S]*La pidió AD-EL POS[\s\S]*Pendiente de confirmar/);
+	const alerts = page.locator('#license-alerts');
 	assert.match(
-		await transfers.locator('[data-testid="alert"]').innerText(),
+		await alerts.locator('[data-testid="alert"]').innerText(),
 		/intentó transferir la licencia mientras otra transferencia está pendiente[\s\S]*Intentos: 1\./,
 	);
 	await screenshot('license-transfers-desktop');
 
-	// 3. Marcar la alerta como revisada desde el detalle: vuelve al detalle y la barra tiene una menos.
-	await submit(transfers.getByRole('button', { name: 'Marcar como revisada' }));
+	// 3. Marcar la alerta como revisada desde el detalle: vuelve a la misma sección y la barra tiene una menos.
+	await submit(alerts.getByRole('button', { name: 'Marcar como revisada' }));
 	assert.equal(
 		page.url(),
-		new URL('/admin/licenses/' + licenses.blocked + '?notice=alert-reviewed', page.url()).href,
+		new URL('/admin/licenses/' + licenses.blocked + '?section=computers&notice=alert-reviewed', page.url()).href,
 	);
 	assert.match(await notice(), /Alerta marcada como revisada/);
 	assert.equal(await count(), before + 1);
-	assert.match(
-		await transfers.locator('[data-testid="alert"]').innerText(),
-		/Revisada por Administración de pruebas/,
-	);
-	assert.equal(await transfers.getByRole('button', { name: 'Marcar como revisada' }).count(), 0);
+	assert.match(await alerts.locator('[data-testid="alert"]').innerText(), /Revisada por Administración de pruebas/);
+	assert.equal(await alerts.getByRole('button', { name: 'Marcar como revisada' }).count(), 0);
 
-	// 4. Liberar el contador a mano, con motivo y confirmando la identidad. Los recorridos anteriores ya
-	// agotaron las confirmaciones de identidad de esta cuenta en los últimos 15 minutos.
+	// 4. Liberar el contador a mano en su página de confirmación: qué pasará, la casilla, el motivo y la
+	// identidad. Los recorridos anteriores ya agotaron las confirmaciones de identidad de esta cuenta en los
+	// últimos 15 minutos.
 	api('reauth-window');
-	await transfers.locator('summary').filter({ hasText: 'Liberar el contador de autoservicio' }).click();
-	await transfers.locator('[name="reason"]').fill('La computadora anterior se dañó');
-	await transfers.locator('[name="password"]').fill('Fixture-Password-Only-2026!');
-	await transfers.locator('[name="code"]').fill(await freshCode(secret));
-	await submit(transfers.getByRole('button', { name: 'Liberar el contador' }));
+	await submit(page.getByRole('link', { name: 'Liberar el contador de autoservicio' }));
+	assert.match(new URL(page.url()).pathname, /\/transfer-release$/);
+	const confirm = page.locator('[data-testid="confirm-form"]');
+	assert.match(await confirm.innerText(), /Qué va a pasar[\s\S]*confirmada a mano/);
+	await confirm.locator('[name="reason"]').fill('La computadora anterior se dañó');
+	await confirm.locator('[name="understood"]').check();
+	await confirm.locator('[name="password"]').fill('Fixture-Password-Only-2026!');
+	await confirm.locator('[name="code"]').fill(await freshCode(secret));
+	await screenshot('transfer-release-confirm-desktop');
+	await submit(confirm.getByRole('button', { name: 'Liberar el contador' }));
 	assert.match(await notice(), /Contador de autoservicio liberado/);
+	assert.equal(await page.locator('.record-notes').filter({ hasText: 'Transferencia pendiente' }).count(), 0);
+	await page.goto('/admin/licenses/' + licenses.blocked + '?section=computers');
 	assert.equal(await page.locator('[data-testid="pending-transfer"]').count(), 0);
 	assert.match(
 		await page.locator('[data-testid="transfer-history"] tbody').innerText(),

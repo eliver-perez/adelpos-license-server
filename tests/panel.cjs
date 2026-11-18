@@ -140,14 +140,18 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await assertBrand('resumen');
 		assert.equal((await context.cookies()).find((cookie) => cookie.name === 'adelpos_admin_dev').httpOnly, true);
 
+		// Pantallas del panel definitivo (etapa 5), antes de que el recorrido cambie los datos sintéticos.
+		await require('./screens-panel.cjs')({ page, screenshot });
+
 		await page.goto('/admin/licenses');
 		await page
 			.locator('tbody tr')
 			.filter({ hasText: 'Restaurante del Norte' })
-			.getByRole('link', { name: 'Detalle' })
+			.getByRole('link', { name: 'Restaurante del Norte' })
 			.click();
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
-		const signedDownload = await page.getByRole('link', { name: 'Descargar .lic' }).getAttribute('href');
+		// La barra de acciones descarga el archivo de la revisión vigente.
+		const signedDownload = await page.getByRole('link', { name: 'Descargar .lic vigente' }).getAttribute('href');
 		const signedFile = await sensitiveDownload(signedDownload, secret);
 		assert.equal(signedFile.status(), 200);
 		assert.match(signedFile.headers()['content-disposition'], /^attachment; filename="license-/);
@@ -169,9 +173,20 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await submit(page.getByRole('button', { name: 'Guardar cliente' }));
 		const customerId = new URL(page.url()).pathname.split('/').pop();
 		assert.match(customerId, /^[a-f0-9-]{36}$/);
-		assert.equal(await page.locator('#time_zone').inputValue(), 'America/Tijuana');
+		// El detalle del cliente muestra sus datos (escapados), sus licencias y sus pagos.
+		assert.match(await page.locator('[role="status"]').innerText(), /Cliente registrado/);
+		const facts = await page.locator('[data-testid="customer-facts"]').innerText();
+		assert.match(facts, /America\/Tijuana/);
+		assert.match(facts, /<script>window\.unwantedScript=true<\/script>/);
 		assert.equal(await page.evaluate(() => window.unwantedScript), undefined);
+		assert.match(await page.locator('#customer-licenses').innerText(), /todavía no tiene licencias/);
+		await page.goto('/admin/customers/' + customerId + '/edit');
+		assert.equal(await page.locator('#time_zone').inputValue(), 'America/Tijuana');
 		assert.equal(await page.locator('#legal_name').inputValue(), '<script>window.unwantedScript=true</script>');
+		// «Emitir licencia para este cliente» abre el formulario con el cliente elegido.
+		await page.goto('/admin/customers/' + customerId);
+		await submit(page.getByRole('link', { name: 'Emitir licencia para este cliente' }));
+		assert.equal(await page.locator('#customer_id').inputValue(), customerId);
 
 		await page.goto('/admin/licenses/new');
 		await page.locator('#customer_id').selectOption(customerId);
@@ -228,15 +243,16 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.match(await page.locator('main').innerText(), /Sin vencimiento/);
 		// No dates until the license is activated: its initial period can still be edited.
 		assert.match(await page.locator('main').innerText(), /Empieza al activar/);
-		assert.equal(await page.locator('#initial-terms').isVisible(), true);
-		assert.equal(await page.locator('#renew-form').count(), 0);
-		assert.equal(await page.locator('#maintenance-form').count(), 0);
+		// Sin activar: solo se edita su periodo inicial; no se renueva ni compra mantenimiento.
+		const actions = page.locator('[data-testid="license-actions"]');
+		assert.equal(await actions.getByRole('link', { name: 'Editar periodo inicial' }).count(), 1);
+		assert.equal(await actions.getByRole('link', { name: 'Renovar' }).count(), 0);
+		assert.equal(await actions.getByRole('link', { name: 'Mantenimiento' }).count(), 0);
+		assert.match(await page.locator('[data-testid="license-state"]').innerText(), /Sin activar/);
 		// Detalle con el modelo del contrato: tipo, plan, cupos y la zona horaria del cliente.
 		const rights = async () => {
 			const entries = await page
-				.locator('.detail-grid')
-				.first()
-				.locator('div')
+				.locator('#section-summary .detail-grid > div')
 				.evaluateAll((items) =>
 					items.map((item) => [
 						item.querySelector('dt').innerText.trim(),
@@ -294,20 +310,26 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			assert.equal(pending.status(), 422, operation);
 			assert.match(await pending.text(), message);
 		}
-		await page.reload();
+		await page.goto(licenseURL + '?section=history');
 		assert.equal(await page.locator('#commercial-history tbody tr').count(), 1);
+		assert.match(await page.locator('#license-audit').innerText(), /Licencia emitida/);
 		// El pago de alta queda en el historial, con el precio sugerido y el motivo del cambio de monto.
+		await page.goto(licenseURL + '?section=payments');
 		const payments = await page.locator('#payments tbody').innerText();
 		assert.match(payments, /Alta/);
 		assert.match(payments, /\$14,000\.00 MXN/);
 		assert.match(payments, /Catálogo: \$15,000\.00 MXN/);
 		assert.match(payments, /Monto cambiado: Descuento de lanzamiento/);
+		await page.goto(licenseURL);
 		await screenshot('license-detail-desktop');
 		const metadata = page.locator('form[action$="/administrative"]');
 		await metadata.locator('[name="reference"]').fill('Contrato sintético BROWSER-084');
 		await submit(metadata.getByRole('button'));
-		assert.match(await page.locator('[role="status"]').innerText(), /administrativa actualizada/);
+		assert.match(await page.locator('[role="status"]').innerText(), /Datos comerciales actualizados/);
+		await page.goto(licenseURL + '?section=documents');
 		await submit(page.getByRole('button', { name: 'Generar constancia de licenciamiento', exact: true }));
+		assert.match(await page.locator('[role="status"]').innerText(), /Constancia generada/);
+		await page.goto(licenseURL + '?section=documents');
 		const pdfUrl = await page.getByRole('link', { name: 'Descargar PDF r1', exact: true }).getAttribute('href');
 		const pdfResponse = await context.request.get(pdfUrl);
 		assert.equal(pdfResponse.status(), 200);
@@ -351,7 +373,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		await submit(page.getByRole('button', { name: 'Emitir y mostrar clave' }));
 		await page.getByRole('link', { name: 'Ya la guardé · Ver licencia' }).click();
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
-		assert.match(await page.locator('main').innerText(), /Licencia de prueba/);
+		assert.match(await page.locator('main').innerText(), /Prueba de 1 mes/);
 		assert.match(await page.locator('main').innerText(), /0 días/);
 		assert.equal((await rights())['Tipo'], 'Prueba de 1 mes');
 
@@ -382,7 +404,10 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.equal(detail['Plan'], 'Plan elemental Personalizada');
 		assert.deepEqual([detail['Cajas'], detail['Comanderos'], detail['Pantallas de cocina (KDS)']], ['4', '3', '3']);
 		assert.match(await page.locator('main').innerText(), /Licencia personalizada/);
+		const subscriptionURL = page.url();
+		await page.goto(subscriptionURL + '?section=history');
 		assert.equal(await page.locator('#commercial-history tbody tr').count(), 1);
+		await page.goto(subscriptionURL + '?section=payments');
 		assert.match(await page.locator('#payments tbody').innerText(), /\$1,200\.00 MXN[\s\S]*Sin precio de catálogo/);
 		const offlineDownload = await require('./offline-panel.cjs')({
 			page,
@@ -392,7 +417,7 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 			freshCode,
 			sensitiveDownload,
 			licenseURL,
-			subscriptionURL: page.url(),
+			subscriptionURL,
 			commercialKey,
 			screenshot,
 		});
@@ -404,7 +429,10 @@ const future = (days) => new Date(Date.now() + days * 86400000).toISOString().sl
 		assert.match(detail['Inicio del periodo'], /^\d{2}\/\d{2}\/\d{4} · \d{2}:\d{2} America\/Tijuana$/);
 		assert.match(detail['Actualizaciones hasta'], /^\d{2}\/\d{2}\/\d{4} · \d{2}:\d{2} America\/Tijuana$/);
 		assert.equal(detail['Vencimiento'], 'Sin vencimiento');
-		const signedStates = await page.locator('table').first().locator('tbody tr td:nth-child(2)').allInnerTexts();
+		await page.goto(licenseURL + '?section=revisions');
+		const signedStates = await page
+			.locator('[data-testid="revision-list"] tbody tr td:nth-child(2)')
+			.allInnerTexts();
 		assert.deepEqual(
 			signedStates.map((text) => text.trim()),
 			['Revocada · licencia liberada', 'Activa', 'Revocada · transferida a otra computadora', 'Activa'],

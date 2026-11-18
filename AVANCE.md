@@ -3267,3 +3267,80 @@ Esta fase no cambia código: solo `docs/PANEL.md`, `DECISIONS.md` y este registr
 | Playwright | No aplica: el panel no cambió (el recorrido de capturas no es una prueba) |
 | `bin/check-secrets.php` | Sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+---
+
+## Etapa 5 · Fase 2 — Panel definitivo: estructura y pantallas principales
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-2.1 Qué cambió
+
+| Pantalla o pieza | Qué hay ahora |
+| --- | --- |
+| **Navegación** | Tres grupos (Operación, Catálogo, Control) con íconos SVG propios; el número de alertas sin revisar y de solicitudes sin internet pendientes en la navegación; ruta de la pantalla y «Emitir licencia» en la barra superior |
+| **Resumen** | Licencias activas por tipo (con las sin activar), en tolerancia, vencidas en los últimos 30 días y alertas sin revisar, cada tarjeta enlazada a su lista filtrada; «Por vencer» en 7, 15 o 30 días de calendario en la zona del cliente, con «Renovar» o «Convertir»; cobros del mes en curso y del anterior en MXN, con las operaciones por concepto; alertas y actividad recientes |
+| **Licencias** | Búsqueda por cliente, razón social, `license_id`, `server_id` (también de las computadoras anteriores) y referencia; filtros por tipo, estado real, plan, personalizadas y transferencia pendiente; orden por alta o por vencimiento; columnas con estado de color, plan y cupos, vencimiento en la zona del cliente y computadora activa; filas como tarjetas en el teléfono |
+| **Detalle de la licencia** | Cabecera con cliente, estado, tipo, plan, cupos, vencimiento, actualizaciones y computadora activa, más avisos de cambio programado, transferencia pendiente y alertas; una barra con solo las acciones que aplican a la licencia y al rol (`Application\LicenseActions`); siete secciones con su dirección, que consultan solo lo que muestran |
+| **Operaciones** | Renovar, convertir, cambiar de plan y mantenimiento en su propia página: datos ajustables, resultado (antes y después, desde cuándo, monto sugerido y desglose de la bonificación) y confirmación. Los campos de cobro son un fragmento común (`payment-fields.php`) |
+| **Confirmaciones explícitas** | Revelar código, reemplazar clave, revocar, recuperar plaza y liberar el contador: qué pasará, casilla «Entiendo…», motivo y nueva autenticación (`license-confirm.php`) |
+| **Clientes** | Lista con búsqueda por nombre, razón social, RFC o correo, licencias (y cuántas vigentes) y zona horaria; detalle con sus datos, todas sus licencias con su estado y sus pagos; edición en su propia página; «Emitir licencia para este cliente» |
+| **Esquema** | Migración `009_indice_de_cobros.sql`: índice que cubre los cobros del mes |
+
+Plantillas nuevas: `customer-detail.php`, `license-confirm.php`, `payment-fields.php` y las siete `license-section-*.php`. Se retiraron `license-activations.php`, `license-commercial.php`, `license-offline.php`, `license-payments.php` y `license-transfers.php`, sustituidas por las secciones.
+
+### E5-2.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/PanelQueriesTest.php` | 10, nuevo | «Por vencer» con el día exacto en la zona del cliente (7 días de calendario aunque falten 7 días y 23.5 horas; un segundo antes, 8; «vence hoy» un microsegundo antes; al vencer, en tolerancia); solo suscripciones y pruebas activadas y no revocadas; conteos con los límites exactos de vigente, tolerancia y vencida; vencidas recientes por 30 días de calendario contados desde el fin de la tolerancia, también con el cambio de horario de Tijuana; cobros con el corte del mes en Monterrey (un segundo antes de las 00:00 es del mes anterior); búsqueda por cada campo, también por la computadora anterior a una transferencia, con los comodines de `LIKE` como texto; cada filtro y cada orden; páginas de 20; lista y detalle de clientes |
+| `tests/Unit/LicenseStateTest.php` | 3, nuevo | Límites exclusivos de vigente, tolerancia y vencida; prueba sin tolerancia; perpetua; revocada antes que sin activar; nombres y colores; días de calendario con cambio de horario y zona inválida |
+| `tests/Unit/LicenseActionsTest.php` | 2, nuevo | Acciones según el tipo y la activación, y según el rol y los permisos especiales |
+| `tests/Unit/ViewTest.php` | +2 | Insignias (escape y tonos permitidos), cupos, días restantes, identificadores abreviados, direcciones con filtros, fechas en dos partes, fechas largas en español sin `intl`; lo escrito en un formulario rechazado vuelve sin contraseñas ni códigos y solo a su formulario |
+| `tests/Integration/AdministrationTest.php` | — | La búsqueda de clientes sin inyección usa la lista nueva (`PanelQueries::customers`), y además busca `%` como texto |
+| `tests/Integration/InitialSchemaTest.php` | — | La migración `009` en la lista |
+| `tests/screens-panel.cjs` | nuevo (Playwright) | Resumen (conteos, «Por vencer» con sus tres filtros y su acceso directo, cobros), búsqueda, filtros y orden de las licencias, la cabecera y la barra de acciones, cada sección del detalle, una sección desconocida, la confirmación de revocar, la lista y el detalle de un cliente; y las mismas pantallas a 390 px sin desbordamiento, las secciones desde la lista del teléfono y las filas como tarjetas |
+| `tests/panel.cjs`, `commercial-panel.cjs`, `transfers-panel.cjs`, `offline-panel.cjs` | — | Mismos recorridos con los selectores nuevos: las operaciones se abren desde la barra de acciones; los pagos, el historial, las revisiones y las constancias en su sección; el detalle del cliente y su edición; la liberación del contador en su página de confirmación. Nuevo: «Emitir licencia para este cliente» abre el formulario con el cliente elegido |
+
+Ninguna prueba se eliminó. Las aserciones que cambiaron son las de los selectores y los textos del panel (por ejemplo, el título «Aumento» pasó a «Cambio de plan: aumento con bonificación», y la bonificación de un pago es ahora una columna).
+
+### E5-2.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **45 reglas**, una a la vez, con `PanelQueriesTest`, `LicenseStateTest`, `LicenseActionsTest` y `ViewTest`. En la primera pasada **seis no se detectaban**:
+
+| Regla | Qué pasó |
+| --- | --- |
+| La perpetua activada siempre está vigente | **Redundante:** la base exige `expires_at` vacío en la perpetua (`chk_license_period`), y esa condición ya la resuelve. Se quitó del código, con la explicación en un comentario |
+| Los cobros solo suman pagos en MXN | **No podía fallar:** la base exige `currency='MXN'` (`chk_payment_currency`). Se quitó; así el índice de la migración `009` cubre la consulta |
+| El identificador se busca en minúsculas | **Redundante:** `LIKE` no distingue mayúsculas con la colación de la conexión. Se quitó, con un comentario |
+| Las vencidas recientes se cuentan desde el fin de la tolerancia | **Faltaba un caso:** la prueba usaba una prueba gratuita, sin tolerancia. Se agregó una suscripción con el cambio de horario de Tijuana |
+| En el instante exacto del vencimiento la suscripción deja de contar como vigente | **Faltaba un caso:** se agregó al conteo y al filtro de vigentes |
+| «Sin activar» excluye las revocadas | **Faltaba un caso:** una licencia revocada antes de activarse |
+
+Con esos cambios, las **42 que siguen en el código quedaron detectadas** (las otras tres se quitaron por redundantes o imposibles): estado (límite del vencimiento, tolerancia en segundos, revocada antes que sin activar, días de calendario en la zona del cliente, color de la prueba vigente); resumen (hoy + N días, no revocadas, no vencidas, 30 días con hoy incluido, desde el fin de la tolerancia, límite exclusivo de la tolerancia, vigentes antes de vencer, meses en la zona del panel, ventanas de 7, 15 o 30); búsqueda (computadoras anteriores, comodines, razón social, referencia); orden (sin vencimiento al final); filtros (sin activar, vigente con la perpetua, antes de vencer, personalizadas, transferencia pendiente, plan); clientes (vigentes, RFC); páginas de 20; acciones (cada una de las diez reglas de `LicenseActions` y las licencias revocadas); y lo escrito en un formulario (sin secretos, solo a su formulario, tonos permitidos de la insignia).
+
+### E5-2.4 Rendimiento
+
+| Consulta | Índice | `EXPLAIN` |
+| --- | --- | --- |
+| Cobros del mes | `ix_payment_paid_concept` (nuevo) | Con el índice lo cubre («Using index»); sin él, recorre la tabla (`ALL`) |
+| «Por vencer» y vencidas recientes | `ix_license_expiry` | Rango sobre `expires_at` |
+| Detalle del cliente | `ix_license_customer`, `ix_payment_license` | — |
+| Búsqueda por computadora | `ix_activation_identity` | — |
+| Transferencia pendiente | `uq_transfer_pending` | — |
+| Auditoría de una licencia | `ix_audit_target` | — |
+
+### E5-2.5 Capturas revisadas
+
+En `var/screenshots/` (no se versiona): `dashboard-desktop`, `licenses-desktop`, `revoke-confirm-desktop`, `customer-detail-desktop` y sus versiones `-mobile`, además de las del detalle por sección, la renovación, el cambio de plan y las del recorrido de la etapa 4 con el diseño nuevo. Un recorrido previo, fuera del repositorio, tomó las 37 pantallas en escritorio y teléfono (`var/screenshots/fase-2/`): encontró que la ruta de la barra superior desbordaba en el teléfono (una regla nueva la hacía visible); se corrigió y ninguna pantalla desborda a 390 px.
+
+### E5-2.6 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | **483 pruebas, 29 110 aserciones**, todas OK (eran 466) |
+| Playwright (panel, ciclo comercial, transferencias, sin internet, pantallas nuevas y dispositivos de confianza) | OK, en escritorio y a 390 px; datos sintéticos eliminados |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+Dos pruebas existentes se ajustaron a cambios esperados de esta fase: la de la migración `008` aplicaba «todas menos la última» y ahora aplica las anteriores a la `008` (ya existe la `009`), y la del botón de notificaciones cuenta los enlaces a la sección de computadoras de la licencia.

@@ -105,4 +105,65 @@ final class ViewTest extends TestCase
 			]),
 		);
 	}
+
+	public function testPanelHelpersOfTheDefinitiveDesign(): void
+	{
+		// La insignia escapa su texto y solo acepta los tonos de la tabla de colores.
+		self::assertSame(
+			'<span class="badge-state tone-gray"><span class="badge-dot" aria-hidden="true"></span>&lt;b&gt;</span>',
+			View::badge('<b>', 'neon'),
+		);
+		self::assertStringContainsString('tone-blue', View::stateBadge('active', 'trial'));
+		self::assertStringContainsString('Prueba vigente', View::stateBadge('active', 'trial'));
+		self::assertSame(
+			'3 cajas · 10 comanderos · 0 KDS',
+			View::limits(['cash_registers' => 3, 'order_takers' => '10', 'kitchen_displays' => 0]),
+		);
+		self::assertSame(
+			['vence hoy', 'vence mañana', 'en 7 días'],
+			[View::daysLeft(0), View::daysLeft(1), View::daysLeft(7)],
+		);
+		self::assertSame('abcdef12…', View::shortId('abcdef12-0000-4000-8000-000000000000'));
+		self::assertSame('', View::shortId(null));
+		self::assertSame(
+			'/admin/licenses?q=caf%C3%A9&page=2',
+			View::query('/admin/licenses', ['q' => 'café', 'state' => '', 'page' => 1], ['page' => 2]),
+		);
+		self::assertSame('/admin/licenses', View::query('/admin/licenses', ['q' => '']));
+		self::assertSame(
+			['date' => '15/11/2026 · 22:30', 'zone' => 'America/Tijuana'],
+			View::dateParts('2026-11-16 06:30:00.000000', 'America/Tijuana'),
+		);
+		self::assertSame(['date' => '—', 'zone' => ''], View::dateParts(null, 'America/Tijuana'));
+		// Fechas largas en español sin depender de la extensión intl, en la zona del panel.
+		self::assertSame(
+			'martes 17 de noviembre de 2026',
+			View::longDate(new \DateTimeImmutable('2026-11-18T05:59:59Z')),
+		);
+		self::assertSame(
+			'miércoles 18 de noviembre de 2026',
+			View::longDate(new \DateTimeImmutable('2026-11-18T06:00:00Z')),
+		);
+		self::assertSame('octubre de 2026', View::monthYear(new \DateTimeImmutable('2026-10-01 00:00')));
+		self::assertStringContainsString('<svg class="icon"', View::icon('home'));
+	}
+
+	public function testRejectedFormValuesComeBackWithoutSecrets(): void
+	{
+		View::remember('/admin/customers/create', [
+			'name' => 'Restaurante',
+			'password' => 'secreta',
+			'code' => '123456',
+			'csrf' => 'token',
+		]);
+		self::assertSame('Restaurante', View::old('name', '', '/admin/customers/create'));
+		// Las contraseñas y los códigos nunca vuelven.
+		self::assertSame('', View::old('password', '', '/admin/customers/create'));
+		self::assertSame('', View::old('code', '', '/admin/customers/create'));
+		// Otro formulario de la misma pantalla conserva sus valores.
+		self::assertSame('Original', View::old('name', 'Original', '/admin/customers/otro'));
+		self::assertTrue(View::hasOld('/admin/customers/create'));
+		self::assertFalse(View::hasOld('/admin/customers/otro'));
+		View::remember('', []);
+	}
 }

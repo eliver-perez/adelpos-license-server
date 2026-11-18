@@ -9,16 +9,31 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 	const submit = async (button) => Promise.all([page.waitForNavigation({ waitUntil: 'load' }), button.click()]);
 	async function open(customer) {
 		await page.goto('/admin/licenses');
-		await page.locator('tbody tr').filter({ hasText: customer }).getByRole('link', { name: 'Detalle' }).click();
+		await page.locator('tbody tr').filter({ hasText: customer }).getByRole('link', { name: customer }).click();
 		await page.waitForURL(/\/admin\/licenses\/[a-f0-9-]{36}$/);
 		return page.url();
 	}
-	const payments = async () => page.locator('#payments tbody').innerText();
+	// Las operaciones se abren desde la barra de acciones del detalle (docs/PANEL.md, sección 3.3).
+	const action = async (name) => submit(page.locator('[data-testid="license-actions"]').getByRole('link', { name }));
+	// Los pagos están en su sección; se vuelve al resumen de la licencia al terminar.
+	const payments = async () => {
+		const url = page.url().split('?')[0];
+		await page.goto(url + '?section=payments');
+		const text = await page.locator('#payments tbody').innerText();
+		await page.goto(url);
+		return text;
+	};
+	const paymentCell = async (concept, label) => {
+		const url = page.url().split('?')[0];
+		await page.goto(url + '?section=payments');
+		const row = page.locator('#payments tbody tr').filter({ hasText: concept }).first();
+		const text = await row.locator('td[data-label="' + label + '"]').innerText();
+		await page.goto(url);
+		return text.trim();
+	};
 	const detail = async () => {
 		const entries = await page
-			.locator('.detail-grid')
-			.first()
-			.locator('div')
+			.locator('#section-summary .detail-grid > div')
 			.evaluateAll((items) =>
 				items.map((item) => [
 					item.querySelector('dt').innerText.trim(),
@@ -31,8 +46,11 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 	// 1. Renovar la suscripción: la vista previa muestra el vencimiento nuevo y sugiere el precio del plan.
 	const subscriptionURL = await open('Cocina Regional');
 	const before = await detail();
+	// La renovación se calcula de inmediato con la duración vigente; aquí se cambia a trimestral.
+	await action('Renovar');
+	assert.match(await page.locator('#renewal-quote').innerText(), /Mensual \(1 mes\)/);
 	await page.locator('#renew-form [name="billing_period"]').selectOption('quarterly');
-	await submit(page.getByRole('button', { name: 'Revisar renovación' }));
+	await submit(page.getByRole('button', { name: 'Calcular' }));
 	assert.match(new URL(page.url()).pathname, /\/renew$/);
 	const quote = await page.locator('#renewal-quote').innerText();
 	assert.match(quote, /Pagó antes de que terminara la tolerancia/);
@@ -50,10 +68,13 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 	assert.match(await payments(), /Renovación[\s\S]*Trimestral[\s\S]*\$1,500\.00 MXN/);
 
 	// 2. Subir de plan con bonificación: la vista previa muestra lo pagado, la bonificación y lo sugerido.
+	// El cambio de plan pide primero el destino.
+	await action('Cambiar de plan');
+	assert.equal(await page.locator('#plan-change-quote').count(), 0);
 	await page.locator('#plan-change-form [name="plan_id"]').selectOption('premium');
 	await page.locator('#plan-change-form [name="billing_period"]').selectOption('monthly');
-	await submit(page.getByRole('button', { name: 'Revisar cambio de plan' }));
-	assert.match(await page.locator('h1').innerText(), /Aumento/);
+	await submit(page.getByRole('button', { name: 'Calcular el cambio' }));
+	assert.match(await page.locator('h1').innerText(), /aumento con bonificación/);
 	const planQuote = await page.locator('#plan-change-quote').innerText();
 	// Cuentan el periodo en curso (alta de 0.00) y el trimestre renovado por adelantado, que no ha empezado
 	// y cuenta completo (decisión 3 de la etapa 4).
@@ -72,12 +93,13 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 		[upgraded['Cajas'], upgraded['Comanderos'], upgraded['Pantallas de cocina (KDS)']],
 		['5', '10', '5'],
 	);
-	assert.match(await payments(), /Cambio de plan[\s\S]*Bonificación: \$1,500\.00 MXN/);
+	assert.equal(await paymentCell('Cambio de plan', 'Bonificación'), '$1,500.00 MXN');
 
 	// 3. Programar una reducción, sin cobro, y cancelarla.
+	await action('Cambiar de plan');
 	await page.locator('#plan-change-form [name="plan_id"]').selectOption('basico');
-	await submit(page.getByRole('button', { name: 'Revisar cambio de plan' }));
-	assert.match(await page.locator('h1').innerText(), /Reducción programada/);
+	await submit(page.getByRole('button', { name: 'Calcular el cambio' }));
+	assert.match(await page.locator('h1').innerText(), /reducción programada/);
 	assert.equal(await page.locator('[name="amount"]').count(), 0);
 	assert.match(await page.locator('[data-testid="scheduled-at"]').innerText(), /\d{2}\/\d{2}\/\d{4}/);
 	await submit(page.getByRole('button', { name: 'Programar el cambio' }));
@@ -90,11 +112,16 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 
 	// 4. Convertir la prueba en suscripción anual del plan elemental.
 	const trialURL = await open('Café Central');
-	assert.equal(await page.locator('#renew-form').count(), 0);
+	// Una prueba no se renueva: se convierte.
+	assert.equal(
+		await page.locator('[data-testid="license-actions"]').getByRole('link', { name: 'Renovar' }).count(),
+		0,
+	);
+	await action('Convertir');
 	await page.locator('#convert-form [name="license_type"]').selectOption('subscription');
 	await page.locator('#convert-form [name="billing_period"]').selectOption('annual');
 	await page.locator('#convert-form [name="plan_id"]').selectOption('elemental');
-	await submit(page.getByRole('button', { name: 'Revisar conversión' }));
+	await submit(page.getByRole('button', { name: 'Calcular la conversión' }));
 	assert.match(await page.locator('#conversion-quote').innerText(), /La prueba ya está activada/);
 	await page.locator('[name="amount"]').fill('5000');
 	await submit(page.getByRole('button', { name: 'Registrar conversión' }));
@@ -107,7 +134,7 @@ module.exports = async function commercialPanel({ page, screenshot }) {
 	// 5. Comprar mantenimiento de la perpetua.
 	await open('Restaurante del Norte');
 	const updates = (await detail())['Actualizaciones hasta'];
-	await submit(page.locator('#maintenance-form').getByRole('button', { name: 'Revisar mantenimiento' }));
+	await action('Mantenimiento');
 	assert.match(await page.locator('#maintenance-quote').innerText(), /todavía no terminan/);
 	assert.equal(await page.locator('[name="amount"]').inputValue(), '3000.00');
 	await submit(page.getByRole('button', { name: 'Registrar mantenimiento' }));

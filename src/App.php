@@ -30,6 +30,7 @@ use AdelPos\License\Infrastructure\{
 	Clock,
 	Crypto,
 	Database,
+	PanelQueries,
 	RateLimiter,
 	ReadRepository,
 	Sessions,
@@ -50,6 +51,7 @@ final class App
 	public readonly LicenseService $licenses;
 	public readonly AdminService $admins;
 	public readonly ReadRepository $read;
+	public readonly PanelQueries $panel;
 	public readonly SigningKeys $signingKeys;
 	public readonly RevisionPublisher $publisher;
 	public readonly ActivationService $activations;
@@ -156,6 +158,7 @@ final class App
 			$this->trustedDevices,
 		);
 		$this->read = new ReadRepository($db, $this->clock);
+		$this->panel = new PanelQueries($db, $this->clock);
 		$this->access = new Access($db);
 		$this->materials = new LicenseMaterials($db, $this->crypto, $this->audit, $this->access, $this->auth);
 		$this->documents = new DocumentService(

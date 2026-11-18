@@ -4,6 +4,15 @@ use AdelPos\License\Http\View as V;
 
 $availableProducts = array_values(array_filter($products, fn($product) => $product['state'] === 'active'));
 $selectedProduct = $availableProducts[0]['product_id'] ?? '';
+foreach ($availableProducts as $product) {
+	// El producto del contrato va primero: es el único que firma licencias para AD-EL POS.
+	if ($product['product_id'] === 'adel_pos') {
+		$selectedProduct = 'adel_pos';
+	}
+}
+// Cliente elegido: el del detalle del cliente («Emitir licencia para este cliente») o el escrito antes.
+$chosenCustomer = V::old('customer_id', $selectedCustomer ?? '', '/admin/licenses/create');
+$crumbs = [['Licencias', '/admin/licenses'], ['Emitir licencia', null]];
 // Precio del catálogo de cada plazo, para que el formulario sugiera el monto de alta.
 $priceAttributes = function (array $plan): string {
 	$attributes = [];
@@ -41,9 +50,10 @@ $priceAttributes = function (array $plan): string {
 							<select class="form-select" name="customer_id" id="customer_id" required>
 								<option value="">Selecciona un cliente</option>
 								<?php foreach ($customers as $customer): ?>
-									<option value="<?= V::escape($customer['id_text']) ?>">
-										<?= V::escape($customer['display_name']) ?>
-									</option>
+									<option
+										value="<?= V::escape($customer['id_text']) ?>"
+										<?= $customer['id_text'] === $chosenCustomer ? 'selected' : '' ?>
+									><?= V::escape($customer['display_name']) ?></option>
 								<?php endforeach; ?>
 							</select>
 						</div>
@@ -51,9 +61,10 @@ $priceAttributes = function (array $plan): string {
 							<label for="product_id" class="form-label">Producto</label>
 							<select class="form-select" name="product_id" id="product_id" required>
 								<?php foreach ($availableProducts as $product): ?>
-									<option value="<?= V::escape($product['product_id']) ?>">
-										<?= V::escape($product['display_name']) ?>
-									</option>
+									<option
+										value="<?= V::escape($product['product_id']) ?>"
+										<?= $product['product_id'] === $selectedProduct ? 'selected' : '' ?>
+									><?= V::escape($product['display_name']) ?></option>
 								<?php endforeach; ?>
 							</select>
 						</div>

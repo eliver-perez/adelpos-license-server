@@ -1,45 +1,37 @@
 <?php
-// Plan y cupos de destino de una operación comercial. Espera $plans (los que se ofrecen) y
-// $selectedPlan (el plan_id elegido). Los cupos vacíos son los del plan.
+// Plan y cupos de destino de una operación comercial. Espera $plans (los que se ofrecen), $selectedPlan (el
+// plan_id elegido) y, si se eligieron, $limitValues (cupo → número). Los cupos vacíos son los del plan.
 use AdelPos\License\Domain\LicenseTerms;
 use AdelPos\License\Http\View as V;
+
+$limitValues = $limitValues ?? [];
 ?>
-<label>
-	Plan
-	<select class="form-select mt-2" name="plan_id" required>
+<div>
+	<label class="form-label" for="target_plan">Plan</label>
+	<select class="form-select" id="target_plan" name="plan_id" required>
 		<?php foreach ($plans as $plan): ?>
-			<?php
-			$planLabel =
-				$plan['display_name'] .
-				' · ' .
-				(int) $plan['cash_registers'] .
-				' cajas · ' .
-				(int) $plan['order_takers'] .
-				' comanderos · ' .
-				(int) $plan['kitchen_displays'] .
-				' KDS';
-			?>
+			<?php $planLabel = $plan['display_name'] . ' · ' . V::limits($plan); ?>
 			<option value="<?= V::escape($plan['plan_id']) ?>" <?= $plan['plan_id'] === $selectedPlan ? 'selected' : '' ?>>
 				<?= V::escape($planLabel) ?>
 			</option>
 		<?php endforeach; ?>
 	</select>
-</label>
+</div>
 <div class="row g-2">
 	<?php foreach (LicenseTerms::LIMITS as $limit => $label): ?>
 		<div class="col-4">
-			<label class="small">
-				<?= V::escape($label) ?>
-				<input
-					class="form-control mt-1"
-					type="number"
-					name="<?= $limit ?>"
-					min="0"
-					max="<?= LicenseTerms::MAX_LIMIT ?>"
-					step="1"
-					placeholder="Del plan"
-				>
-			</label>
+			<label class="form-label small" for="target_<?= $limit ?>"><?= V::escape($label) ?></label>
+			<input
+				class="form-control"
+				type="number"
+				id="target_<?= $limit ?>"
+				name="<?= $limit ?>"
+				min="0"
+				max="<?= LicenseTerms::MAX_LIMIT ?>"
+				step="1"
+				placeholder="Del plan"
+				value="<?= V::escape($limitValues[$limit] ?? '') ?>"
+			>
 		</div>
 	<?php endforeach; ?>
 </div>

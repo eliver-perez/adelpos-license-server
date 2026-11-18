@@ -165,7 +165,7 @@ module.exports = async function offlinePanel({
 	assert.notEqual(transferred.payload.activation_id, activated.payload.activation_id);
 	assert.equal(transferred.payload.server_id, newDevice.id);
 	// El detalle de la licencia nombra el estado en que quedó la computadora anterior.
-	const detail = await (await context.request.get(licenseURL)).text();
+	const detail = await (await context.request.get(licenseURL + '?section=computers')).text();
 	assert.match(detail, /Transferida/);
 	assert.doesNotMatch(detail, /Undefined array key|Warning/);
 

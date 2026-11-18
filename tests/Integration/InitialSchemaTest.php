@@ -28,6 +28,7 @@ final class InitialSchemaTest extends TestCase
 		'006_editor_de_planes.sql',
 		'007_cambios_programados.sql',
 		'008_transferencias_y_alertas.sql',
+		'009_indice_de_cobros.sql',
 	];
 	private \PDO $server;
 	private string $dsn;
@@ -228,11 +229,17 @@ final class InitialSchemaTest extends TestCase
 		// Hasta la etapa 3 solo el propietario transfería, desde el panel. Esas filas quedan con la vía «owner» y
 		// confirmadas desde su creación.
 		[, $db] = $this->database();
+		// Las migraciones anteriores a la 008 primero; la 008 y las siguientes, después de los datos.
 		$files = [];
+		$later = [];
 		foreach (self::MIGRATIONS as $name) {
-			$files[$name] = (string) file_get_contents(self::migrations() . '/' . $name);
+			$contents = (string) file_get_contents(self::migrations() . '/' . $name);
+			if (strcmp($name, '008_') < 0) {
+				$files[$name] = $contents;
+			} else {
+				$later[$name] = $contents;
+			}
 		}
-		$latest = array_pop($files);
 		$directory = $this->directory($files);
 		(new Migrator($db, $directory))->migrate();
 		$admin = random_bytes(16);
@@ -277,7 +284,9 @@ final class InitialSchemaTest extends TestCase
 				VALUES (?,?,?,?,?,'Equipo averiado',1,'2026-11-02 10:00:00.000000')",
 			[random_bytes(16), $license, $outgoing, $incoming, $admin],
 		);
-		file_put_contents($directory . '/' . self::MIGRATIONS[count(self::MIGRATIONS) - 1], $latest);
+		foreach ($later as $name => $contents) {
+			file_put_contents($directory . '/' . $name, $contents);
+		}
 		(new Migrator($db, $directory))->migrate();
 		self::assertSame(
 			[

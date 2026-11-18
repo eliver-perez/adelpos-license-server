@@ -3,7 +3,7 @@ declare(strict_types=1);
 namespace AdelPos\License\Http;
 
 use AdelPos\License\Application\{Alerts, Payments};
-use AdelPos\License\Domain\{Money, TimeZones, Uuid};
+use AdelPos\License\Domain\{LicenseState, Money, TimeZones, Uuid};
 
 final class View
 {
@@ -21,6 +21,38 @@ final class View
 	public static function escape(mixed $value): string
 	{
 		return htmlspecialchars(is_scalar($value) ? (string) $value : '', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+	}
+
+	/** Campos que nunca se vuelven a escribir en un formulario: contraseñas, códigos y controles. */
+	private const SECRET_FIELDS = ['password', 'new_password', 'confirmation', 'code', 'csrf', 'operation_id'];
+
+	/** @var array<string, mixed> Lo escrito en el formulario que no pasó la validación. */
+	private static array $old = [];
+	private static string $oldForm = '';
+
+	/**
+	 * Guarda lo escrito en un formulario rechazado ($form es su dirección de envío) para volver a mostrarlo
+	 * (docs/PANEL.md, sección 7). Nunca guarda contraseñas ni códigos.
+	 */
+	public static function remember(string $form, array $input): void
+	{
+		self::$oldForm = $form;
+		self::$old = array_diff_key($input, array_flip(self::SECRET_FIELDS));
+	}
+
+	/** Valor de un campo: lo escrito si su formulario ($form) fue el rechazado; si no, $default. */
+	public static function old(string $name, mixed $default, string $form): string
+	{
+		if (self::$oldForm !== $form || !array_key_exists($name, self::$old) || !is_scalar(self::$old[$name])) {
+			return is_scalar($default) ? (string) $default : '';
+		}
+		return (string) self::$old[$name];
+	}
+
+	/** Si el formulario rechazado ($form) traía el campo; para casillas y opciones. */
+	public static function hasOld(string $form): bool
+	{
+		return self::$oldForm === $form && self::$old !== [];
 	}
 
 	public static function fields(string $csrf): void
@@ -135,7 +167,7 @@ final class View
 				' (AD-EL POS ' .
 				$detail['app_version'] .
 				') intentó transferir la licencia mientras otra transferencia está pendiente de confirmar desde el ' .
-				self::date($detail['pending_since']) .
+				self::date($detail['pending_since'], $alert['time_zone'] ?? null) .
 				'. Intentos: ' .
 				$alert['attempts'] .
 				'.';
@@ -146,6 +178,148 @@ final class View
 			'. Veces que se repitió: ' .
 			$alert['attempts'] .
 			'.';
+	}
+
+	/**
+	 * Insignia de estado (docs/PANEL.md, sección 5): un punto de color y el texto. El color nunca va solo.
+	 * Tonos: green, blue, amber, red, darkred, gray y outline.
+	 */
+	public static function badge(string $label, string $tone): string
+	{
+		$tone = in_array($tone, ['green', 'blue', 'amber', 'red', 'darkred', 'gray', 'outline'], true) ? $tone : 'gray';
+		return '<span class="badge-state tone-' .
+			$tone .
+			'"><span class="badge-dot" aria-hidden="true"></span>' .
+			self::escape($label) .
+			'</span>';
+	}
+
+	/** Insignia del estado de una licencia, con el nombre y el color de la tabla de estados. */
+	public static function stateBadge(string $state, string $licenseType): string
+	{
+		return self::badge(LicenseState::label($state, $licenseType), LicenseState::tone($state, $licenseType));
+	}
+
+	/** Los tres cupos en una línea: «3 cajas · 3 comanderos · 3 KDS». */
+	public static function limits(array $license): string
+	{
+		return (int) $license['cash_registers'] .
+			' cajas · ' .
+			(int) $license['order_takers'] .
+			' comanderos · ' .
+			(int) $license['kitchen_displays'] .
+			' KDS';
+	}
+
+	/**
+	 * Fecha de una licencia en la zona de su cliente, separada en la fecha y la zona para mostrarlas en
+	 * dos líneas. Sin fecha: «Empieza al activar».
+	 *
+	 * @return array{date: string, zone: string}
+	 */
+	public static function dateParts(?string $value, ?string $zone): array
+	{
+		if ($value === null || $value === '') {
+			return ['date' => '—', 'zone' => ''];
+		}
+		$zone = $zone !== null && TimeZones::valid($zone) ? $zone : self::TIMEZONE;
+		$local = (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone($zone));
+		return ['date' => $local->format('d/m/Y · H:i'), 'zone' => $zone];
+	}
+
+	private const MONTHS = [
+		'enero',
+		'febrero',
+		'marzo',
+		'abril',
+		'mayo',
+		'junio',
+		'julio',
+		'agosto',
+		'septiembre',
+		'octubre',
+		'noviembre',
+		'diciembre',
+	];
+	private const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+	/** «martes 17 de noviembre de 2026», en la zona del panel. Sin depender de la extensión intl. */
+	public static function longDate(\DateTimeImmutable $instant): string
+	{
+		$local = $instant->setTimezone(new \DateTimeZone(self::TIMEZONE));
+		return self::WEEKDAYS[(int) $local->format('w')] .
+			' ' .
+			$local->format('j') .
+			' de ' .
+			self::MONTHS[(int) $local->format('n') - 1] .
+			' de ' .
+			$local->format('Y');
+	}
+
+	/** «noviembre de 2026»: el mes de un instante en su propia zona. */
+	public static function monthYear(\DateTimeImmutable $local): string
+	{
+		return self::MONTHS[(int) $local->format('n') - 1] . ' de ' . $local->format('Y');
+	}
+
+	/** Días de calendario que faltan, en palabras: «vence hoy», «vence mañana», «en 5 días». */
+	public static function daysLeft(int $days): string
+	{
+		return match (true) {
+			$days <= 0 => 'vence hoy',
+			$days === 1 => 'vence mañana',
+			default => 'en ' . $days . ' días',
+		};
+	}
+
+	/** Un identificador largo, abreviado a sus primeros 8 caracteres para las listas. */
+	public static function shortId(?string $uuid): string
+	{
+		return $uuid === null || $uuid === '' ? '' : substr($uuid, 0, 8) . '…';
+	}
+
+	/** Dirección con los filtros actuales y algunos cambiados; los vacíos no se escriben. */
+	public static function query(string $path, array $filters, array $changes = []): string
+	{
+		$values = array_filter(
+			array_replace($filters, $changes),
+			static fn($value): bool => $value !== '' && $value !== null,
+		);
+		return $path . ($values === [] ? '' : '?' . http_build_query($values));
+	}
+
+	/** Ícono de trazo propio, decorativo (aria-hidden), para la navegación y los botones. */
+	public static function icon(string $name): string
+	{
+		$paths = [
+			'home' => '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+			'license' =>
+				'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="12" r="2.5"/>' .
+				'<path d="M13 10h5M13 14h3"/>',
+			'customers' =>
+				'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/>' .
+				'<path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.8 3 2.5 3.5 5.2"/>',
+			'alerts' => '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+			'offline' => '<path d="M4 8h14l-3-3M20 16H6l3 3"/>',
+			'plans' => '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/>',
+			'products' => '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/>',
+			'audit' =>
+				'<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/>' .
+				'<circle cx="4" cy="18" r="1"/>',
+			'admins' => '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/>',
+			'security' => '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+			'plus' => '<path d="M12 5v14M5 12h14"/>',
+			'search' => '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+			'download' => '<path d="M12 4v11m0 0-4-4m4 4 4-4"/><path d="M5 19h14"/>',
+			'more' =>
+				'<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+			'computer' => '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+		];
+		return '<svg class="icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" ' .
+			'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" ' .
+			'aria-hidden="true" focusable="false">' .
+			($paths[$name] ?? '') .
+			'</svg>';
 	}
 
 	public static function role(string $role): string

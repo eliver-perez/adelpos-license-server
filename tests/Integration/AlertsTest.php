@@ -289,7 +289,8 @@ final class AlertsTest extends TestCase
 		$html = $render($this->actor, $summary);
 		self::assertStringContainsString('data-testid="notification-count">2</span>', $html);
 		self::assertStringContainsString('aria-label="Notificaciones: 2 alertas sin revisar"', $html);
-		self::assertSame(2, substr_count($html, 'href="/admin/licenses/' . $license['id'] . '"'));
+		// Cada alerta lleva a la sección de computadoras y transferencias de su licencia.
+		self::assertSame(2, substr_count($html, 'href="/admin/licenses/' . $license['id'] . '?section=computers"'));
 		// Sin alertas sin revisar, el botón sigue y el número no aparece.
 		foreach ($this->alerts($license['id'], 'transfer_blocked') as $alert) {
 			$this->app->alerts->review($this->actor, Uuid::create(), Uuid::text($alert['alert_id']));

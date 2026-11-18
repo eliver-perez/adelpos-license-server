@@ -2,19 +2,41 @@
 use AdelPos\License\Domain\TimeZones;
 use AdelPos\License\Http\View as V;
 
-$selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
+// Alta o edición de un cliente. Si el formulario no pasó la validación, se vuelve a mostrar lo escrito.
+$isNew = $customer === null;
+$formUrl = '/admin/customers/' . ($customer['id_text'] ?? 'create');
+$backUrl = $isNew ? '/admin/customers' : '/admin/customers/' . $customer['id_text'];
+$crumbs = [['Clientes', '/admin/customers'], ['Nuevo cliente', null]];
+if (!$isNew) {
+	$crumbs = [['Clientes', '/admin/customers'], [$customer['display_name'], $backUrl], ['Editar datos', null]];
+}
+$values = [];
+$columns = [
+	'name' => 'display_name',
+	'tax_id' => 'tax_id',
+	'legal_name' => 'legal_name',
+	'contact_name' => 'contact_name',
+	'email' => 'email',
+	'phone' => 'phone',
+	'state' => 'state',
+	'time_zone' => 'time_zone',
+];
+foreach ($columns as $field => $column) {
+	$values[$field] = V::old($field, $customer[$column] ?? '', $formUrl);
+}
+$selectedZone = $values['time_zone'] !== '' ? $values['time_zone'] : TimeZones::DEFAULT;
 ?>
 <div class="page-heading">
 	<div>
-		<a href="/admin/customers" class="text-link">← Clientes</a>
-		<h1 class="mt-3"><?= $customer ? V::escape($customer['display_name']) : 'Nuevo cliente' ?></h1>
-		<p>Conserva solo la información necesaria para administrar sus licencias.</p>
+		<a href="<?= V::escape($backUrl) ?>" class="text-link">← <?= $isNew ? 'Clientes' : 'Detalle del cliente' ?></a>
+		<h1 class="mt-3"><?= $isNew ? 'Nuevo cliente' : 'Editar ' . V::escape($customer['display_name']) ?></h1>
+		<p>Solo la información necesaria para administrar sus licencias.</p>
 	</div>
 </div>
 <form
 	class="panel form-panel"
 	method="post"
-	action="/admin/customers/<?= V::escape($customer['id_text'] ?? 'create') ?>"
+	action="<?= V::escape($formUrl) ?>"
 >
 	<?php V::fields($csrf); ?>
 	<input type="hidden" name="version" value="<?= (int) ($customer['row_version'] ?? 0) ?>">
@@ -31,7 +53,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					id="name"
 					name="name"
 					maxlength="190"
-					value="<?= V::escape($customer['display_name'] ?? '') ?>"
+					value="<?= V::escape($values['name']) ?>"
 					required
 				>
 			</div>
@@ -42,7 +64,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					id="tax_id"
 					name="tax_id"
 					maxlength="32"
-					value="<?= V::escape($customer['tax_id'] ?? '') ?>"
+					value="<?= V::escape($values['tax_id']) ?>"
 				>
 			</div>
 			<div class="col-md-6">
@@ -52,7 +74,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					id="legal_name"
 					name="legal_name"
 					maxlength="190"
-					value="<?= V::escape($customer['legal_name'] ?? '') ?>"
+					value="<?= V::escape($values['legal_name']) ?>"
 				>
 			</div>
 			<div class="col-md-6">
@@ -82,7 +104,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					id="contact_name"
 					name="contact_name"
 					maxlength="190"
-					value="<?= V::escape($customer['contact_name'] ?? '') ?>"
+					value="<?= V::escape($values['contact_name']) ?>"
 					required
 				>
 			</div>
@@ -94,7 +116,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					id="email"
 					name="email"
 					maxlength="190"
-					value="<?= V::escape($customer['email'] ?? '') ?>"
+					value="<?= V::escape($values['email']) ?>"
 				>
 			</div>
 			<div class="col-md-6">
@@ -104,7 +126,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					id="phone"
 					name="phone"
 					maxlength="60"
-					value="<?= V::escape($customer['phone'] ?? '') ?>"
+					value="<?= V::escape($values['phone']) ?>"
 				>
 			</div>
 			<div class="col-md-6">
@@ -113,7 +135,7 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 					<option value="active">Activo</option>
 					<option
 						value="archived"
-						<?= ($customer['state'] ?? '') === 'archived' ? 'selected' : '' ?>
+						<?= $values['state'] === 'archived' ? 'selected' : '' ?>
 					>Archivado</option>
 				</select>
 				<div class="form-text">Archivar conserva las licencias y su historial.</div>
@@ -121,10 +143,8 @@ $selectedZone = $customer['time_zone'] ?? TimeZones::DEFAULT;
 		</div>
 		<?php if ($actor->canWrite()): ?>
 			<div class="form-footer">
-				<a
-					href="/admin/customers"
-					class="btn btn-outline-secondary"
-				>Cancelar</a><button class="btn btn-primary" type="submit">Guardar cliente</button>
+				<a href="<?= V::escape($backUrl) ?>" class="btn btn-outline-secondary">Cancelar</a>
+				<button class="btn btn-primary" type="submit">Guardar cliente</button>
 			</div>
 		<?php endif; ?>
 	</fieldset>
