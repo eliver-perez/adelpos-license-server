@@ -3220,3 +3220,50 @@ Los pendientes de la etapa 5 registrados fuera del código (AVANCE.md, E4-6.6):
 | `generate-fixtures.php --check` y verificador Go | Sin cambios; OK |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+---
+
+## Etapa 5 · Fase 1 — Revisión del panel y propuesta de diseño
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-1.1 Qué se hizo
+
+- **Inventario con capturas.** Un recorrido de Playwright, fuera del repositorio y con los datos sintéticos de `tests/prepare-panel.php`, tomó 52 capturas: las 26 pantallas del panel en escritorio (1440 px) y en teléfono (390 px), en `var/screenshots/inventario-etapa-4/` (no se versiona). Ninguna desborda a lo ancho a 390 px. Los datos sintéticos se eliminaron al terminar (una primera corrida falló al abrir el registro del servidor y dejó una base sintética; se eliminó con su usuario).
+- **`docs/PANEL.md`**, nuevo: qué hace el propietario cada día; el inventario de cada pantalla (para qué la usa, qué cuesta trabajo hoy y qué cambia); navegación; diseño de cada pantalla; componentes reutilizables; colores de estado con su contraste y la regla exacta de cada estado; tipografía y espaciado; reglas de texto; accesibilidad, teléfono y rendimiento; y pruebas.
+- **`DECISIONS.md`, sección 18, Fase 1:** las 12 decisiones de diseño que la especificación no fija.
+
+### E5-1.2 Lo que más cuesta hoy, según el inventario
+
+| Pantalla | Problema principal |
+| --- | --- |
+| Detalle de la licencia | 11 bloques en una página de 3,500 px; operaciones repartidas en tres lugares; el estado dice «Emitida» en vez de vigente, en tolerancia o vencida |
+| Resumen | Cifras que no piden acción; sin cobros; «vencen en 30 días» no lleva a renovar |
+| Licencias | Búsqueda y filtros mínimos; sin plan, cupos ni computadora; en el teléfono el vencimiento y el enlace quedan fuera de la vista |
+| Clientes | El detalle es solo el formulario: no muestra licencias ni pagos |
+| Operaciones | La vista previa no deja ajustar los datos |
+| Formularios | Un error de validación lleva a la página de error y se pierde lo escrito |
+
+### E5-1.3 Contraste de los colores de estado
+
+| Estado | Texto / fondo | Contraste |
+| --- | --- | --- |
+| Vigente | `#14653a` / `#e3f5ea` | 6.27:1 |
+| Prueba vigente | `#1d4fb8` / `#e5eeff` | 6.29:1 |
+| En tolerancia y pendiente | `#8a4b00` / `#fff1d6` | 6.09:1 |
+| Vencida | `#a1251b` / `#fde8e6` | 6.39:1 |
+| Revocada | `#7a1b14` / `#f6dedb` | 8.22:1 |
+| Transferida, liberada, cerrada | `#475467` / `#eef1f5` | 6.79:1 |
+| Sin activar | `#3d4a5c` / `#ffffff` | 9.00:1 |
+| Texto de ayuda | `#5b6678` / `#ffffff` | 5.81:1 |
+
+### E5-1.4 Resultado
+
+Esta fase no cambia código: solo `docs/PANEL.md`, `DECISIONS.md` y este registro.
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | 466 pruebas, 28 983 aserciones, todas OK |
+| Playwright | No aplica: el panel no cambió (el recorrido de capturas no es una prueba) |
+| `bin/check-secrets.php` | Sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
