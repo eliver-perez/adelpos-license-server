@@ -3448,3 +3448,51 @@ Se quitaron **9 reglas**, todas detectadas: sin datos comerciales internos (la r
 | Marcas `PENDIENTE etapa` | 0 |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+---
+
+## Etapa 5 · Fase 5 — Nginx: límites de intentos y configuración del sitio
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-5.1 Qué cambió
+
+`deploy/nginx.conf.example` es ahora la configuración completa de `licensing.sicrat.com`, con el patrón del sitio de AIDEX:
+
+| Pieza | Valor |
+| --- | --- |
+| Contexto `http` | `map $request_id $adelpos_correlation_id`; `map $request_method $adelpos_login_limit_key` (solo POST); zonas `adelpos_api` y `adelpos_login`. Ningún nombre sin el prefijo `adelpos_` |
+| Límites | API `/v1/`: 60 por minuto por IP, ráfagas de 20. Inicio de sesión y verificación en dos pasos: 10 envíos por minuto, ráfagas de 5; abrir la página no cuenta. Los límites de la aplicación se conservan |
+| 429 de la API | JSON del contrato (`RATE_LIMITED`, `request_id: null`, `details: {}`), `Retry-After: 60` y la correlación en `X-Request-Id` |
+| 413 y 503 de la API | El mismo formato, ahora con `details` y `request_id: null` (el ejemplo heredado ponía la correlación en `request_id`) |
+| HTTP | Validación de Certbot en `/var/www/letsencrypt` y redirección 301 a HTTPS |
+| HTTPS | `listen 443 ssl`, `server_name` propio, certificados de Let's Encrypt, `TLSv1.2 TLSv1.3`, `server_tokens off`, `client_max_body_size 96k` (16k en la API), HSTS, `nosniff` y `no-store` con `always`, socket del pool propio |
+| Raíz | `/srv/adelpos-license/app/public` (el clon, Fase 6). Archivos ocultos: **404**; cualquier otro `.php`: 404 |
+| Nginx 1.24.0 | Sin directivas posteriores (ni `http2` como directiva); ver `DECISIONS.md`, sección 18, Fase 5, n.º 7 |
+
+Se retiró `deploy/nginx-http.conf.example` (su bloque está en el archivo completo) y la tarea diaria entra a `/srv/adelpos-license/app`.
+
+### E5-5.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/NativeStackFixture.php` | — | La pila real (TLS, Nginx, PHP-FPM y MySQL) carga el ejemplo completo, con el bloque de HTTP en otro puerto y la carpeta de Certbot; `nginx -t` lo acepta antes de arrancar |
+| `tests/Integration/NginxConfigTest.php` | 7, nuevo | 30 peticiones seguidas a la API: la 22.ª responde **429** de Nginx con el JSON exacto del contrato y sus cabeceras, sin que la aplicación llegue a su propio límite; 413 con el formato del contrato; 12 aperturas de `/login` sin límite y el séptimo envío seguido con 429; **404** para `/.htaccess` (que existe en `public/`), `/.env`, `/.git/config`, ocultos en `assets/`, `/router.php` y `/index.php`; redirección 301 de HTTP a HTTPS conservando la ruta y validación de Certbot servida por HTTP; **convivencia con AIDEX**: el ejemplo junto a un bloque con `$aidex_correlation_id` y la zona `aidex_api` pasa `nginx -t`, y con la zona `adelpos_api` repetida falla; todo lo declarado en el contexto `http` lleva el prefijo `adelpos_`, sin directivas posteriores a 1.24 y con la raíz en `public/`; y `public/` solo contiene lo que se sirve |
+| `tests/Integration/ProductionHttpTest.php` | — | `/.env` responde 404 (antes 403) |
+| `tests/trusted-devices-panel.cjs` (Playwright) | — | Corre sobre la pila con el ejemplo nuevo: sus inicios de sesión no alcanzan el límite de Nginx |
+
+**Hallazgo.** Una variable de `map` repetida en otro sitio **no** hace fallar `nginx -t` en Nginx 1.31.3 (el de las pruebas locales): una definición sustituye a la otra sin aviso. En 1.24.0 no se pudo comprobar aquí; lo prudente es suponer lo mismo. Una zona repetida sí lo hace fallar. La prueba de convivencia lo deja documentado, y la del prefijo protege los nombres.
+
+### E5-5.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **10 reglas**, todas detectadas: el límite de la API, el formato del contrato en el 429 y en el 413, `Retry-After`, que solo los envíos cuenten para el inicio de sesión, el límite del inicio de sesión, el 404 de los ocultos, la redirección a HTTPS, el prefijo propio de las zonas y la raíz en `public/`.
+
+### E5-5.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | **495 pruebas, 29 346 aserciones**, todas OK |
+| `nginx -t` con el ejemplo (Nginx 1.31.3 local) | OK, también junto al bloque sintético de AIDEX |
+| Playwright de dispositivos de confianza (sobre la pila con el ejemplo) | OK |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |

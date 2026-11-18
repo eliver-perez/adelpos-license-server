@@ -2,7 +2,7 @@
 set -eu
 umask 077
 export ADELPOS_LICENSE_CONFIG=/srv/adelpos-license/shared/config.php
-cd /srv/adelpos-license/current
+cd /srv/adelpos-license/app
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 destination=/srv/adelpos-license/backup/archives
 php bin/cleanup.php

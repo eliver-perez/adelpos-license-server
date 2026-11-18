@@ -9,6 +9,8 @@ final class NativeStackFixture
 {
 	public readonly string $directory;
 	public readonly string $origin;
+	/** El bloque de HTTP del ejemplo (redirección a HTTPS y validación de Certbot), en su propio puerto. */
+	public readonly string $httpOrigin;
 	public readonly App $app;
 	public readonly array $values;
 	private array $processes = [];
@@ -24,6 +26,11 @@ final class NativeStackFixture
 		$address = stream_socket_get_name($port, false);
 		fclose($port);
 		$this->origin = 'https://' . $address;
+		$httpPort = stream_socket_server('tcp://127.0.0.1:0');
+		$httpAddress = stream_socket_get_name($httpPort, false);
+		fclose($httpPort);
+		$this->httpOrigin = 'http://' . $httpAddress;
+		mkdir($this->directory . '/letsencrypt', 0700);
 		$this->values = array_replace($fixture->values, ['APP_ENV' => 'production', 'APP_URL' => $this->origin]);
 		$config = new Config($this->values, false);
 		$config->validate();
@@ -69,23 +76,28 @@ final class NativeStackFixture
 				"\$server_addr;\nfastcgi_param SERVER_PORT \$server_port;\nfastcgi_param SERVER_NAME " .
 				"\$server_name;\nfastcgi_param REDIRECT_STATUS 200;\n";
 			$this->privateFile('fastcgi_params', $parameters);
+			// El ejemplo de despliegue tal cual, con las rutas, los puertos y el certificado de esta pila.
 			$nginx = file_get_contents(dirname(__DIR__) . '/deploy/nginx.conf.example');
 			$nginx = str_replace(
 				[
 					'listen 443 ssl;',
+					'listen 80;',
 					'licensing.sicrat.com',
-					'/srv/adelpos-license/current/public',
+					'/srv/adelpos-license/app/public',
 					'/etc/letsencrypt/live/127.0.0.1/fullchain.pem',
 					'/etc/letsencrypt/live/127.0.0.1/privkey.pem',
+					'/var/www/letsencrypt',
 					'/srv/adelpos-license/shared',
 					'/run/php/adelpos-license.sock',
 				],
 				[
 					'listen ' . $address . ' ssl;',
+					'listen ' . $httpAddress . ';',
 					'127.0.0.1',
 					dirname(__DIR__) . '/public',
 					$this->directory . '/tls.crt',
 					$this->directory . '/tls.key',
+					$this->directory . '/letsencrypt',
 					$this->directory,
 					$this->directory . '/fpm.sock',
 				],

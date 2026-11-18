@@ -1,28 +1,87 @@
-# Include from nginx's http{} context (e.g. sites-enabled/).
-# Configure domain, certificate paths and the dedicated PHP-FPM socket before enabling.
-map $request_id $adelpos_license_correlation_id {
+# AD-EL POS — Licencias: sitio de pruebas licensing.sicrat.com (etapa 5, Fase 5).
+#
+# Se instala como /etc/nginx/sites-available/adelpos-license y se habilita con un enlace en sites-enabled/
+# (DEPLOY_UBUNTU_24_04.md, paso 10). Nginx lo incluye dentro de su contexto http{}, igual que el sitio de
+# AIDEX que convive en el mismo VPS.
+#
+# Todo lo que se declara aquí fuera de un server{} (map y limit_req_zone) es GLOBAL para todos los sitios:
+# por eso sus nombres empiezan con «adelpos_». Una zona con el nombre de una de AIDEX haría fallar «nginx -t»,
+# y Nginx dejaría de recargar su configuración también para AIDEX. Una variable de map repetida es peor: no
+# hace fallar «nginx -t», y una definición sustituye a la otra sin aviso.
+#
+# Compatible con Nginx 1.24.0 (la versión del VPS): no usa la directiva «http2» (1.25.1) ni ninguna otra
+# posterior. La raíz es public/: nada fuera de esa carpeta se puede servir.
+
+# Identificador de correlación de cada petición, con formato UUID, para el registro de errores de la API.
+map $request_id $adelpos_correlation_id {
     "~^([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})$" "$1-$2-$3-$4-$5";
     default "00000000-0000-4000-8000-000000000000";
 }
+
+# Solo los envíos (POST) del inicio de sesión y de la verificación en dos pasos cuentan para su límite: una
+# clave vacía no se limita, así que abrir la página no gasta intentos.
+map $request_method $adelpos_login_limit_key {
+    POST $binary_remote_addr;
+    default "";
+}
+
+# Límites de intentos por dirección IP. Son una barrera adicional, más amplia que los de la aplicación,
+# que se conservan (30 peticiones por minuto a la API, 10 intentos por código cada 15 minutos, y los del
+# inicio de sesión por dirección y por cuenta):
+# - API /v1/: 60 por minuto, con ráfagas de hasta 20 sin espera. Una computadora del restaurante hace dos
+#   peticiones por operación (el desafío y la operación) y consulta al arrancar y una vez al día.
+# - Inicio de sesión y verificación en dos pasos del panel: 10 envíos por minuto, con ráfagas de hasta 5.
+limit_req_zone $binary_remote_addr zone=adelpos_api:10m rate=60r/m;
+limit_req_zone $adelpos_login_limit_key zone=adelpos_login:10m rate=10r/m;
+
+# HTTP: solo la validación de Certbot y la redirección a HTTPS.
+server {
+    listen 80;
+    server_name licensing.sicrat.com;
+    server_tokens off;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://licensing.sicrat.com$request_uri;
+    }
+}
+
 server {
     listen 443 ssl;
     server_name licensing.sicrat.com;
-    root /srv/adelpos-license/current/public;
+    root /srv/adelpos-license/app/public;
     server_tokens off;
+
+    # Certificado de Let's Encrypt que emite Certbot (DEPLOY_UBUNTU_24_04.md, paso 10).
     ssl_certificate /etc/letsencrypt/live/licensing.sicrat.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/licensing.sicrat.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+
+    # El panel acepta archivos .licreq de hasta 64 KiB; la API, cuerpos de hasta 16 KiB (contrato §8).
     client_max_body_size 96k;
+
     add_header Strict-Transport-Security "max-age=31536000" always;
     add_header X-Content-Type-Options nosniff always;
     add_header Cache-Control "no-store" always;
 
+    limit_req_status 429;
+    limit_req_log_level warn;
+
+    # API en línea del contrato (§8). Los errores de Nginx responden con el formato de error del contrato.
     location ^~ /v1/ {
+        limit_req zone=adelpos_api burst=20 nodelay;
         client_max_body_size 16k;
         error_page 413 = @api_too_large;
         error_page 429 = @api_rate_limited;
         error_page 500 502 503 504 = @api_unavailable;
-        if (-f /srv/adelpos-license/shared/maintenance.flag) { return 503; }
+        if (-f /srv/adelpos-license/shared/maintenance.flag) {
+            return 503;
+        }
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root/index.php;
         fastcgi_param HTTPS on;
@@ -31,30 +90,55 @@ server {
         fastcgi_hide_header X-Powered-By;
         fastcgi_read_timeout 60s;
     }
+
+    # Respuestas de error de la API con el formato del contrato (§8.7): Nginx no lee el cuerpo, así que no
+    # conoce el request_id del cliente y responde null, como en el desafío. El identificador de correlación
+    # va en la cabecera X-Request-Id. add_header no se hereda dentro de estos bloques: se repiten.
     location @api_too_large {
         default_type application/json;
-        return 413 '{"error":{"code":"INVALID_REQUEST","message":"La solicitud supera el tamaño permitido.","request_id":"$adelpos_license_correlation_id"}}';
-    }
-    location @api_rate_limited {
-        default_type application/json;
-        # Preserve security headers here because add_header inheritance is all-or-nothing.
         add_header Strict-Transport-Security "max-age=31536000" always;
         add_header X-Content-Type-Options nosniff always;
         add_header Cache-Control "no-store" always;
+        add_header X-Request-Id $adelpos_correlation_id always;
+        return 413 '{"error":{"code":"INVALID_REQUEST","message":"La solicitud supera el tamaño permitido.","request_id":null,"details":{}}}';
+    }
+    location @api_rate_limited {
+        default_type application/json;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Cache-Control "no-store" always;
+        add_header X-Request-Id $adelpos_correlation_id always;
         add_header Retry-After "60" always;
-        return 429 '{"error":{"code":"RATE_LIMITED","message":"Demasiadas solicitudes.","request_id":"$adelpos_license_correlation_id"}}';
+        return 429 '{"error":{"code":"RATE_LIMITED","message":"Demasiadas solicitudes desde esta dirección. Intenta de nuevo en un minuto.","request_id":null,"details":{}}}';
     }
     location @api_unavailable {
         default_type application/json;
-        return 503 '{"error":{"code":"TEMPORARY_UNAVAILABLE","message":"El servicio no está disponible temporalmente.","request_id":"$adelpos_license_correlation_id"}}';
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Cache-Control "no-store" always;
+        add_header X-Request-Id $adelpos_correlation_id always;
+        return 503 '{"error":{"code":"TEMPORARY_UNAVAILABLE","message":"El servicio no está disponible temporalmente.","request_id":null,"details":{}}}';
     }
-    location ~ /\. { deny all; }
-    location ~ \.php(?:/|$) { return 404; }
-    location /assets/ { try_files $uri =404; }
-    # The unguessable document reference is not an authentication token; keep it out of access logs.
-    location ^~ /verify/ {
-        access_log off;
-        if (-f /srv/adelpos-license/shared/maintenance.flag) { return 503; }
+
+    # Archivos ocultos dentro de public/ (por ejemplo, .htaccess): no existen para el mundo.
+    location ~ /\. {
+        return 404;
+    }
+    # Ningún otro PHP se ejecuta: todo pasa por index.php.
+    location ~ \.php(?:/|$) {
+        return 404;
+    }
+    location /assets/ {
+        try_files $uri =404;
+    }
+
+    # Inicio de sesión y verificación en dos pasos del panel, con su límite de intentos.
+    location ~ ^/(login|mfa)$ {
+        limit_req zone=adelpos_login burst=5 nodelay;
+        error_page 429 = @panel_rate_limited;
+        if (-f /srv/adelpos-license/shared/maintenance.flag) {
+            return 503;
+        }
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root/index.php;
         fastcgi_param HTTPS on;
@@ -62,8 +146,33 @@ server {
         fastcgi_hide_header X-Powered-By;
         fastcgi_read_timeout 60s;
     }
+    location @panel_rate_limited {
+        default_type "text/plain; charset=utf-8";
+        add_header Strict-Transport-Security "max-age=31536000" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Cache-Control "no-store" always;
+        add_header Retry-After "60" always;
+        return 429 "Demasiados intentos de inicio de sesión desde esta dirección. Espera un minuto e intenta de nuevo.\n";
+    }
+
+    # La referencia de una constancia no es una credencial, pero tampoco va a los registros de acceso.
+    location ^~ /verify/ {
+        access_log off;
+        if (-f /srv/adelpos-license/shared/maintenance.flag) {
+            return 503;
+        }
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param HTTPS on;
+        fastcgi_pass unix:/run/php/adelpos-license.sock;
+        fastcgi_hide_header X-Powered-By;
+        fastcgi_read_timeout 60s;
+    }
+
     location / {
-        if (-f /srv/adelpos-license/shared/maintenance.flag) { return 503; }
+        if (-f /srv/adelpos-license/shared/maintenance.flag) {
+            return 503;
+        }
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root/index.php;
         fastcgi_param HTTPS on;

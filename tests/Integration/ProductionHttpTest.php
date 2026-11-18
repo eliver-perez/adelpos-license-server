@@ -301,7 +301,8 @@ final class ProductionHttpTest extends TestCase
 			])['status'],
 		);
 		self::assertSame(404, $this->stack->request('/test.php', '', 'GET')['status']);
-		self::assertSame(403, $this->stack->request('/.env', '', 'GET')['status']);
+		// Un archivo oculto no existe para el mundo (etapa 5, Fase 5: antes respondía 403).
+		self::assertSame(404, $this->stack->request('/.env', '', 'GET')['status']);
 		$api = $this->stack->request('/v1/activations/challenge');
 		self::assertSame(400, $api['status']);
 		self::assertSame('INVALID_REQUEST', $api['json']['error']['code']);
