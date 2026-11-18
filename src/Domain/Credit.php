@@ -4,7 +4,7 @@ namespace AdelPos\License\Domain;
 
 /**
  * Bonificación de un cambio de plan de una suscripción vigente (decisión 6 del propietario para la
- * etapa 3, corregida por la decisión 3 para la etapa 4; propuestas V1.1 n.º 27 y 28):
+ * etapa 3, corregida por la decisión 3 para la etapa 4; aclaraciones n.º 27 y 28 del contrato):
  *
  *     valor del periodo = monto cobrado + bonificación aplicada en ese pago
  *

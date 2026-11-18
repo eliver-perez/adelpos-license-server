@@ -197,4 +197,4 @@ Las etapas 3 y 4 no dejaron marcas `PENDIENTE etapa 3` ni `PENDIENTE etapa 4`. L
 | Parte | Cómo funciona hoy | Etapa |
 | --- | --- | --- |
 | Panel y constancias | Ajuste mínimo para emitir, consultar, operar el ciclo comercial, las transferencias y las alertas | 5: pantallas definitivas, diseño final de las constancias, `limit_req` de Nginx y despliegue en el VPS |
-| Contrato `_v2` | V1.0 con 37 propuestas V1.1 registradas | El propietario lo redacta con la tabla consolidada de `DECISIONS.md`, sección 15 |
+| Contrato | V1.0 definitivo, adoptado al empezar la etapa 5, con las 37 aclaraciones incorporadas | Un cambio espera a la versión 1.1 |

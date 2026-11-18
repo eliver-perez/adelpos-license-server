@@ -8,7 +8,7 @@ use AdelPos\License\Infrastructure\Database;
 /**
  * Periodos pagados de una suscripción que todavía no terminan en un instante, con su valor. Son la
  * base de la bonificación de un cambio de plan (decisión 3 del propietario para la etapa 4;
- * propuestas V1.1 n.º 27 y 28).
+ * aclaraciones n.º 27 y 28 del contrato).
  *
  * Los periodos forman una cadena que termina en el periodo vigente de la licencia:
  * - el periodo vigente es el que cubre el pago «period_payment_id»;
@@ -27,8 +27,8 @@ final class PaidPeriods
 
 	/**
 	 * Periodos que todavía no terminan en $at, del más antiguo al más reciente. $at es anterior al
-	 * vencimiento vigente: un pago posterior no es un cambio de plan sino una renovación (propuesta
-	 * V1.1 n.º 31). Devuelve null si el valor de alguno no se conoce: no hay sugerencia y el monto se
+	 * vencimiento vigente: un pago posterior no es un cambio de plan sino una renovación (aclaración
+	 * n.º 31). Devuelve null si el valor de alguno no se conoce: no hay sugerencia y el monto se
 	 * escribe a mano.
 	 *
 	 * @return ?list<array{

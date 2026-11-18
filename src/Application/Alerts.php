@@ -43,7 +43,7 @@ final class Alerts
 	 * Alerta de transferencias frecuentes (contrato §8.4, regla 5; decisión 6 del propietario): una licencia
 	 * suma dos o más transferencias, de autoservicio o del propietario y confirmadas o no, dentro de los
 	 * 12 meses de calendario anteriores, en la zona horaria del cliente. La ventana incluye su inicio
-	 * exacto (propuesta V1.1 n.º 37). Se evalúa después de registrar cada transferencia, con la licencia
+	 * exacto (aclaración n.º 37 del contrato). Se evalúa después de registrar cada transferencia, con la licencia
 	 * bloqueada.
 	 *
 	 * @return ?array{alert_id: string, attempts: int, opened: bool} null si no hay alerta

@@ -248,7 +248,7 @@ final class OfflineService
 					$activationId = $activation['activation_id'];
 					$this->recordVersion($activation, $payload);
 					// La solicitud firmada demuestra que es la computadora anterior, y recibe su cierre: confirma la
-					// transferencia por autoservicio pendiente que salió de ella (propuesta V1.1 n.º 34).
+					// transferencia por autoservicio pendiente que salió de ella (aclaración n.º 34 del contrato).
 					$confirmed = $this->transfers->confirm($activation, 'offline_' . $payload['action']);
 					if ($renewal !== null) {
 						// La renovación es de la licencia, pero se entrega a esta computadora: debe seguir activa.

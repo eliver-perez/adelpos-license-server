@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Mantenimiento de la perpetua y edición del periodo inicial (etapa 3, Fase 6; contrato §5.2 y §5.5,
- * decisión 4 del propietario y propuesta V1.1 n.º 11).
+ * decisión 4 del propietario y aclaración n.º 11 del contrato).
  */
 final class MaintenanceTest extends TestCase
 {

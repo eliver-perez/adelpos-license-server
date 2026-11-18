@@ -11,7 +11,7 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Database};
  * Solo el superadministrador crea, edita y archiva planes. Al guardar cupos nuevos elige si el
  * cambio aplica solo a las licencias nuevas o también a las existentes que siguen el plan. Si
  * elige las existentes, solo se aplican los aumentos, cupo por cupo: una reducción del catálogo
- * nunca alcanza a una licencia existente, ni siquiera al renovar (propuesta V1.1 n.º 21).
+ * nunca alcanza a una licencia existente, ni siquiera al renovar (aclaración n.º 21 del contrato).
  *
  * La propagación es de todo o nada: el plan, las licencias, sus revisiones firmadas y la
  * auditoría se confirman en una sola transacción. Si algo falla a la mitad (por ejemplo, la

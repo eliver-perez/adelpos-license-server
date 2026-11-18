@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Confirmación de la transferencia por autoservicio y liberación manual del contador (contrato §8.4,
- * regla 4; propuestas V1.1 n.º 34 y 35; etapa 4, Fase 3).
+ * regla 4; aclaraciones n.º 34 y 35 del contrato; etapa 4, Fase 3).
  */
 final class TransferConfirmationTest extends TestCase
 {

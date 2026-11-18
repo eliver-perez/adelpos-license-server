@@ -427,7 +427,7 @@ final class ContractFilesTest extends TestCase
 		foreach ($credits as $case) {
 			$periods = [];
 			foreach ($case['periods'] as $period) {
-				// El valor del periodo es lo cobrado más la bonificación aplicada en ese pago (propuesta V1.1 n.º 28).
+				// El valor del periodo es lo cobrado más la bonificación aplicada en ese pago (aclaración n.º 28).
 				self::assertSame($period['amount_cents'] + $period['applied_credit_cents'], $period['value_cents']);
 				foreach (['amount', 'applied_credit', 'value'] as $field) {
 					self::assertSame(Money::toSql($period[$field . '_cents']), $period[$field . '_mxn'], $case['name']);

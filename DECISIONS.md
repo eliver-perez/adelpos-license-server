@@ -28,9 +28,12 @@ Este servidor deriva del servidor de licencias de **AIDEX**. Es la única menci�
 
 | Documento | Versión | SHA-256 |
 | --- | --- | --- |
-| `docs/CONTRATO_LICENCIAS_ADEL_POS.md` | V1.0, copiado sin cambios | `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb` |
+| `docs/CONTRATO_LICENCIAS_ADEL_POS.md` | **V1.0 definitiva**, adoptada el 2026-11-17 al empezar la etapa 5 (Fase 0): el contenido de `CONTRATO_LICENCIAS_ADEL_POS_v3.md`, sin cambios, con el nombre de siempre en el repositorio | `e3435f16e27e11c85ac263ef2accfa72aad07cf30dbcdee0a0b8b22326314058` |
+| `docs/CONTRATO_LICENCIAS_ADEL_POS.md` hasta la etapa 4 | Borrador inicial del 16 de noviembre de 2026, que la V1.0 definitiva sustituye | `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb` |
 
-Las **decisiones comerciales del propietario** están en la **sección 14 del contrato**:
+La V1.0 definitiva incorpora las 37 aclaraciones registradas durante las etapas 2 a 4 (secciones 9 y 15) y no cambia el formato firmado: las licencias siguen llevando `schema_version: "1.0"`. **No se edita.** Desde la etapa 5 una ambigüedad se registra como consulta al propietario, y cualquier cambio espera a la versión 1.1.
+
+Las **decisiones comerciales del propietario** están en la **sección 14 del contrato**. Hasta la etapa 4, el borrador inicial las numeraba así:
 
 1. licencia atada al servidor Go del restaurante;
 2. sin comunicación periódica obligatoria;
@@ -133,7 +136,9 @@ Todas son del 2026-11-16, al cerrar la Fase 0. El detalle de cada consulta está
 
 ## 9. Propuestas V1.1 del contrato
 
-El contrato V1.0 no se modificó. Estas aclaraciones quedan propuestas para una V1.1; la lista completa, con su texto, está en AVANCE.md, sección E2-0.5.
+> **Nota de la etapa 5 (Fase 0).** Las «propuestas V1.1» n.º 1 a 37 de esta sección están **incorporadas en la V1.0 definitiva** del contrato, con la misma numeración en su anexo de trazabilidad. Las n.º 36 y 37 quedaron aprobadas como están implementadas (sección 17, decisión 1). El número 1.1 queda reservado para el primer cambio posterior; desde la etapa 5 las ambigüedades se registran como consultas al propietario.
+
+Hasta la etapa 4, el contrato V1.0 (el borrador inicial) no se modificó. Estas aclaraciones quedaron propuestas para una V1.1; la lista completa, con su texto, está en AVANCE.md, sección E2-0.5.
 
 | N.º | Sección | Aclaración | Estado |
 | --- | --- | --- | --- |
@@ -550,6 +555,8 @@ Todas son del 2026-11-17 y están al inicio de la especificación de la etapa (`
 
 ## 15. Tabla consolidada de propuestas V1.1 (insumo para el contrato `_v2`)
 
+> **Nota de la etapa 5 (Fase 0).** Esta tabla fue el insumo del contrato definitivo. Sus 37 reglas están **incorporadas en la V1.0 definitiva** (`docs/CONTRATO_LICENCIAS_ADEL_POS.md`, anexo de trazabilidad, con la misma numeración), y las n.º 36 y 37 quedaron **aprobadas** como están implementadas (sección 17, decisión 1). La columna «Estado» se conserva como registro de la etapa 4. El número 1.1 queda reservado para el primer cambio posterior.
+
 Todas las propuestas V1.1 registradas entre las etapas 2 y 4, de la n.º 1 a la última, con el texto final de cada regla **tal como quedó implementada** al cerrar la etapa 4 (commit de la Fase 6). El propietario la usará para redactar `CONTRATO_LICENCIAS_ADEL_POS_v2.md`. **El contrato V1.0 no se modificó.**
 
 **Estados:** *aprobada* (como se propuso); *aprobada con nota* (el propietario agregó una regla o eligió la alternativa; la nota dice cuál); *pendiente* (aplicada con el criterio más conservador, espera su respuesta).
@@ -604,3 +611,25 @@ Todas las propuestas V1.1 registradas entre las etapas 2 y 4, de la n.º 1 a la 
 | 2 | Antes de liberar el contador, el recorrido vacía el contador de confirmaciones de identidad de la base sintética (`panel-api.php reauth-window`). | Todo el recorrido de Playwright usa la misma cuenta, y sus confirmaciones anteriores agotan el límite real de 10 cada 15 minutos (`429`). El límite no se cambia; solo se reinicia en la base de prueba. |
 | 3 | La suite completa se corrió en PHP 8.3 en cada fase desde la 2, y en PHP 8.5 una sola vez, en este cierre. Playwright, en las fases que cambiaron el panel (0, 1, 3 y 4) y en el cierre. | Indicación del propietario a mitad de la etapa. |
 | 4 | Sin dependencias nuevas en toda la etapa: ni de Composer ni de npm. | — |
+
+## 17. Decisiones del propietario para la etapa 5
+
+Todas son del 2026-11-17 y están al inicio de la especificación de la etapa (`docs/ETAPA_5_PANEL_CONSTANCIAS_Y_DESPLIEGUE_v2.md`).
+
+| # | Decisión |
+| --- | --- |
+| 1 | **El contrato definitivo es la V1.0 de `CONTRATO_LICENCIAS_ADEL_POS_v3.md`.** Sustituye al borrador del 16 de noviembre e incorpora las 37 aclaraciones registradas como «propuestas V1.1». Las n.º 36 y 37 quedan **aprobadas** como están implementadas. El formato firmado no cambia: `schema_version: "1.0"`. Se adopta en la Fase 0 con el nombre `docs/CONTRATO_LICENCIAS_ADEL_POS.md` (sección 2). |
+| 2 | **Aprobadas** las decisiones J a O de la etapa 4 (AVANCE.md, sección E4-6.4). |
+| 3 | **Panel:** se conserva el estilo de base actual (Bootstrap, barra lateral oscura y marca de AD-EL POS). Se puede cambiar lo que haga falta para que sea más profesional, más funcional y más eficiente. Toda decisión de diseño que no esté en la especificación se registra en este documento (sección 18). |
+| 4 | **Despliegue:** lo hace el propietario, clonando el repositorio en el VPS, con el mismo patrón de AIDEX: raíz en `public/` y nombres propios en Nginx. En el VPS ya están Nginx 1.24.0, PHP 8.3.6 y MySQL 8.0.46, y AIDEX convive en él. Claude Code no accede al VPS: entrega instrucciones completas y herramientas de verificación. |
+| 5 | **Versiones de PHP:** en cada fase, la suite completa solo en PHP 8.3; PHP 8.5 una sola vez, en el cierre. Playwright en las fases que cambian el panel y en el cierre. |
+
+## 18. Decisiones técnicas de la etapa 5
+
+### Fase 0 — Verificación y adopción del contrato definitivo
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | El commit de partida es `b02a14f`, no `315b8e5`: el propietario reescribió el historial con un rebase después del cierre de la etapa 4, y los dos commits tienen **el mismo árbol** (`c637d214…`). Los hashes que citan las secciones anteriores de AVANCE.md son los del historial previo; AVANCE.md, sección E5-0.1, tiene la tabla de equivalencias de la etapa 4. | La especificación pide «`315b8e5` o posterior»; el contenido es idéntico. |
+| 2 | Los borradores `docs/CONTRATO_LICENCIAS_ADEL_POS_v2.md` (la «V1.1» que la definitiva sustituye) y `docs/CONTRATO_LICENCIAS_ADEL_POS_v3.md` (idéntico, byte por byte, al contrato adoptado) no se versionan ni se borran: son archivos del propietario. Se versiona la especificación de la etapa. | Conservar el nombre del contrato en el repositorio y no tocar archivos que no son de esta sesión. |
+| 3 | Las referencias del código a «propuesta V1.1 n.º N» pasan a «aclaración n.º N del contrato», la numeración de su anexo. El generador de los archivos de prueba (`contracts/v1/generate-fixtures.php`) y el verificador Go no se tocan, ni siquiera sus comentarios. | El número 1.1 queda reservado para un cambio futuro; la especificación pide que los archivos de prueba y el verificador no cambien. |

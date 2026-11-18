@@ -1,6 +1,6 @@
 # Archivos del contrato de licencias V1.0
 
-Esta carpeta es la forma exacta, legible por una máquina, del [contrato de licencias](../../docs/CONTRATO_LICENCIAS_ADEL_POS.md) entre el servidor de licencias y AD-EL POS. Si un archivo de aquí y el contrato difieren, **manda el contrato**.
+Esta carpeta es la forma exacta, legible por una máquina, del [contrato de licencias](../../docs/CONTRATO_LICENCIAS_ADEL_POS.md) entre el servidor de licencias y AD-EL POS, en su **versión 1.0 definitiva**. Si un archivo de aquí y el contrato difieren, **manda el contrato**.
 
 | Archivo | Qué es |
 | --- | --- |

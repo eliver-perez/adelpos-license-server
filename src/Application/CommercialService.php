@@ -877,7 +877,7 @@ final class CommercialService
 	}
 
 	/**
-	 * Edita el periodo inicial de una licencia sin activar (contrato §5.2 y propuesta V1.1 n.º 11):
+	 * Edita el periodo inicial de una licencia sin activar (contrato §5.2 y aclaración n.º 11):
 	 * el tipo, el periodo o la duración, los meses de actualizaciones, el plan y los cupos. No hay
 	 * fechas que mover ni revisiones que firmar: todo se fija al activarla. No registra un pago.
 	 */

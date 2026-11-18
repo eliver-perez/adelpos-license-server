@@ -7,7 +7,7 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
 - **API `/v1`:** activación en línea con desafío y prueba de posesión, transferencia por autoservicio, consulta de actualización y desactivación.
 - **Flujo sin internet:** el panel importa una solicitud `.licreq`, el propietario la aprueba y entrega un archivo `.lic` firmado.
 
-> **Estado: etapa 4 cerrada. La API cumple completo el contrato.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea (con la transferencia por autoservicio, `TRANSFER_LIMIT` y `transfer_available`) y archivos sin internet. Administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado** (etapa 3), y desde la etapa 4 la confirmación de las transferencias por la computadora anterior, su liberación manual y las alertas del panel. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para la etapa 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
+> **Estado: etapa 4 cerrada. La API cumple completo el contrato.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 definitivo ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea (con la transferencia por autoservicio, `TRANSFER_LIMIT` y `transfer_available`) y archivos sin internet. Administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado** (etapa 3), y desde la etapa 4 la confirmación de las transferencias por la computadora anterior, su liberación manual y las alertas del panel. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para la etapa 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
 
 ## Requisitos
 
@@ -159,20 +159,19 @@ Las etapas 3 y 4 no dejaron marcas `PENDIENTE etapa 3` ni `PENDIENTE etapa 4`. L
 | Qué falta | Etapa |
 | --- | --- |
 | Pantallas definitivas del panel (las del ciclo comercial, de las transferencias y de las alertas son mínimas), diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
-| Contrato `_v2`: lo redacta el propietario a partir de la tabla consolidada de propuestas V1.1 ([DECISIONS.md](DECISIONS.md), sección 15) | Propietario |
 | Avisos a los clientes por cambios del catálogo (decisión 9 del propietario); pasarela de pagos, facturación e impuestos | Sin etapa asignada |
 
 ## Contrato
 
 | Dónde | Qué es |
 | --- | --- |
-| [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | El contrato V1.0. Es la fuente de verdad y no se modifica |
+| [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | El contrato V1.0 definitivo. Es la fuente de verdad y no se modifica |
 | [contracts/v1/license.schema.json](contracts/v1/license.schema.json) | Contenido de la licencia firmada, en JSON Schema 2020-12 |
 | [contracts/v1/openapi.yaml](contracts/v1/openapi.yaml) | API en línea, en OpenAPI 3.1 |
 | [contracts/v1/fixtures/](contracts/v1/fixtures/) | Archivos de prueba compartidos, con llaves públicas de prueba |
 | [contracts/v1/verify/](contracts/v1/verify/) | Verificador de referencia en Go, base de la integración de AD-EL POS |
 
-Las ambigüedades encontradas al implementarlo están registradas como propuestas para una V1.1 en [DECISIONS.md](DECISIONS.md), sección 9. La sección 15 es la tabla consolidada y final, de la n.º 1 a la n.º 37, con el texto de cada regla tal como quedó implementada: el insumo para el contrato `_v2`.
+La versión 1.0 definitiva, adoptada al empezar la etapa 5, incorpora las 37 aclaraciones encontradas al implementar las etapas 2 a 4 ([DECISIONS.md](DECISIONS.md), secciones 9 y 15, con la misma numeración que el anexo del contrato). Desde la etapa 5 una ambigüedad se registra como consulta al propietario, y cualquier cambio espera a la versión 1.1.
 
 ## Documentación
 
@@ -186,7 +185,7 @@ Las ambigüedades encontradas al implementarlo están registradas como propuesta
 | [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Despliegue en Ubuntu 24.04 con Nginx y PHP-FPM |
 | [DECISIONS.md](DECISIONS.md) | Decisiones del propietario y técnicas, y procedencia |
 | [AVANCE.md](AVANCE.md) | Avance de las etapas 1 y 2, cifras de pruebas y verificación |
-| [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | Contrato de licencias V1.0 entre este servidor y AD-EL POS |
+| [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | Contrato de licencias V1.0 definitivo entre este servidor y AD-EL POS |
 | [contracts/v1/README.md](contracts/v1/README.md) | Esquema, OpenAPI, archivos de prueba y verificador de referencia |
 
 ## Procedencia

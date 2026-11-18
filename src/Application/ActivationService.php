@@ -189,7 +189,7 @@ final class ActivationService
 		]);
 	}
 
-	/** La misma instalación es la misma identidad con la misma llave (contrato §8.3; propuesta V1.1 n.º 20). */
+	/** La misma instalación es la misma identidad con la misma llave (contrato §8.3; aclaración n.º 20). */
 	private static function sameInstallation(array $active, array $input): bool
 	{
 		return $active['server_id'] === Uuid::bytes($input['server_id']) &&
@@ -230,8 +230,8 @@ final class ActivationService
 	 * 1. código inexistente, retirado o de otro producto: LICENSE_NOT_FOUND;
 	 * 2. licencia revocada: REVOKED;
 	 * 3. la misma instalación ya está activa: su revisión vigente, como al volver a activar;
-	 * 4. sin activación vigente: una activación normal, que no cuenta como transferencia (propuesta
-	 *    V1.1 n.º 33);
+	 * 4. sin activación vigente: una activación normal, que no cuenta como transferencia
+	 *    (aclaración n.º 33);
 	 * 5. con una transferencia por autoservicio pendiente: TRANSFER_LIMIT y la alerta del panel;
 	 * 6. si no, la transferencia, en esta misma transacción.
 	 * Transferir nunca cambia las fechas de la licencia (decisión 5 del propietario para la etapa 4).

@@ -14,8 +14,8 @@ use AdelPos\License\Infrastructure\{Audit, Clock, Database};
  * - «self_service»: la pide AD-EL POS por la API (contrato §8.4) y queda pendiente hasta que la
  *   computadora anterior demuestra con su llave que es ella y recibe su revisión de cierre: en línea
  *   con «refresh» o «deactivate», o sin internet con la aprobación de su «renew» o «deactivate»
- *   (propuesta V1.1 n.º 34). Si nunca va a volver, el superadministrador libera el contador a mano
- *   (propuesta V1.1 n.º 35). Mientras está pendiente, otra transferencia por autoservicio de la
+ *   (aclaración n.º 34 del contrato). Si nunca va a volver, el superadministrador libera el contador a mano
+ *   (aclaración n.º 35). Mientras está pendiente, otra transferencia por autoservicio de la
  *   misma licencia recibe TRANSFER_LIMIT.
  *
  * Transferir nunca cambia las fechas de la licencia: son de la licencia, no de la activación.
@@ -75,7 +75,7 @@ final class Transfers
 	}
 
 	/**
-	 * Liberación manual del contador (propuesta V1.1 n.º 35): para cuando la computadora anterior nunca va a
+	 * Liberación manual del contador (aclaración n.º 35 del contrato): para cuando la computadora anterior nunca va a
 	 * volver a conectarse, por ejemplo porque se dañó. Solo el superadministrador, con un motivo obligatorio
 	 * y confirmando de nuevo su contraseña y un código de autenticación. La transferencia queda confirmada
 	 * con la forma «manual», quién la liberó y el motivo, en la auditoría.

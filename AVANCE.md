@@ -3099,3 +3099,124 @@ git grep -n "PENDIENTE etapa" -- src bin templates
 | Contrato | SHA-256 `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb`, sin cambio |
 
 La primera corrida de cierre encontró una sola falla, en las dos versiones: el mensaje final de Playwright, que se había ampliado en esta fase, pasaba de 140 columnas (`CodeStyleTest`). Se partió la línea y se repitieron las dos suites y Playwright.
+
+---
+
+# Avance — Etapa 5: panel definitivo, constancias y despliegue
+
+Especificación: [docs/ETAPA_5_PANEL_CONSTANCIAS_Y_DESPLIEGUE_v2.md](docs/ETAPA_5_PANEL_CONSTANCIAS_Y_DESPLIEGUE_v2.md). Fuente de verdad: el contrato **V1.0 definitivo**, adoptado en la Fase 0, que no se modifica. Las decisiones del propietario para la etapa están en `DECISIONS.md`, sección 17, y las técnicas en la sección 18.
+
+El propietario pidió trabajar las fases 0 a 8 sin detenerse entre ellas. Lo que el contrato o la especificación no resuelven se decide con el criterio más conservador y coherente con el contrato, se aplica y queda como **consulta al propietario** en el cierre, con su alternativa. Desde esta etapa ya no se llaman «propuestas V1.1».
+
+**Versiones de PHP (decisión 5):** en cada fase la suite completa corre solo en PHP 8.3; PHP 8.5 una sola vez, en el cierre. Playwright en las fases que cambian el panel y en el cierre.
+
+## Etapa 5 · Fase 0 — Verificación y adopción del contrato definitivo
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-0.1 Estado de partida
+
+| Comprobación | Resultado |
+| --- | --- |
+| Commit | `b02a14f` «Etapa 4, Fase 6: panel y cierre de la etapa». Es el `315b8e5` de la especificación con otro hash: el propietario reescribió el historial con un rebase, y los dos tienen **el mismo árbol** (`c637d214…`). Árbol limpio, salvo tres archivos nuevos sin versionar en `docs/`: la especificación de esta etapa y los borradores `_v2` y `_v3` del contrato |
+| PHPUnit, PHP 8.3.36 | 466 pruebas, 28 983 aserciones, todas OK (3 min 5 s). Se corrió en una copia limpia de `b02a14f` (`git worktree` con su propia copia de `vendor/`) |
+| `generate-fixtures.php --check` | Comprobado: 20 licencias, 17 casos negativos, 10 de revisión, 40 de fechas, 11 de bonificación, 13 estados temporales, 4 pruebas de posesión y 3 solicitudes |
+| Verificador de referencia en Go 1.25.5 | OK en todos los casos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+**Equivalencia de hashes.** Los hashes que citan las secciones anteriores de este archivo son los del historial previo al rebase. Cada uno tiene su equivalente con el mismo árbol; los de la etapa 4:
+
+| Antes del rebase | Ahora | Commit |
+| --- | --- | --- |
+| `d45651a` | `fd51536` | Etapa 3, Fase 9 |
+| `4b178fc` | `3a84e38` | Etapa 4, Fase 0 |
+| `e61aa05` | `e028716` | Etapa 4, Fase 1 |
+| `e2661ae` | `266f9af` | Etapa 4, Fase 2 |
+| `3f07a19` | `6e9e969` | Etapa 4, Fase 3 |
+| `bbb943e` | `1bba3ec` | Etapa 4, Fase 4 |
+| `17201e4` | `f112ae0` | Etapa 4, Fase 5 |
+| `315b8e5` | `b02a14f` | Etapa 4, Fase 6 |
+
+Las de etapas anteriores se obtienen igual, comparando árboles (`git rev-parse <hash>^{tree}`).
+
+### E5-0.2 Contrato definitivo
+
+| Archivo | SHA-256 |
+| --- | --- |
+| `docs/CONTRATO_LICENCIAS_ADEL_POS_v3.md` (recibido) | `e3435f16e27e11c85ac263ef2accfa72aad07cf30dbcdee0a0b8b22326314058` |
+| `docs/CONTRATO_LICENCIAS_ADEL_POS.md` (adoptado, con el nombre de siempre) | `e3435f16e27e11c85ac263ef2accfa72aad07cf30dbcdee0a0b8b22326314058`: idéntico byte por byte |
+| `docs/CONTRATO_LICENCIAS_ADEL_POS.md` hasta la etapa 4 (borrador del 16 de noviembre) | `a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb` |
+
+- **Qué es cada borrador.** La `_v3` es la «V1.0 definitiva». La `_v2` era una «V1.1» con el mismo contenido técnico: solo difiere en el título, la introducción, el nombre de la sección 15 y el del anexo. Se adoptó la `_v3`, como indica la decisión 1.
+- **Los dos borradores** quedan sin versionar y sin tocar en `docs/` (`DECISIONS.md`, sección 18, Fase 0, n.º 2). Se versiona la especificación de la etapa.
+- **`StageClosureTest`** comprueba el SHA-256 nuevo, y `DECISIONS.md`, sección 2, registra los dos.
+
+### E5-0.3 `DECISIONS.md`
+
+- **Sección 2:** el contrato V1.0 definitivo, con su SHA-256 y el del borrador anterior.
+- **Secciones 9 y 15:** nota de que las propuestas n.º 1 a 37 están incorporadas en la V1.0 definitiva, con la misma numeración en su anexo; las n.º 36 y 37 quedan aprobadas como están implementadas, y el número 1.1 queda reservado para el primer cambio posterior.
+- **Sección 17, nueva:** las decisiones 1 a 5 del propietario para esta etapa.
+- **Sección 18, nueva:** decisiones técnicas de la etapa 5, por fase.
+
+### E5-0.4 Referencias al contrato
+
+| Dónde | Cambio |
+| --- | --- |
+| `README.md` | «V1.0 definitivo» en el estado y en las tablas; la fila del contrato `_v2` sale de los pendientes, y el párrafo de las propuestas V1.1 dice que la versión definitiva las incorpora y que un cambio espera a la 1.1 |
+| `ARCHITECTURE.md` | La fila «Contrato `_v2`» de los pendientes pasa a «V1.0 definitivo, con las 37 aclaraciones incorporadas» |
+| `contracts/v1/README.md` | Dice que la carpeta es la forma exacta del contrato en su versión 1.0 definitiva |
+| `contracts/v1/openapi.yaml` y `license.schema.json` | **Sin cambios:** ya dicen «contrato de licencias V1.0» y apuntan a `docs/CONTRATO_LICENCIAS_ADEL_POS.md` |
+| Comentarios de `src/` y `tests/` | «propuesta V1.1 n.º N» pasa a «aclaración n.º N del contrato», la numeración del anexo (16 referencias en 12 archivos, todas en comentarios; ninguna línea de código) |
+| `contracts/v1/generate-fixtures.php` | Sin cambios, ni siquiera el comentario que nombra las propuestas n.º 27 y 28: la especificación pide que los archivos de prueba no cambien |
+
+`SCHEMA.md`, `SECURITY.md`, `OPERATIONS.md` y `TEST_PLAN.md` ya decían «contrato V1.0» y enlazaban el documento vigente; su repaso completo es del cierre (Fase 8).
+
+### E5-0.5 Nada cambió en lo técnico
+
+- **Archivos del contrato:** `git diff` de `contracts/` solo muestra `contracts/v1/README.md`. Los archivos de prueba, su generador, el verificador Go, el JSON Schema y el OpenAPI no cambian. `generate-fixtures.php --check` sigue comprobando lo mismo.
+- **Contrato contra código.** Se comparó cada regla de la V1.0 definitiva con la tabla de `DECISIONS.md`, sección 15, y con el código y sus pruebas. Coinciden. Los puntos con texto nuevo en el contrato, y dónde se comprueban:
+
+| Contrato | Regla | Dónde está probada |
+| --- | --- | --- |
+| §8.4, §8.7 | Código mal formado → `404 LICENSE_NOT_FOUND`, igual que uno desconocido | `SelfServiceTransferTest` («mal formado»), `ActivationsTest` |
+| §8.3, §8.4 | Licencia revocada → `403 REVOKED`, también con el código retirado al revocar (n.º 36) | `ActivationsTest`, `SelfServiceTransferTest` |
+| §8.4, regla 5 | La negativa `TRANSFER_LIMIT` consume el desafío, queda como respuesta idempotente y genera la alerta | `SelfServiceTransferTest`, `AlertsTest` |
+| §8.4 | Ventana de 12 meses con su inicio incluido (n.º 37) | `AlertsTest`, `CalendarPeriodTest` |
+| §8.7 | Límite por código comercial compartido entre `activate` y `transfer` (10 cada 15 minutos) | `SelfServiceTransferTest` (activar y transferir alternados agotan el mismo límite), `ActivationsTest` |
+| §5.2 | Una suscripción o prueba vencida se puede activar y transferir: el servidor firma sus fechas | `SelfServiceTransferTest` («prueba vencida», «suscripción vencida») |
+| §5.4 | La fecha de pago de una conversión no es anterior al inicio de la prueba | `ConversionTest` |
+| §11.4 | Sin pago del periodo vigente, vale el precio del catálogo de su plan y su periodo | `PlanChangeTest`, casos `credits` |
+
+### E5-0.6 Marcas `PENDIENTE etapa 5` y la fase que las resuelve
+
+```sh
+git grep -n "PENDIENTE etapa" -- src bin templates
+```
+
+| Archivo | Qué queda pendiente | Fase |
+| --- | --- | --- |
+| `templates/certificate-pdf.php:8` | Diseño final de las constancias | 4 |
+
+Los pendientes de la etapa 5 registrados fuera del código (AVANCE.md, E4-6.6):
+
+| Pendiente | Fase |
+| --- | --- |
+| Pantallas definitivas del panel, también las del ciclo comercial, las transferencias y las alertas | 1 (revisión y diseño), 2 y 3 |
+| `limit_req` de Nginx para la API | 5 |
+| Despliegue en `licensing.sicrat.com` | 6 (instrucciones) y 7 (verificación) |
+| Contrato `_v2` y referencias a «V1.0» | 0 (esta fase): la V1.0 definitiva lo sustituye |
+
+### E5-0.7 Reglas comprobadas quitándolas una a la vez
+
+| Regla | Resultado |
+| --- | --- |
+| El contrato vigente es el V1.0 definitivo, sin un byte de diferencia | Detectada: con el borrador anterior y con un espacio de más al final, `StageClosureTest::testTheContractWasNotModified` falla |
+
+### E5-0.8 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | 466 pruebas, 28 983 aserciones, todas OK |
+| `generate-fixtures.php --check` y verificador Go | Sin cambios; OK |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |

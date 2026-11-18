@@ -5,8 +5,8 @@ namespace AdelPos\License\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Criterios de cierre de la etapa 2 que se pueden comprobar leyendo el repositorio: el contrato
- * no se modificó, no queda protocolo anterior y lo pendiente está marcado con su etapa.
+ * Criterios de cierre que se pueden comprobar leyendo el repositorio: el contrato no se modificó,
+ * no queda protocolo anterior y lo pendiente está marcado con su etapa.
  */
 final class StageClosureTest extends TestCase
 {
@@ -32,9 +32,10 @@ final class StageClosureTest extends TestCase
 
 	public function testTheContractWasNotModified(): void
 	{
-		// El contrato V1.0 es la fuente de verdad. Una aclaración va como propuesta V1.1, no como edición.
+		// El contrato V1.0 definitivo (adoptado en la etapa 5, Fase 0) es la fuente de verdad. No se edita:
+		// una ambigüedad va como consulta al propietario, y un cambio espera a la versión 1.1.
 		self::assertSame(
-			'a4c3bfd0ec428b7dc14434e294d6fbb10940c8992718b7d4db2a0703f1f554bb',
+			'e3435f16e27e11c85ac263ef2accfa72aad07cf30dbcdee0a0b8b22326314058',
 			hash_file('sha256', self::root() . '/docs/CONTRATO_LICENCIAS_ADEL_POS.md'),
 		);
 	}
