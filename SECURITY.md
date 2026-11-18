@@ -1,6 +1,6 @@
 # Seguridad
 
-Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados al cerrar la etapa 4. El protocolo es el del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0. Las decisiones están en [DECISIONS.md](DECISIONS.md).
+Controles de seguridad del servidor de licencias de AD-EL POS tal como están implementados al cerrar la etapa 5, en la versión **1.0.0**. El protocolo es el del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0. Las decisiones están en [DECISIONS.md](DECISIONS.md).
 
 ## 1. Modelo de amenazas
 
@@ -116,6 +116,7 @@ Todo lo que llega del exterior se trata como dato no confiable: JSON de la API, 
 - **Token.** 32 bytes aleatorios; en la base solo se guarda su SHA-256.
 - **Vigencia.** 30 minutos de inactividad y 8 horas como máximo. Una sesión a medio autenticar dura 10 minutos.
 - **Cambios de sesión.** El token se rota al autenticarse. Las sesiones se revocan al salir, al cambiar la contraseña, al modificar la cuenta y en la recuperación por CLI.
+- **Formularios rechazados** (etapa 5). Un 401 o 422 vuelve a la pantalla del formulario con lo escrito, salvo contraseñas, códigos, confirmaciones, el token CSRF y el identificador de la operación (`View::SECRET_FIELDS`). La pantalla de origen solo puede ser una ruta del panel (`/admin…`). Un 409 vuelve sin lo escrito.
 - **CSRF.** Todo POST exige un token derivado de la sesión. Si llega la cabecera `Origin`, debe ser exactamente `APP_URL`, así que `Origin: null` se rechaza. Ningún GET cambia estado.
 - **Cabeceras** (`public/index.php`):
   - `Content-Security-Policy`: solo recursos propios, imágenes `data:` para el QR, `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'` y `form-action 'self'`;
@@ -148,7 +149,12 @@ Contadores persistentes en `rate_limit_buckets`, confirmados fuera de la transac
 | Generación de constancias | 10 por minuto por administrador |
 | Verificación pública de constancias | 30 por minuto por IP |
 
-El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_req`. La barrera de red por ruta e IP queda pendiente para el despliegue (etapa 5).
+Antes de la aplicación, Nginx pone su propia barrera por IP (`deploy/nginx.conf.example`, etapa 5), más amplia, sin quitar ninguno de estos límites:
+
+| Ámbito | Límite de Nginx | Respuesta |
+| --- | --- | --- |
+| API `/v1/` | 60 por minuto, ráfagas de 20 | 429 con el JSON del contrato (`RATE_LIMITED`, `request_id: null`, `details: {}`), `Retry-After: 60` y la correlación en `X-Request-Id` |
+| Envíos (POST) de `/login` y `/mfa` | 10 por minuto, ráfagas de 5; abrir la página no cuenta | 429 en texto, con `Retry-After: 60` |
 
 ## 7. API de instalaciones (`/v1`)
 
@@ -163,8 +169,6 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 - **Transferencia por autoservicio** (contrato §8.4). La nueva computadora prueba la posesión de su llave y presenta el código, como al activar, con el mismo límite de intentos por código. Solo puede haber **una pendiente de confirmar** por licencia, garantizado en la base: un segundo intento recibe `TRANSFER_LIMIT` y abre una alerta en el panel. La transferencia se confirma solo cuando la computadora anterior prueba con su llave que es ella y recibe su cierre; la consulta de la nueva o una llave ajena no confirman. Transferir nunca cambia las fechas: no sirve para reiniciar una prueba ni para alargar una suscripción.
 - **Alertas.** Cada intento bloqueado y cada licencia con dos o más transferencias en 12 meses, de autoservicio o del propietario, quedan en el panel hasta que alguien las revisa; la revisión queda en la auditoría.
 - **Limitación conocida: la computadora anterior sin internet.** Después de una transferencia, la computadora anterior sigue funcionando con su última revisión mientras no consulte: hasta su vencimiento, o **para siempre si es perpetua**. El servidor no puede retirar a distancia una revisión ya aceptada (contrato §9.2 y §12). Por eso el contador de autoservicio no vuelve a 0 hasta que la anterior confirma, y la liberación manual exige al superadministrador, un motivo y nueva autenticación: libera el contador, no las copias de la computadora anterior.
-
-> **Pendiente (etapa 5).** `limit_req` de Nginx para la API.
 
 ## 8. Flujo sin internet
 
@@ -181,8 +185,9 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 ## 9. Constancias y verificación pública
 
 - **Almacenamiento.** Cada constancia guarda el PDF y una instantánea cifrados, el SHA-256 del PDF y un folio `ADELPOS-…`.
-- **Verificación pública.** Usa un token aleatorio de 256 bits, del que solo se guarda el hash. No requiere sesión ni muestra códigos, datos personales ni la instalación.
-- **Qué acredita la verificación.** El documento histórico, no que una instalación esté activa hoy. Comparar el SHA-256 detecta un QR copiado a otro documento.
+- **Contenido** (diseño final, etapa 5). Las constancias se entregan al cliente: **no llevan montos, pagos ni la referencia comercial**, ni el código de activación.
+- **Verificación pública.** Usa un token aleatorio de 256 bits, del que solo se guarda el hash. No requiere sesión ni muestra códigos, datos personales ni la instalación. Nginx no registra sus accesos.
+- **Qué acredita la verificación.** El documento (folio, revisión y SHA-256 del PDF) y el estado actual de la licencia (vigente, en tolerancia, vencida, revocada o sin activar), no que una instalación esté activa hoy. Comparar el SHA-256 detecta un QR copiado a otro documento.
 - **Generación (Dompdf).** Sin contenido remoto, sin PHP ni JavaScript, con `chroot` a `public/assets/brand/`. El logo de la constancia se verifica contra su SHA-256 fijo antes de usarse. El PDF no lleva firma PAdES.
 
 ## 10. Auditoría
@@ -207,18 +212,22 @@ El ejemplo de Nginx define respuestas JSON para 429, pero no configura `limit_re
 ## 12. Repositorio, paquete y despliegue
 
 - **Revisión de secretos.** `php bin/check-secrets.php` se ejecuta antes de cada commit. Falla con valores en `DB_PASSWORD` o `*_KEY`, llaves privadas PEM o Ed25519, archivos bajo `var/keys/` o archivos `*.key` o `*.pem`, y nunca imprime el valor. `.gitignore` excluye la configuración local, `var/`, las llaves, los respaldos, `vendor/` y `node_modules/`.
-- **Paquete.** `bin/build-release.php` solo empaqueta archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`, más una lista explícita de archivos. Aborta si aparece configuración local, `var/`, `.DS_Store` o una llave. No incluye `vendor/`, pruebas ni `contracts/`. Lo verifica `tests/Unit/ReleasePackageTest.php`.
+- **Paquete.** `bin/build-release.php` solo empaqueta archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`, más una lista explícita de archivos. Aborta si aparece configuración local, `var/`, `.DS_Store` o una llave. No incluye `vendor/`, pruebas, llaves ni los archivos de prueba del contrato. Lo verifica `tests/Unit/ReleasePackageTest.php`.
 - **Nginx** (`deploy/nginx.conf.example`, dominio de pruebas `licensing.sicrat.com`):
   - TLS 1.2 y 1.3, HSTS, `server_tokens off`;
   - cuerpo máximo de 96 KiB (16 KiB en `/v1`);
-  - archivos ocultos denegados y ningún `.php` accesible directamente;
+  - los archivos ocultos y cualquier `.php` pedido directamente, incluido `index.php`, responden 404;
+  - límites de intentos (sección 6) y errores 413, 429 y 503 de la API con el formato del contrato;
+  - todo lo declarado en el contexto `http` lleva el prefijo `adelpos_`, para no chocar con el sitio de AIDEX en el mismo Nginx;
   - bandera de mantenimiento con respuesta 503.
 - **PHP-FPM** (`deploy/php-fpm-pool.conf.example`): pool y usuario propios `adelpos-license`, `clear_env`, errores sin mostrar, `expose_php` apagado y límites de subida de 64 KiB.
+- **Despliegue** ([DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md), etapa 5). El código es un clon de `root` en una etiqueta, con una llave de despliegue de solo lectura; `composer install --no-dev` corre sin scripts ni complementos. La tarea diaria corre como `root`, así que el usuario de la aplicación no puede modificar el código. La configuración, las llaves, los registros y los respaldos viven fuera del clon. Las contraseñas de MySQL las genera MySQL.
+- **Verificación del despliegue.** `bin/verify-deployment.php` comprueba, sin modificar nada, los permisos de la configuración, las llaves, el código y los respaldos; los permisos exactos de la cuenta de MySQL; la llave activa del entorno; la tarea diaria; el certificado; la redirección a HTTPS; las cabeceras; el 404 de los ocultos y el formato de error de la API.
 
 ## 13. Fuera del alcance
 
 - **Protecciones del equipo del restaurante.** Clonar una máquina virtual completa, restaurar instantáneas antiguas o cambiar el reloj: le corresponden a AD-EL POS (contrato, secciones 5.6 y 12).
 - **Copias desconectadas.** No hay borrado remoto de una copia que sigue sin conexión (contrato, sección 9.2).
-- **Ataques volumétricos.** Requieren protección de red, además de los límites de la aplicación.
+- **Ataques volumétricos.** Requieren protección de red, además de los límites de la aplicación y de Nginx.
 - **Administrador de MySQL o del servidor con todos los secretos.** Puede alterar datos. La auditoría lo detecta solo comparando contra un anclaje externo previo.
 - **Firma de instaladores y actualizaciones automáticas.** Fuera de V1 (contrato, sección 15).

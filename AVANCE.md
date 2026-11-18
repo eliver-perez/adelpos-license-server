@@ -3600,3 +3600,94 @@ No se quitaron las de PHP 8.3, las extensiones y MySQL 8: son las de `preflight`
 | Playwright | No aplica: el panel no cambió |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+## Etapa 5 · Fase 8 — Cierre de la etapa
+
+Fecha: 2026-11-17. Estado: **cerrada**. Versión **1.0.0**, etiqueta `v1.0.0` en el commit de esta fase.
+
+### E5-8.1 Verificación completa
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 (la versión del VPS) | **506 pruebas, 29 581 aserciones**, todas OK |
+| PHPUnit, PHP 8.5 (una sola vez, en el cierre) | **506 pruebas, 29 581 aserciones (PHP 8.5.7 con su PHP-FPM)**, todas OK |
+| Playwright completo (`php tests/run-panel-tests.php all`): panel, pantallas nuevas, ciclo comercial, transferencias, sin internet y dispositivos de confianza, en escritorio (1440 px) y en teléfono (390 px) | OK en 4 min 21 s; 45 capturas; datos sintéticos eliminados |
+| Verificador Go (`go run -C contracts/v1/verify . ../fixtures/vectors.json`, Go 1.25.5) | OK: 20 licencias, 17 casos negativos, 10 casos de revisión, 13 estados temporales, 4 pruebas de posesión y 3 `.licreq` |
+| `contracts/v1/generate-fixtures.php --check` | Sin cambios: también los 40 casos de fechas y los 11 de bonificación |
+| `npm run format:check` | Sin diferencias |
+| `bin/check-secrets.php` | Sin hallazgos |
+| Paquete (`bin/build-release.php`) | 173 archivos, sin `vendor/`, con `RELEASE.json` y su `.sha256`; incluye `bin/verify-deployment.php`, `docs/PANEL.md` y `docs/INTEGRACION_ADEL_POS.md`, y del contrato solo el esquema y el OpenAPI |
+| Marcas `PENDIENTE` en el código | 0 (`StageClosureTest`) |
+| Contrato | Sin cambios desde la Fase 0: SHA-256 `e3435f16e27e11c85ac263ef2accfa72aad07cf30dbcdee0a0b8b22326314058` (`StageClosureTest`) |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+### E5-8.2 Documentación
+
+`README.md`, `ARCHITECTURE.md` (sección 13 nueva, «Panel definitivo y despliegue», y 14, «Pendiente para después»), `SCHEMA.md`, `SECURITY.md` (límites de Nginx, formularios rechazados, constancias sin montos, despliegue y su verificación), `OPERATIONS.md` (sección 6, **«El panel en el día a día»**: qué revisar en el resumen, cómo buscar, cobrar una renovación, atender una solicitud sin internet o una alerta, consultar un cliente y entregar una constancia) y `TEST_PLAN.md` describen la versión 1.0.0. El paquete incluye ahora `docs/PANEL.md` y `docs/INTEGRACION_ADEL_POS.md`.
+
+### E5-8.3 Cifras por fase
+
+| Fase | Commit | Qué | Pruebas (PHP 8.3) | Reglas quitadas | Playwright |
+| --- | --- | --- | --- | --- | --- |
+| Partida | `b02a14f` | Cierre de la etapa 4 (el `315b8e5` de la especificación, mismo árbol) | 466 | — | — |
+| 0 | `63065ec` | Contrato V1.0 definitivo adoptado | 466 | 1 | No aplica |
+| 1 | `aef3287` | Revisión del panel y `docs/PANEL.md` | 466 | — (solo documento) | No aplica |
+| 2 | `adaed7d` | Panel: estructura y pantallas principales | 483 | 45 | OK |
+| 3 | `b2b3de4` | Panel: operaciones, catálogo y acabado | 486 | 11 | OK |
+| 4 | `f9f6faf` | Constancias PDF definitivas | 488 | 9 | OK |
+| 5 | `50618ec` | Nginx: límites de intentos y sitio completo | 495 | 10 | OK (dispositivos de confianza) |
+| 6 | `37191f4` | Instrucciones de despliegue | 498 | 7 | No aplica |
+| 7 | `a794d46` | Verificación del despliegue y guía de integración | 506 | 42 | No aplica |
+| 8 | este commit | Cierre | 506 | — | OK |
+
+En total se quitaron **125 reglas**, una a la vez. Las que al principio no se detectaban (seis en la Fase 2, tres en la Fase 3 y una en la Fase 6) se resolvieron reforzando la prueba o quitando la regla redundante, y están descritas en su fase.
+
+### E5-8.4 Capturas revisadas
+
+Del recorrido completo de Playwright, en `var/screenshots/` (git lo ignora), con los datos sintéticos de `tests/prepare-panel.php`:
+
+Revisadas en este cierre, una por una:
+
+| Captura | Qué se revisó |
+| --- | --- |
+| `dashboard-desktop.png` | Resumen: licencias activas por tipo, en tolerancia, vencidas y alertas; «Por vencer» con sus tres ventanas y la acción directa (Convertir o Renovar); cobros del mes en curso y del anterior en `America/Monterrey`; actividad reciente |
+| `license-detail-activated-desktop.png` | Detalle: cabecera con el estado en texto y color, la barra de acciones de una perpetua, las siete secciones y las revisiones firmadas con su motivo de cierre (liberada, transferida). La referencia sintética con `<script>` aparece escapada |
+| `license-detail-mobile.png` | El detalle a 390 px: acciones en dos columnas, la lista de secciones con «Ver», sin desbordamiento |
+| `renewal-quote-desktop.png` | Vista previa de una renovación: antes y después, «desde cuándo», monto sugerido y la columna de confirmación |
+| `customer-detail-desktop.png` | Detalle del cliente: datos, sus licencias con su estado y sus pagos |
+
+Las otras 40 (lista de licencias, clientes, formularios, confirmaciones de revocar y liberar, sin internet, planes con el conteo de la propagación, alertas, menú de notificaciones, seguridad y sus versiones de teléfono) se revisaron en las Fases 2 y 3; en el cierre se comprobó que el recorrido las generara todas sin errores. **Observación:** en las capturas de página completa la barra lateral se corta a la altura de la ventana porque es `position: fixed`; en el navegador ocupa siempre la altura visible. No es un defecto del panel.
+
+Las constancias de muestra de la Fase 4 (tres tipos de licencia y los dos métodos de entrega) están en `var/screenshots/constancias/`.
+
+### E5-8.5 Consultas al propietario
+
+Decisiones que tomé con el criterio más conservador coherente con el contrato. Ninguna cambia el contrato; cada una tiene su alternativa:
+
+| # | Decisión aplicada | Alternativa | Dónde |
+| --- | --- | --- | --- |
+| 1 | La **referencia comercial no se imprime** en las constancias (puede ser un número de pedido o de factura, un dato de pago) | Imprimirla, si sirve al cliente para identificar su compra | DECISIONS 18, Fase 4, n.º 1 |
+| 2 | **«Por vencer» y «vencidas»** se cuentan por **fechas de calendario en la zona del cliente** (vence hoy a las 23:00 cuenta como «hoy») | Contar múltiplos de 24 horas desde ahora | Fase 1, n.º 2 |
+| 3 | **Los cobros del mes** se cortan en la zona del panel (`America/Monterrey`) | Cortar cada pago en la zona de su cliente | Fase 1, n.º 3 |
+| 4 | La casilla **«Entiendo…»** de las operaciones sensibles es obligatoria en el formulario; el servidor exige lo de siempre (motivo y nueva autenticación) | Exigirla también en el servidor | Fase 2, n.º 7 |
+| 5 | Un formulario rechazado por **conflicto (409)** vuelve con los datos actuales y **sin lo escrito**, para no pisar el cambio de otro administrador | Devolver también lo escrito | Fase 3, n.º 1 |
+| 6 | **Límites de Nginx:** API 60 por minuto con ráfagas de 20; inicio de sesión 10 envíos por minuto con ráfagas de 5, **solo los POST** | Otros valores; limitar también abrir la página | Fase 5, n.º 2 |
+| 7 | **Los errores de la API que responde Nginx** llevan `request_id: null` y la correlación en `X-Request-Id` (el ejemplo heredado la ponía en `request_id`, contra el contrato §8.7) | — (el contrato no deja otra) | Fase 5, n.º 3 |
+| 8 | **Hallazgo:** una variable de `map` repetida en otro sitio no hace fallar `nginx -t` (comprobado en 1.31.3; en 1.24.0 no se pudo aquí). Los nombres llevan el prefijo `adelpos_` y una prueba lo exige | Comprobarlo en el VPS con `nginx -T` antes de recargar | Fase 5, n.º 8 |
+| 9 | **El clon y `composer install` son de `root`** (sin scripts ni complementos), porque la tarea diaria corre como `root` | Un usuario de despliegue propio con `sudo` limitado | Fase 6, n.º 2 |
+| 10 | La tarea diaria llama a **`php8.3`**, no a `php` | `php`, si el VPS siempre apunta a 8.3 | Fase 6, n.º 5 |
+| 11 | La verificación pública dice **«Sin activar»** de una licencia todavía sin fechas (antes decía «Emitida») | Conservar «Emitida» | Fase 4, n.º 6 |
+| 12 | `bin/verify-deployment.php` **no abre el panel** (crearía una sesión anónima); el entorno esperado es **`test`** por omisión; el certificado se advierte a **14 días** y la tarea a las **36 horas** | Revisar también `/login`; exigir la opción del entorno; otros plazos | Fase 7, n.º 1, 5 y 6 |
+| 13 | Los borradores `docs/CONTRATO_LICENCIAS_ADEL_POS_v2.md` y `_v3.md` **no se versionan ni se borran** (el v3 es idéntico al adoptado) | Borrarlos | Fase 0, n.º 2 |
+| 14 | Queda en `/private/tmp/adelpos-license-stack-b9d1a4a88869` una carpeta de una corrida **anterior a esta etapa**; no la borré porque no la creó esta etapa | Borrarla (son datos sintéticos de prueba) | — |
+
+### E5-8.6 Pendiente para después del despliegue
+
+| Qué | Quién |
+| --- | --- |
+| Desplegar con `DEPLOY_UBUNTU_24_04.md` y correr `bin/verify-deployment.php`: todo en OK salvo, como mucho, la tarea diaria hasta su primera ejecución | El propietario |
+| Copiar `shared/llaves-publicas-test.json` al proyecto de AD-EL POS antes de activar la llave (paso 8) | El propietario |
+| Ensayar la restauración (paso 12.3) y comprobar que el respaldo diario llega fuera del VPS | El propietario |
+| Revisar con `nginx -T` que ningún nombre de AIDEX choque con los `adelpos_` (consulta 8) | El propietario |
+| Integración en AD-EL POS con `docs/INTEGRACION_ADEL_POS.md` y sus 14 pruebas contra `licensing.sicrat.com` | Etapa de integración |
+| Llaves de producción y dominio definitivo; avisos por correo y a los clientes; pasarela de pagos, facturación e impuestos | Sin etapa asignada |

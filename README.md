@@ -2,12 +2,12 @@
 
 Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es un proyecto independiente del punto de venta: emite, firma, revoca y audita licencias, y ofrece un panel privado para el propietario.
 
-- **Panel administrativo:** clientes, productos, catálogo de planes con precios, licencias, solicitudes sin internet, transferencias, alertas con su botón de notificaciones en la barra superior, constancias PDF, administradores y auditoría.
+- **Panel administrativo** ([docs/PANEL.md](docs/PANEL.md)): resumen con «por vencer» y cobros, licencias con búsqueda y filtros, detalle de cada licencia por secciones, clientes con sus licencias y pagos, catálogo de planes con precios, solicitudes sin internet, transferencias, alertas con su botón de notificaciones en la barra superior, constancias PDF, administradores y auditoría; también en el teléfono.
 - **Ciclo comercial:** monto de alta, renovación, conversión de una prueba, cambio de plan con bonificación, cambios programados, mantenimiento de una perpetua y edición del periodo inicial, cada uno con su pago registrado en MXN.
 - **API `/v1`:** activación en línea con desafío y prueba de posesión, transferencia por autoservicio, consulta de actualización y desactivación.
 - **Flujo sin internet:** el panel importa una solicitud `.licreq`, el propietario la aprueba y entrega un archivo `.lic` firmado.
 
-> **Estado: etapa 4 cerrada. La API cumple completo el contrato.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 definitivo ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea (con la transferencia por autoservicio, `TRANSFER_LIMIT` y `transfer_available`) y archivos sin internet. Administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado** (etapa 3), y desde la etapa 4 la confirmación de las transferencias por la computadora anterior, su liberación manual y las alertas del panel. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda para la etapa 5 está en [Pendiente para las etapas siguientes](#pendiente-para-las-etapas-siguientes). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
+> **Estado: etapa 5 cerrada, versión 1.0.0 (etiqueta `v1.0.0`).** El panel es el definitivo, las constancias tienen su diseño final sin montos, Nginx limita los intentos con el formato de error del contrato, y [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) y `bin/verify-deployment.php` dejan listo el despliegue en `licensing.sicrat.com`, que hace el propietario. **La API cumple completo el contrato.** El servidor firma, recibe y devuelve exactamente lo que define el contrato de licencias V1.0 definitivo ([docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md)): contenido de la licencia, entornos de firma `test` y `production`, fechas de calendario, API en línea (con la transferencia por autoservicio, `TRANSFER_LIMIT` y `transfer_available`) y archivos sin internet. Administra además la vida comercial completa de una licencia **sin cambiar el contenido firmado** (etapa 3), y desde la etapa 4 la confirmación de las transferencias por la computadora anterior, su liberación manual y las alertas del panel. La forma exacta está publicada en [contracts/v1/](contracts/v1/README.md). Lo que queda está en [Pendiente para después](#pendiente-para-después). El avance y las cifras de pruebas están en [AVANCE.md](AVANCE.md).
 
 ## Requisitos
 
@@ -21,7 +21,7 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
 
 ## Instalación local
 
-1. Dependencias: `composer install`. En producción: `composer install --no-dev --prefer-dist --optimize-autoloader`.
+1. Dependencias: `composer install`. En un servidor, como en la guía de despliegue: `composer install --no-dev --optimize-autoloader --no-interaction --no-scripts --no-plugins`.
 2. Crea una base vacía y dos cuentas de MySQL: una de migración y otra de aplicación con permisos mínimos. Ver [OPERATIONS.md](OPERATIONS.md).
 3. Genera la configuración y sus claves. La contraseña de MySQL se pide sin mostrarla:
 
@@ -40,7 +40,7 @@ Servidor de licencias de **AD-EL POS**, el punto de venta para restaurantes. Es 
    php bin/grants.php --database=adelpos_license_dev --user=adelpos_license_dev_app   # imprime los GRANT; aplícalos con una cuenta autorizada
    ```
 
-   El esquema está en `database/migrations/`. `001_esquema_inicial.sql` crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos; las migraciones siguientes lo adaptan al contrato: `002_entornos_de_firma.sql` y `003_contrato_v1.sql`, que agrega los planes `basico`, `elemental` y `premium`. El migrador registra cada archivo con su checksum. Si repites la migración no cambia nada, y si un archivo se modifica después de aplicarlo, el migrador se detiene.
+   El esquema está en `database/migrations/`. `001_esquema_inicial.sql` crea las tablas y el producto `adel_pos` («AD-EL POS»), sin módulos; las migraciones siguientes lo adaptan al contrato: `002_entornos_de_firma.sql`, `003_contrato_v1.sql`, que agrega los planes `basico`, `elemental` y `premium`, y las siguientes, hasta `009_indice_de_cobros.sql` (ver [SCHEMA.md](SCHEMA.md)). El migrador registra cada archivo con su checksum. Si repites la migración no cambia nada, y si un archivo se modifica después de aplicarlo, el migrador se detiene.
 5. Crea el primer administrador y comprueba la instalación:
 
    ```sh
@@ -94,7 +94,7 @@ npm ci --ignore-scripts --no-audit --no-fund
 env TEST_MYSQL_DSN=… TEST_MYSQL_USER=… TEST_MYSQL_PASSWORD=… php tests/run-panel-tests.php all
 
 # Verificador de referencia del contrato, en Go y sin dependencias externas:
-go run -C contracts/v1/verify . ../fixtures/vectors.json
+env GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go run -C contracts/v1/verify . ../fixtures/vectors.json
 ```
 
 ### Estilo del código
@@ -138,6 +138,8 @@ printf '#!/bin/sh\nexec php bin/check-secrets.php\n' > .git/hooks/pre-commit && 
 
 ## Paquete de despliegue
 
+`licensing.sicrat.com` se despliega clonando el repositorio en una etiqueta ([DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md)); al terminar, `bin/verify-deployment.php` comprueba la instalación sin modificar nada. El paquete sirve para archivar una versión con el SHA-256 de cada archivo:
+
 ```sh
 php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
 ```
@@ -145,21 +147,23 @@ php bin/build-release.php --output=/ruta/nueva/adelpos-license.tar.gz
 **Qué incluye:**
 - solo los archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`;
 - `composer.json`, `composer.lock` y `config/local.example.php`;
-- la documentación de operación, `DECISIONS.md` y `docs/CONTRATO_LICENCIAS_ADEL_POS.md`;
+- la documentación de operación, `DECISIONS.md`, `docs/CONTRATO_LICENCIAS_ADEL_POS.md`, `docs/PANEL.md` y `docs/INTEGRACION_ADEL_POS.md`;
 - del contrato, solo su forma publicada: `contracts/v1/license.schema.json` y `contracts/v1/openapi.yaml`.
 
 **Qué genera:** `RELEASE.json`, con el SHA-256 de cada archivo, y el archivo `.sha256` del paquete.
 
 **Qué nunca incluye:** `config/local.php`, `var/`, llaves, pruebas, los archivos de prueba del contrato (`contracts/v1/fixtures/`), su generador y el verificador en Go, `vendor/` ni archivos sin versionar. El comando aborta si alguno aparece en la lista. En el servidor se ejecuta `composer install --no-dev` con el `composer.lock` incluido.
 
-## Pendiente para las etapas siguientes
+## Pendiente para después
 
-Las etapas 3 y 4 no dejaron marcas `PENDIENTE etapa 3` ni `PENDIENTE etapa 4`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:`.
+No quedan marcas `PENDIENTE` en el código.
 
-| Qué falta | Etapa |
+| Qué falta | Cuándo |
 | --- | --- |
-| Pantallas definitivas del panel (las del ciclo comercial, de las transferencias y de las alertas son mínimas), diseño final de las constancias, `limit_req` de Nginx y despliegue en `licensing.sicrat.com` | 5 |
-| Avisos a los clientes por cambios del catálogo (decisión 9 del propietario); pasarela de pagos, facturación e impuestos | Sin etapa asignada |
+| Desplegar en `licensing.sicrat.com` con [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) y comprobarlo con `bin/verify-deployment.php` | Lo hace el propietario |
+| Integrar las licencias en AD-EL POS ([docs/INTEGRACION_ADEL_POS.md](docs/INTEGRACION_ADEL_POS.md)) | Etapa de integración de AD-EL POS |
+| Llaves de producción y dominio definitivo: otro servidor, con otra base y otras llaves | Sin etapa asignada |
+| Avisos por correo y a los clientes por cambios del catálogo (decisión 9 del propietario); pasarela de pagos, facturación e impuestos | Sin etapa asignada |
 
 ## Contrato
 
@@ -182,9 +186,11 @@ La versión 1.0 definitiva, adoptada al empezar la etapa 5, incorpora las 37 acl
 | [SECURITY.md](SECURITY.md) | Modelo de seguridad y controles |
 | [OPERATIONS.md](OPERATIONS.md) | Operación diaria, llaves, respaldos y recuperación |
 | [TEST_PLAN.md](TEST_PLAN.md) | Plan de pruebas y cómo reproducirlas |
-| [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Despliegue en Ubuntu 24.04 con Nginx y PHP-FPM |
+| [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Despliegue en `licensing.sicrat.com` (Ubuntu 24.04, junto a AIDEX), clonando el repositorio en una etiqueta, y su verificación |
+| [docs/PANEL.md](docs/PANEL.md) | Diseño del panel: navegación, pantallas, componentes, colores de estado, textos y accesibilidad |
+| [docs/INTEGRACION_ADEL_POS.md](docs/INTEGRACION_ADEL_POS.md) | Orientación para integrar las licencias en AD-EL POS (no sustituye al contrato) |
 | [DECISIONS.md](DECISIONS.md) | Decisiones del propietario y técnicas, y procedencia |
-| [AVANCE.md](AVANCE.md) | Avance de las etapas 1 y 2, cifras de pruebas y verificación |
+| [AVANCE.md](AVANCE.md) | Avance de las etapas 1 a 5, cifras de pruebas y verificación |
 | [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md) | Contrato de licencias V1.0 definitivo entre este servidor y AD-EL POS |
 | [contracts/v1/README.md](contracts/v1/README.md) | Esquema, OpenAPI, archivos de prueba y verificador de referencia |
 

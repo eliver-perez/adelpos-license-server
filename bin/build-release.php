@@ -52,6 +52,8 @@ consoleRun(function (): void {
 			'TEST_PLAN.md',
 			'DECISIONS.md',
 			'docs/CONTRATO_LICENCIAS_ADEL_POS.md',
+			'docs/PANEL.md',
+			'docs/INTEGRACION_ADEL_POS.md',
 			'contracts/v1/license.schema.json',
 			'contracts/v1/openapi.yaml',
 		]

@@ -2,12 +2,7 @@
 
 Cómo configurar, operar, respaldar y verificar el servidor. La instalación paso a paso en Ubuntu 24.04 está en [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md); las decisiones, en [DECISIONS.md](DECISIONS.md); el contrato con AD-EL POS, en [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md).
 
-> **Estado: etapa 3 cerrada.** El servidor firma, recibe y devuelve lo que define el contrato V1.0, y administra el ciclo comercial de cada licencia: pagos, planes, renovación, conversión, cambio de plan, mantenimiento y cambios programados. Lo que todavía no existe, y en qué etapa llega:
->
-> | Etapa | Qué cambia en la operación |
-> | --- | --- |
-> | 4 | Transferencia por autoservicio y alertas |
-> | 5 | Pantallas definitivas del panel, diseño final de las constancias y despliegue en el VPS |
+> **Estado: etapa 5 cerrada, versión 1.0.0.** El servidor cumple el contrato V1.0 completo, administra el ciclo comercial, las transferencias y las alertas, y tiene su panel definitivo ([docs/PANEL.md](docs/PANEL.md)). Lo que queda para después está en [ARCHITECTURE.md](ARCHITECTURE.md), sección 14.
 
 ## 1. Requisitos
 
@@ -101,8 +96,28 @@ Cada comando muestra primero el entorno de licencias en el que opera (`Entorno d
 - Las llaves derivadas de las semillas públicas de prueba (`ADELPOS LICENSE PUBLIC TEST ONLY V1 …`) se rechazan con `LICENSE_ENVIRONMENT=production` y en cualquier servidor con `APP_ENV=production`.
 - **Si la llave activa es de otro entorno,** el servidor no arranca: el panel y la API responden 503 y los comandos se detienen con un mensaje que nombra la llave y los dos entornos. Se corrige `LICENSE_ENVIRONMENT` o se apunta a la base de ese entorno.
 
-## 6. Licencias y operación sin internet
+## 6. El panel en el día a día
 
+El panel sigue [docs/PANEL.md](docs/PANEL.md). La navegación tiene tres grupos: **Operación** (Resumen, Licencias, Clientes, Alertas y Sin internet), **Catálogo** (Planes y Productos) y **Control** (Auditoría, Administradores, solo para el superadministrador, y Mi seguridad). Quien puede escribir tiene el botón **Emitir licencia** en la barra superior de todas las pantallas.
+
+| Tarea | Dónde | Qué hacer |
+| --- | --- | --- |
+| Ver qué necesita atención | **Resumen** | Licencias vigentes por tipo, en tolerancia, vencidas en los últimos 30 días y alertas sin revisar; **Por vencer** en 7, 15 o 30 días de calendario, en la zona de cada cliente; **Cobros del periodo** (mes en curso y anterior, informativos, en MXN); alertas y actividad recientes. Cada número abre su lista ya filtrada |
+| Buscar una licencia | **Licencias** | Busca por nombre o razón social del cliente, referencia comercial, identificador de la licencia o `server_id` de cualquier computadora que la haya tenido. Filtra por tipo, estado, plan, personalizadas o con transferencia pendiente, y ordena; 20 por página |
+| Cobrar una renovación | Detalle de la licencia → **Renovar** | Revisa la vista previa (fechas nuevas y monto sugerido) y confirma con el monto cobrado |
+| Atender una solicitud sin internet | **Sin internet** (con el número de pendientes en el menú) | Importa el `.licreq`, revisa la computadora y la licencia, aprueba o rechaza y descarga el `.lic` |
+| Atender una alerta | **Alertas** o el botón de notificaciones | Sigue la tabla de alertas de esta sección y después «Marcar como revisada» |
+| Consultar o corregir un cliente | **Clientes** → el cliente | Sus datos, sus licencias con su estado y sus pagos. «Editar» cambia los datos y la zona horaria |
+| Entregar una constancia | Detalle → **Constancias** | De licenciamiento, o de entrega para activación (con nueva autenticación). No llevan montos |
+| Revisar quién hizo qué | **Auditoría** | Busca por la operación, en español (por ejemplo, «renovada»), o por el identificador del objeto; cada evento dice quién y cuándo |
+
+- **El detalle de una licencia** tiene siete secciones: Resumen, Pagos, Computadoras y transferencias, Revisiones firmadas, Sin internet, Constancias e Historial. Su barra de acciones muestra solo lo que aplica a esa licencia y a tu rol: Renovar, Convertir, Cambiar de plan, Mantenimiento, Editar periodo inicial, Descargar .lic vigente, Constancias, Revelar código, Reemplazar clave y Revocar.
+- **Estados**, con las reglas que aplica AD-EL POS (contrato §5.6) y la hora del servidor: **Sin activar**, **Vigente** (o **Prueba vigente**), **En tolerancia**, **Vencida** y **Revocada**. Cada uno tiene su color y su texto; nunca depende solo del color.
+- **Antes de cada operación comercial** el panel muestra una vista previa con lo que va a cambiar; las irreversibles piden marcar «Entiendo» y, las sensibles, tu contraseña y un código.
+- **Si un formulario no se puede completar,** vuelve a su pantalla con lo que escribiste (salvo contraseñas y códigos) y un mensaje que nombra el campo. Si la licencia cambió mientras tanto, la pantalla lo avisa: revisa los datos nuevos y repite la operación.
+- **En el teléfono** el panel funciona igual: el menú se abre con el botón de la barra superior y las tablas se leen por filas.
+
+### Licencias y operación sin internet
 Todo se hace en el panel:
 - **Licencias:** emitir (muestra el código 3-4-4-4 una sola vez), cambiar módulos, reemplazar la clave, revocar y generar constancias en PDF.
   - **Al emitir** se elige el tipo y su condición: perpetua con 0, 6 o 12 meses de actualizaciones; suscripción mensual, trimestral, semestral o anual; o prueba de 15 días, 1 mes o 3 meses. También el plan, que llena los cupos de cajas, comanderos y pantallas de cocina (KDS). Si se cambia algún cupo, el panel avisa que la licencia queda **personalizada** y deja de seguir a su plan.
@@ -110,7 +125,7 @@ Todo se hace en el panel:
   - **Las fechas empiezan al activar.** Una licencia emitida no tiene vencimiento asignado; el panel muestra «Empieza al activar». El primer periodo empieza cuando el servidor confirma la primera activación en línea, o cuando se aprueba la primera solicitud sin internet. Si después se activa en otra computadora, conserva sus fechas.
   - **El detalle de la licencia** muestra tipo, plan, cupos, inicio, vencimiento y fin de actualizaciones, en la zona horaria del cliente, y el motivo de cierre de cada revisión firmada: licencia liberada, transferida a otra computadora o revocada por el propietario.
   - **Una computadora principal a la vez.** Para pasarla a otra computadora, la primera libera la licencia, AD-EL POS la transfiere por autoservicio, o el propietario la transfiere desde el panel.
-  - **Transferencias** (etapa 4), en la sección «Transferencias» del detalle: el historial (vía, origen y destino, fecha, estado y forma de confirmación) y la transferencia por autoservicio pendiente, si la hay.
+  - **Transferencias** (etapa 4), en la sección «Computadoras y transferencias» del detalle: el historial (vía, origen y destino, fecha, estado y forma de confirmación) y la transferencia por autoservicio pendiente, si la hay.
   - **Al emitir se registra el pago de alta,** en MXN y tal como se cobró. El panel sugiere el precio del catálogo del plan y del plazo; si el monto es otro, pide el motivo. Una licencia personalizada, o un plan sin precio, pide el monto a mano. Una prueba vale 0.
 - **Ciclo comercial** (etapa 3), desde el detalle de la licencia. Cada operación muestra primero una revisión con las fechas nuevas y el monto sugerido, y después se confirma con el monto cobrado:
   - **Renovar** una suscripción activada: si paga antes de que termine la tolerancia, el periodo nuevo empieza en el vencimiento; si no, en la fecha de pago. Conserva sus cupos y puede cambiar la duración.
@@ -121,7 +136,7 @@ Todo se hace en el panel:
   - Cada pago queda en la tabla **Pagos** del detalle, que no se puede editar ni borrar.
 - **Planes** (solo el superadministrador): crear, editar nombre, cupos y precios en MXN, y archivar. Al guardar cupos nuevos se elige si aplican solo a licencias nuevas o también a las existentes que siguen el plan; en las existentes solo suben, y el panel muestra cuántas licencias se actualizaron y cuántas revisiones se firmaron. Un plan archivado ya no se ofrece al emitir.
 - **Clientes:** cada cliente tiene una zona horaria, que se elige de una lista en su ficha (por omisión `America/Monterrey`). Con ella se calculan y se muestran las fechas de sus licencias. Cambiarla no modifica fechas ya firmadas.
-- **Solicitudes sin internet:**
+- **Sin internet:**
   - importar un `.licreq` (máximo 64 KiB);
   - revisar la identidad del equipo;
   - elegir la licencia, aprobar o rechazar;
@@ -149,7 +164,7 @@ AD-EL POS puede mover la licencia a otra computadora sin soporte. Mientras la co
 
 Después de atenderla, **«Marcar como revisada»** (operador o superadministrador; la cuenta de consulta solo las ve). Queda quién y cuándo. Si la situación se repite, se abre otra alerta.
 
-**Liberar el contador de autoservicio** (solo el superadministrador, en «Transferencias» del detalle, con motivo y confirmando la identidad): úsalo solo cuando la computadora anterior **nunca** va a volver a conectarse. No retira la licencia de la anterior: si conserva una copia sin internet, sigue funcionando hasta su vencimiento, o para siempre si es perpetua. Si regresa y consulta, recibe su cierre.
+**Liberar el contador de autoservicio** (solo el superadministrador, en «Computadoras y transferencias» del detalle, con motivo y confirmando la identidad): úsalo solo cuando la computadora anterior **nunca** va a volver a conectarse. No retira la licencia de la anterior: si conserva una copia sin internet, sigue funcionando hasta su vencimiento, o para siempre si es perpetua. Si regresa y consulta, recibe su cierre.
 
 ## 7. Mantenimiento diario
 
@@ -160,7 +175,7 @@ Después de atenderla, **«Marcar como revisada»** (operador o superadministrad
 3. `bin/audit-verify.php`: verifica la cadena de auditoría y escribe un anclaje (`.anchor.json`).
 4. `bin/backup.php --action=create`: crea el respaldo cifrado (`.adelposbackup`) y su recibo (`.receipt.json`).
 
-La tarea no borra respaldos antiguos. La retención y la copia externa las define el operador.
+La tarea no borra respaldos antiguos. La retención y la copia externa las define el operador ([DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md), paso 12). `bin/verify-deployment.php` revisa que el temporizador esté habilitado y que la última ejecución haya terminado bien.
 
 ## 8. Respaldos y restauración
 
@@ -197,8 +212,11 @@ La tarea no borra respaldos antiguos. La retención y la copia externa las defin
   También muestra el entorno de licencias y se detiene si la llave activa es de otro entorno o si la carpeta de llaves contiene llaves de otro entorno.
 
   Con `--require-signer` verifica además la llave de firma activa del entorno.
+- **Verificación del despliegue.** `sudo env ADELPOS_LICENSE_CONFIG=… php8.3 bin/verify-deployment.php` comprueba, sin modificar nada, PHP, permisos, la cuenta de MySQL con sus permisos exactos, migraciones, llave activa, tarea diaria y la respuesta HTTPS del dominio (certificado, redirección, cabeceras, ocultos y API). Cada Advertencia o Error dice qué hacer; termina con código 1 si hay errores. Se ejecuta al instalar, después de cada actualización y cuando algo falle.
 
 ## 10. Paquete de despliegue
+
+`licensing.sicrat.com` se despliega clonando el repositorio en una etiqueta ([DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md)). El paquete sirve para archivar una versión con el SHA-256 de cada archivo, o para instalarla donde no se quiera un clon.
 
 ```sh
 php bin/build-release.php --output=/ruta/existente/adelpos-license.tar.gz
@@ -208,7 +226,7 @@ php bin/build-release.php --output=/ruta/existente/adelpos-license.tar.gz
   - solo los archivos versionados en git de `bin/`, `src/`, `public/`, `templates/`, `database/` y `deploy/`;
   - `composer.json` y `composer.lock`;
   - `config/local.example.php`;
-  - la documentación;
+  - la documentación, incluidos `docs/PANEL.md` y `docs/INTEGRACION_ADEL_POS.md`;
   - del contrato, `contracts/v1/license.schema.json` y `contracts/v1/openapi.yaml`, como documentación.
 - **Qué deja fuera:** pruebas, los archivos de prueba del contrato con sus llaves públicas de prueba, su generador y el verificador en Go, `vendor/`, `var/`, configuración local y archivos sin versionar.
 - **Cuándo aborta:** si aparece `config/local.php`, algo bajo `var/`, un `.DS_Store` o un archivo `.key`/`.pem`.
@@ -231,10 +249,11 @@ Detalles en [README.md](README.md). Falla con:
 
 - **Registros de error:** PHP escribe en `shared/log/php-error.log`, con el prefijo `adelpos-license [<referencia>]`, o `adelpos-license API [<request_id>]` en la API. Nunca escribe cuerpos de petición, códigos comerciales ni parámetros SQL.
 - **Revisar periódicamente:**
+  - `bin/verify-deployment.php`, que resume casi todo lo de esta lista;
   - temporizadores (`adelpos-license-maintenance.timer`, `certbot.timer`);
   - espacio libre;
   - antigüedad de respaldos y anclajes externos;
   - caducidad TLS;
   - sincronización del reloj (NTP);
-  - errores 5xx.
+  - errores 5xx y respuestas 429 de Nginx (`limiting requests` en su registro de errores).
 - **Sin internet:** un equipo desconectado conserva sus derechos según su última licencia firmada; ninguna revocación o transferencia lo alcanza al instante.

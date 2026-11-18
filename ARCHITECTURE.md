@@ -1,6 +1,6 @@
 # Arquitectura del servidor de licencias de AD-EL POS
 
-Este documento describe el código tal como queda al cerrar la etapa 3. Todo lo que el servidor firma, recibe y devuelve sigue el contrato [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md), cuya forma exacta está en [contracts/v1/](contracts/v1/README.md). Lo que queda para otras etapas está en la sección 12.
+Este documento describe el código tal como queda al cerrar la etapa 5, en la versión **1.0.0**. Todo lo que el servidor firma, recibe y devuelve sigue el contrato [docs/CONTRATO_LICENCIAS_ADEL_POS.md](docs/CONTRATO_LICENCIAS_ADEL_POS.md), cuya forma exacta está en [contracts/v1/](contracts/v1/README.md). Lo que queda para después está en la sección 14.
 
 ## 1. Límites del sistema
 
@@ -21,14 +21,14 @@ El servidor de AD-EL POS verifica cada licencia sin internet, con las llaves pú
 | `public/router.php` | Solo para el servidor PHP local de desarrollo: sirve los recursos estáticos y envía lo demás a `index.php`. |
 | `public/assets/` | `app.css`, `app.js`, Bootstrap 5 local (sin CDN) y la marca en `brand/` (`adel-pos-tema-claro.png`, `adel-pos-tema-oscuro.png`, `icon.png`). |
 | `src/App.php`, `src/Config.php` | Arranque y composición de servicios. La configuración viene de `ADELPOS_LICENSE_CONFIG` o de `config/local.php`. Las variables de entorno con el mismo nombre tienen prioridad, y `Config::validate()` revisa claves, origen y el entorno de licencias (`LICENSE_ENVIRONMENT`). `App::boot()` se detiene si la llave de firma activa es de otro entorno. |
-| `src/Http/` | `Kernel` (panel: rutas, sesión, CSRF, origen, redes permitidas), `ApiKernel` (API `/v1`), `View` (escape, fechas con su zona horaria, textos del modelo de licencias y etiquetas de auditoría) y `Network` (`ADMIN_NETWORKS`). |
-| `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios de módulos, clave y revocación), `PlanService` (catálogo de planes y propagación de aumentos), `CommercialService` (renovación, conversión, cambio de plan, mantenimiento y periodo inicial, cada uno con su vista previa), `ScheduledChanges` (cambios de plan programados y la tarea que los aplica), `Payments` (registro de pagos), `LicenseHistory` (historial comercial de una licencia), `ActivationService` (API en línea), `Transfers` (transferencias de autoservicio y del propietario, su confirmación y la liberación manual), `Alerts` (alertas del panel y su revisión), `PaidPeriods` (periodos pagados que todavía corren, base de la bonificación), `OfflineService` (`.licreq`/`.lic`), `LicenseActivator` (alta de una instalación y primer periodo, común a las dos vías), `RevisionPublisher` (contenido y firma de las revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias) y `Operations` (idempotencia). |
-| `src/Domain/` | Reglas sin estado: `LicenseContent` (campos, orden y reglas del contenido firmado), `Protocol` (peticiones de la API y prueba de posesión), `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `LicenseTerms` (tipos, periodos, duraciones, cupos, tolerancia y precios por plazo), `CalendarPeriod` (motor de fechas: primer periodo, renovación, mantenimiento y los 12 meses anteriores de la alerta), `Money` (montos en MXN como centavos enteros), `Credit` (bonificación de un cambio de plan), `TimeZones`, `Input`, `Uuid`, `Problem`, `ApiProblem` (códigos de error y su HTTP) y `ApiResponse`. |
-| `src/Infrastructure/` | MySQL (`Database`, `Migrator`, `ReadRepository`, `MySqlFiles`), criptografía (`Crypto`, `SigningKeys`, `Totp`), `Sessions`, `RateLimiter`, `Audit`, respaldos (`Backup`, `EncryptedArchive`, `RecoveryVerifier`), `CertificatePdf` y `Clock`. |
+| `src/Http/` | `Kernel` (panel: rutas, sesión, CSRF, origen, redes permitidas), `ApiKernel` (API `/v1`), `View` (escape, fechas con su zona horaria, textos del modelo de licencias, etiquetas de auditoría, estados con su color y lo escrito en un formulario rechazado) y `Network` (`ADMIN_NETWORKS`). |
+| `src/Application/` | Casos de uso: `AuthService`, `TrustedDevices`, `AdminService`, `Access`/`Actor` (roles y permisos), `CatalogService` (clientes, productos, módulos), `LicenseService` (emisión y cambios de módulos, clave y revocación), `PlanService` (catálogo de planes y propagación de aumentos), `CommercialService` (renovación, conversión, cambio de plan, mantenimiento y periodo inicial, cada uno con su vista previa), `ScheduledChanges` (cambios de plan programados y la tarea que los aplica), `Payments` (registro de pagos), `LicenseHistory` (historial comercial de una licencia), `ActivationService` (API en línea), `Transfers` (transferencias de autoservicio y del propietario, su confirmación y la liberación manual), `Alerts` (alertas del panel y su revisión), `PaidPeriods` (periodos pagados que todavía corren, base de la bonificación), `OfflineService` (`.licreq`/`.lic`), `LicenseActivator` (alta de una instalación y primer periodo, común a las dos vías), `RevisionPublisher` (contenido y firma de las revisiones), `LicenseMaterials` (código y archivos sensibles), `DocumentService` (constancias), `LicenseActions` (las acciones que el detalle de una licencia ofrece según su estado y el rol) y `Operations` (idempotencia). |
+| `src/Domain/` | Reglas sin estado: `LicenseContent` (campos, orden y reglas del contenido firmado), `Protocol` (peticiones de la API y prueba de posesión), `Jws`, `OfflineRequest`, `StrictJson`, `ActivationCode` (códigos 3-4-4-4), `Capabilities` (dependencias y ciclos de módulos), `LicenseTerms` (tipos, periodos, duraciones, cupos, tolerancia y precios por plazo), `CalendarPeriod` (motor de fechas: primer periodo, renovación, mantenimiento y los 12 meses anteriores de la alerta), `Money` (montos en MXN como centavos enteros), `Credit` (bonificación de un cambio de plan), `LicenseState` (estado de una licencia en el panel: sin activar, vigente, en tolerancia, vencida o revocada, con las reglas de §5.6), `TimeZones`, `Input` (validación con mensajes en español que nombran el campo), `Uuid`, `Problem`, `ApiProblem` (códigos de error y su HTTP) y `ApiResponse`. |
+| `src/Infrastructure/` | MySQL (`Database`, `Migrator`, `ReadRepository`, `PanelQueries` para el resumen, las listas con filtros y los clientes, `MySqlFiles`), criptografía (`Crypto`, `SigningKeys`, `Totp`), `Sessions`, `RateLimiter`, `Audit`, respaldos (`Backup`, `EncryptedArchive`, `RecoveryVerifier`), `CertificatePdf`, `Clock`, `RuntimeGrants` (los permisos exactos de la cuenta de la aplicación) y `DeploymentCheck` (la verificación de un despliegue). |
 | `templates/` | Vistas PHP del panel, la verificación pública y la constancia PDF. |
-| `bin/` | CLI de operación: configuración, migración, permisos, administrador inicial, llaves, respaldo y restauración, verificación de auditoría, limpieza, cambios de plan programados (`apply-scheduled-changes.php`), comprobaciones previas, paquete de despliegue y revisión de secretos. |
-| `database/migrations/` | `001_esquema_inicial.sql` (esquema recibido y producto `adel_pos` sin módulos), `002_entornos_de_firma.sql`, `003_contrato_v1.sql`, `004_retiro_de_lo_heredado.sql`, `005_precios_y_pagos.sql`, `006_editor_de_planes.sql`, `007_cambios_programados.sql` y `008_transferencias_y_alertas.sql`. Ver [SCHEMA.md](SCHEMA.md). |
-| `deploy/` | Ejemplos de Nginx y del pool de PHP-FPM, y el servicio y temporizador `adelpos-license-maintenance.*`. |
+| `bin/` | CLI de operación: configuración, migración, permisos, administrador inicial, llaves, respaldo y restauración, verificación de auditoría, limpieza, cambios de plan programados (`apply-scheduled-changes.php`), comprobaciones previas, verificación del despliegue (`verify-deployment.php`), paquete de despliegue y revisión de secretos. |
+| `database/migrations/` | `001_esquema_inicial.sql` (esquema recibido y producto `adel_pos` sin módulos), `002_entornos_de_firma.sql`, `003_contrato_v1.sql`, `004_retiro_de_lo_heredado.sql`, `005_precios_y_pagos.sql`, `006_editor_de_planes.sql`, `007_cambios_programados.sql`, `008_transferencias_y_alertas.sql` y `009_indice_de_cobros.sql`. Ver [SCHEMA.md](SCHEMA.md). |
+| `deploy/` | El sitio de Nginx completo (`nginx.conf.example`: HTTP, HTTPS, límites de intentos y errores con el formato del contrato), el pool de PHP-FPM, y el servicio y temporizador `adelpos-license-maintenance.*`. |
 | `contracts/v1/` | Forma exacta del contrato: `license.schema.json`, `openapi.yaml`, los archivos de prueba con su generador y el verificador de referencia en Go. Al paquete de despliegue solo van el esquema y el OpenAPI, como documentación. |
 
 ## 3. Panel administrativo
@@ -45,6 +45,7 @@ Recorrido de una petición:
    - `viewer`: solo consulta.
 
    Las acciones sensibles (revelar el código, descargar un `.lic`, constancias de entrega, transferencias y la liberación manual del contador de autoservicio) piden de nuevo la contraseña y un código de verificación.
+6. **Pantallas.** Siguen [docs/PANEL.md](docs/PANEL.md): navegación en tres grupos (Operación, Catálogo y Control), resumen con «por vencer» y cobros, licencias con búsqueda y filtros, detalle de la licencia por secciones, detalle del cliente y una vista previa antes de cada operación comercial. Un formulario rechazado (401 o 422) vuelve a su pantalla con lo escrito y el mensaje del campo; un conflicto (409) vuelve sin lo escrito.
 7. **Alertas.** Cada pantalla muestra en la barra superior el botón de notificaciones con el número de alertas sin revisar (`ReadRepository::alertSummary`).
 8. **Idempotencia.** Cada mutación lleva un `operation_id`. `Operations` guarda el resultado, así que un reintento no repite la operación.
 
@@ -66,7 +67,7 @@ Sigue la sección 8 del contrato. Su especificación formal es [contracts/v1/ope
 - `Content-Type: application/json`;
 - 16 KiB como máximo, y JSON estricto: se rechazan claves duplicadas y valores inválidos;
 - exactamente los campos del contrato: ni faltantes ni sobrantes;
-- límite de 30 peticiones por minuto por IP.
+- límite de 30 peticiones por minuto por IP en la aplicación y, antes, el de Nginx (60 por minuto con ráfagas de 20), que responde con el mismo formato de error.
 
 **Identidad de la instalación.** `server_id` (UUID versión 4 en minúsculas) más su llave pública de licencias. La prueba de posesión es una firma Ed25519 sobre el mensaje `ADELPOS-LIC-V1`, con el desafío, el producto, el `server_id` y la activación.
 
@@ -135,9 +136,9 @@ Sigue la sección 9 del contrato.
 
 ## 9. Constancias PDF
 
-- **Generación.** `DocumentService` genera constancias de licenciamiento o de entrega para activación, con la modalidad, el plan, los cupos y las fechas de la licencia en la zona horaria del cliente. `CertificatePdf` las dibuja con dompdf: el logo claro de AD-EL POS, verificado por su SHA-256 y reducido solo en memoria, y un QR hacia `/verify/<token>`.
+- **Generación.** `DocumentService` genera constancias de licenciamiento o de entrega para activación (diseño final de la etapa 5): titular, tipo y periodo, plan, cupos, revisión firmada y fechas en la zona horaria del titular, en una página A4. **No llevan montos, pagos ni la referencia comercial.** `CertificatePdf` las dibuja con dompdf: el logo claro de AD-EL POS, verificado por su SHA-256 y reducido solo en memoria, y un QR hacia `/verify/<token>`.
 - **Almacenamiento.** Cada constancia tiene un folio `ADELPOS-…` y una revisión inmutable. Se guarda cifrada junto con la huella SHA-256 del PDF.
-- **Verificación pública.** Confirma folio, revisión y estado, pero no demuestra que un equipo esté activado.
+- **Verificación pública.** Confirma folio, revisión, SHA-256 del PDF y el **estado actual** de la licencia (vigente, en tolerancia, vencida, revocada o sin activar), pero no demuestra que un equipo esté activado.
 
 ## 10. Datos protegidos
 
@@ -190,11 +191,27 @@ Reglas comunes:
 
 **Transferir nunca cambia las fechas.** Las fechas son de la licencia, no de la activación: una prueba o suscripción vencida se transfiere y sigue vencida.
 
-## 13. Pendiente para las etapas siguientes
+## 13. Panel definitivo y despliegue (etapa 5)
 
-Las etapas 3 y 4 no dejaron marcas `PENDIENTE etapa 3` ni `PENDIENTE etapa 4`. Lo que todavía no existe está marcado en el código con `PENDIENTE etapa N:`.
-
-| Parte | Cómo funciona hoy | Etapa |
+| Pieza | Dónde | Qué hace |
 | --- | --- | --- |
-| Panel y constancias | Ajuste mínimo para emitir, consultar, operar el ciclo comercial, las transferencias y las alertas | 5: pantallas definitivas, diseño final de las constancias, `limit_req` de Nginx y despliegue en el VPS |
-| Contrato | V1.0 definitivo, adoptado al empezar la etapa 5, con las 37 aclaraciones incorporadas | Un cambio espera a la versión 1.1 |
+| Diseño del panel | [docs/PANEL.md](docs/PANEL.md) | Inventario, navegación, pantallas, componentes, colores de estado con su contraste, textos y accesibilidad. Las pantallas lo siguen |
+| Estado de una licencia | `Domain\LicenseState` | Sin activar, vigente, en tolerancia, vencida o revocada, con las reglas de §5.6 y la hora del servidor; cuenta días de calendario en la zona del cliente para «por vencer» |
+| Consultas del panel | `Infrastructure\PanelQueries` | Conteos, por vencer (7, 15 y 30 días), vencidas recientes, cobros por mes en la zona del panel, la lista de licencias con búsqueda, filtros y orden (20 por página) y los clientes. Acota en SQL con rangos indexados y termina en PHP lo que depende de la zona del cliente |
+| Detalle de una licencia | `ReadRepository::license` | Siete secciones (resumen, pagos, computadoras y transferencias, revisiones firmadas, sin internet, constancias e historial); cada una carga solo lo suyo |
+| Nginx | `deploy/nginx.conf.example` | Límites de intentos de la API y del inicio de sesión (solo los envíos), con el formato de error del contrato; nombres propios `adelpos_` en el contexto `http`, para convivir con AIDEX; compatible con 1.24.0 |
+| Despliegue | [DEPLOY_UBUNTU_24_04.md](DEPLOY_UBUNTU_24_04.md) | Un clon de `root` en `/srv/adelpos-license/app`, en una etiqueta; configuración, llaves, registros y respaldos fuera del clon |
+| Verificación del despliegue | `bin/verify-deployment.php` y `Infrastructure\DeploymentCheck` | Comprueba sin modificar nada PHP, permisos, la cuenta de MySQL con sus permisos exactos (`RuntimeGrants`), migraciones, llave activa, tarea diaria y la respuesta HTTPS |
+| Integración | [docs/INTEGRACION_ADEL_POS.md](docs/INTEGRACION_ADEL_POS.md) | Orientación para integrar las licencias en AD-EL POS; remite al contrato |
+
+## 14. Pendiente para después
+
+No quedan marcas `PENDIENTE` en el código.
+
+| Parte | Cómo queda | Cuándo |
+| --- | --- | --- |
+| Despliegue en `licensing.sicrat.com` | La guía y su verificación están listas | Lo hace el propietario |
+| Producción | Llaves de producción y dominio definitivo: otro servidor, con otra base y otras llaves (contrato §3) | Sin etapa asignada |
+| Integración en AD-EL POS | Guía de orientación y archivos del contrato | Etapa de integración de AD-EL POS |
+| Avisos por correo y a los clientes por cambios del catálogo; pasarela de pagos, facturación e impuestos | Fuera de V1.0 | Sin etapa asignada |
+| Contrato | V1.0 definitivo, con las 37 aclaraciones incorporadas | Un cambio espera a la versión 1.1 |

@@ -2,7 +2,7 @@
 
 Esquema de MySQL 8 (InnoDB) del servidor de licencias de AD-EL POS. La fuente física son las migraciones de `database/migrations/`, que se aplican en orden: [`001_esquema_inicial.sql`](database/migrations/001_esquema_inicial.sql), el esquema recibido (reformateado en la etapa 3 sin cambiar el esquema que produce), [`002_entornos_de_firma.sql`](database/migrations/002_entornos_de_firma.sql), que deja los entornos de firma del contrato, [`003_contrato_v1.sql`](database/migrations/003_contrato_v1.sql), con el modelo de datos del contrato: zona horaria del cliente, planes, tipos de licencia, cupos, periodo vigente, `server_id` y datos de las revisiones, y [`004_retiro_de_lo_heredado.sql`](database/migrations/004_retiro_de_lo_heredado.sql), que retira la huella del equipo, `license_limits` y las fechas de mantenimiento anteriores, y hace obligatorio el motivo de cierre, y [`005_precios_y_pagos.sql`](database/migrations/005_precios_y_pagos.sql), con los precios opcionales del catálogo y el registro de pagos de solo inserción, que reemplaza a `subscription_periods` y `maintenance_purchases`, [`006_editor_de_planes.sql`](database/migrations/006_editor_de_planes.sql), con el estado y la versión de cada plan, [`007_cambios_programados.sql`](database/migrations/007_cambios_programados.sql), con los cambios de plan que entran en vigor al vencer lo pagado, y [`008_transferencias_y_alertas.sql`](database/migrations/008_transferencias_y_alertas.sql), con la vía, el estado y la confirmación de cada transferencia, las alertas del panel y la acción `transfer` del desafío, y [`009_indice_de_cobros.sql`](database/migrations/009_indice_de_cobros.sql) (etapa 5), con el índice que cubre los cobros del mes del resumen del panel. MariaDB no es un motor válido; el migrador y `bin/preflight.php` la rechazan.
 
-El esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0, el ciclo comercial (precios, pagos y cambios programados, etapa 3) y, desde la etapa 4, las transferencias por autoservicio y las alertas del panel. La sección 9 enumera lo que cambia en las etapas siguientes.
+El esquema guarda el modelo del [contrato de licencias](docs/CONTRATO_LICENCIAS_ADEL_POS.md) V1.0, el ciclo comercial (precios, pagos y cambios programados, etapa 3) y, desde la etapa 4, las transferencias por autoservicio y las alertas del panel. La etapa 5 (panel definitivo) solo agregó un índice. La sección 9 enumera lo que queda para después.
 
 ## 1. Convenciones
 
@@ -147,7 +147,7 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 
 ## 5. Permisos de la cuenta de aplicación
 
-`bin/grants.php --database=<base> --user=<cuenta>` imprime los `GRANT` de la cuenta del panel y la API (por omisión `adelpos_license` y `adelpos_license_app`). Las migraciones y la gestión de llaves usan cuentas distintas.
+`bin/grants.php --database=<base> --user=<cuenta>` imprime los `GRANT` de la cuenta del panel y la API (por omisión `adelpos_license` y `adelpos_license_app`). La lista está en `src/Infrastructure/RuntimeGrants.php`. Las migraciones y la gestión de llaves usan cuentas distintas.
 
 | Permiso | Tablas |
 | --- | --- |
@@ -163,6 +163,7 @@ No hay administradores, llaves de firma ni licencias. El primer superadministrad
 | `SELECT, INSERT` y `UPDATE` solo de `attempts`, `detail_json`, `last_seen_at`, `reviewed_at`, `reviewed_by` | `license_alerts` |
 
 - En producción, `bin/preflight.php` comprueba que la cuenta **no** pueda modificar ni borrar las tablas de historia.
+- `bin/verify-deployment.php` compara `SHOW GRANTS FOR CURRENT_USER()` con esta lista: un privilegio o una columna de más o de menos, un permiso global o sobre toda la base, sobre otra base o por un rol son un error (etapa 5).
 - `tests/Integration/InitialSchemaTest.php` comprueba que los permisos cubren exactamente las tablas del esquema.
 
 ## 6. Transacciones e idempotencia
@@ -200,7 +201,7 @@ Compara tablas, columnas (posición, tipo, nulabilidad, valor por omisión, jueg
 - el rechazo de migraciones modificadas o incompletas;
 - los permisos por tabla.
 
-## 9. Pendiente para las etapas siguientes
+## 9. Pendiente para después
 
 | Elemento del esquema | Estado actual | Etapa |
 | --- | --- | --- |

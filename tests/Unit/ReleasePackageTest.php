@@ -25,6 +25,8 @@ final class ReleasePackageTest extends TestCase
 		'TEST_PLAN.md',
 		'DECISIONS.md',
 		'docs/CONTRATO_LICENCIAS_ADEL_POS.md',
+		'docs/PANEL.md',
+		'docs/INTEGRACION_ADEL_POS.md',
 		// Del contrato, solo su forma publicada: el esquema de la licencia y la especificación de la API.
 		'contracts/v1/license.schema.json',
 		'contracts/v1/openapi.yaml',
@@ -102,6 +104,8 @@ final class ReleasePackageTest extends TestCase
 		foreach (
 			[
 				'bin/check-secrets.php',
+				'bin/verify-deployment.php',
+				'deploy/nginx.conf.example',
 				'public/index.php',
 				'public/assets/brand/adel-pos-tema-claro.png',
 				'database/migrations/001_esquema_inicial.sql',
