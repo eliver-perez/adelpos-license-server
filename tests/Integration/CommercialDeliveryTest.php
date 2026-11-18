@@ -235,12 +235,11 @@ final class CommercialDeliveryTest extends TestCase
 		);
 		foreach (
 			[
-				'Perpetua · 6 meses de actualizaciones',
-				'Modalidad Perpetua · 6 meses de actualizaciones',
+				'Constancia de licenciamiento',
+				'Tipo y periodo Perpetua · 6 meses de actualizaciones',
 				'Plan Plan elemental',
-				'Cajas 3',
-				'Comanderos 3',
-				'Pantallas de cocina (KDS) 3',
+				'Cupos simultáneos Cajas: 3 · Comanderos: 3 · Pantallas de cocina (KDS): 3',
+				'Revisión firmada Todavía no se firma',
 				'Inicio del periodo Empieza al activar',
 				'Vencimiento Sin vencimiento (uso perpetuo)',
 				'Actualizaciones hasta Empieza al activar',
@@ -282,10 +281,11 @@ final class CommercialDeliveryTest extends TestCase
 		);
 		foreach (
 			[
-				'Suscripción mensual',
-				'Plan Plan básico · licencia personalizada',
-				'Cajas 2',
-				'Comanderos 0',
+				'Tipo y periodo Suscripción mensual',
+				'Plan Plan básico · cupos personalizados',
+				'Cajas: 2 · Comanderos: 0',
+				'Tolerancia 5 días después del vencimiento',
+				'Revisión firmada 1 (la más reciente al generar esta constancia)',
 				// 12:00 UTC son las 05:00 en Tijuana; un mes después ya no hay horario de verano.
 				'Inicio del periodo 21/10/2026 · 05:00 America/Tijuana',
 				'Vencimiento 21/11/2026 · 05:00 America/Tijuana',
@@ -295,6 +295,150 @@ final class CommercialDeliveryTest extends TestCase
 		) {
 			self::assertStringContainsString($expected, $text);
 		}
+	}
+
+	/**
+	 * Diseño final de las constancias (etapa 5, Fase 4): una página A4, sin montos ni pagos, con el titular y su
+	 * RFC, el tipo y el periodo, el plan y los cupos, las fechas en la zona del titular, la revisión firmada y la
+	 * verificación; la de activación y entrega, además, el método, la computadora, el SHA-256 del .lic si aplica
+	 * e instrucciones para el restaurante.
+	 */
+	public function testFinalCertificatesForEachTypeAndDeliveryMethodWithoutAmounts(): void
+	{
+		$app = $this->fixture->app;
+		$normalize = fn(string $text): string => preg_replace('/\s+/', ' ', $text);
+		$pages = fn(string $text): int => substr_count($text, "\f");
+		$this->fixture->owner->execute("UPDATE plans SET price_monthly='899.00' WHERE plan_id='elemental'");
+		$customer = $app->catalog->saveCustomer($this->actor, Uuid::create(), null, [
+			'name' => 'Taquería del Puerto',
+			'legal_name' => 'Taquería del Puerto SA de CV',
+			'tax_id' => 'TPU010101AB1',
+			'contact_name' => 'Prueba',
+			'email' => '',
+			'state' => 'active',
+			'time_zone' => 'America/Tijuana',
+		]);
+		$expected = [
+			// 12:00 UTC del 21 de octubre son las 05:00 en Tijuana (horario de verano); el vencimiento ya no lo es.
+			'subscription' => ['Suscripción mensual', 'Vencimiento 21/11/2026 · 05:00 America/Tijuana', '5 días'],
+			'trial' => ['Prueba de 15 días', 'Vencimiento 05/11/2026 · 05:00 America/Tijuana', 'Sin tolerancia'],
+			'perpetual' => [
+				'Perpetua · 6 meses de actualizaciones',
+				'Vencimiento Sin vencimiento (uso perpetuo)',
+				'Sin tolerancia',
+			],
+		];
+		foreach ($expected as $type => [$terms, $expiry, $grace]) {
+			$this->license = $app->licenses->issue($this->actor, Uuid::create(), [
+				'customer_id' => $customer['id'],
+				'product_id' => 'adel_pos',
+				...MySqlFixture::terms($type),
+				'amount' => $type === 'subscription' ? '850' : '0',
+				'amount_reason' => $type === 'subscription' ? 'Descuento de prueba' : '',
+			]);
+			$offline = $this->offline();
+			$raw = $this->text(
+				$app->documents->download($this->actor, $this->publicDocument()['document_id'])['bytes'],
+			);
+			$text = $normalize($raw);
+			self::assertSame(1, $pages($raw), $type);
+			foreach (
+				[
+					'Constancia de licenciamiento',
+					'Nombre Taquería del Puerto',
+					'Razón social Taquería del Puerto SA de CV',
+					'RFC TPU010101AB1',
+					'Tipo y periodo ' . $terms,
+					'Inicio del periodo 21/10/2026 · 05:00 America/Tijuana',
+					$expiry,
+					'Tolerancia ' . $grace,
+					'Revisión firmada 1',
+					'zona horaria del titular: America/Tijuana',
+					'Verificación de autenticidad',
+				]
+				as $fragment
+			) {
+				self::assertStringContainsString($fragment, $text, $type);
+			}
+			// Se entregan al cliente: ni montos ni pagos.
+			foreach (['$', 'MXN', '850', 'Descuento de prueba', 'Pago'] as $amount) {
+				self::assertStringNotContainsString($amount, $text, $type);
+			}
+		}
+		// Activación y entrega en línea: el código, la computadora activa y las instrucciones; sin montos.
+		$online = $app->documents->generate(
+			$this->actor,
+			Uuid::create(),
+			$this->license['id'],
+			['document_type' => 'delivery', 'activation_method' => 'online'],
+			self::PASSWORD,
+			$this->code(),
+		);
+		$raw = $this->text(
+			$app->documents->download($this->actor, $online['document_id'], self::PASSWORD, $this->code())['bytes'],
+		);
+		$text = $normalize($raw);
+		self::assertSame(1, $pages($raw));
+		self::assertStringContainsString('Constancia de activación y entrega', $text);
+		self::assertStringContainsString('Método En línea, con el código de activación', $text);
+		self::assertStringContainsString($this->license['secret'], $text);
+		$server = $app->db->one(
+			"SELECT BIN_TO_UUID(server_id) AS server FROM activations WHERE license_id=? AND state='active'",
+			[Uuid::bytes($this->license['id'])],
+		)['server'];
+		self::assertStringContainsString('Computadora (server_id) ' . $server, $text);
+		self::assertStringContainsString('Instrucciones para el restaurante', $text);
+		self::assertStringNotContainsString('MXN', $text);
+		// Activación y entrega sin internet: el archivo, su revisión y su SHA-256.
+		$delivery = $app->documents->generate(
+			$this->actor,
+			Uuid::create(),
+			$this->license['id'],
+			['document_type' => 'delivery', 'activation_method' => 'offline', 'revision_id' => $offline['revision_id']],
+			self::PASSWORD,
+			$this->code(),
+		);
+		$raw = $this->text(
+			$app->documents->download($this->actor, $delivery['document_id'], self::PASSWORD, $this->code())['bytes'],
+		);
+		$text = $normalize($raw);
+		self::assertSame(1, $pages($raw));
+		$revision = $app->db->one('SELECT jws_sha256 FROM license_revisions WHERE revision_id=?', [
+			Uuid::bytes($offline['revision_id']),
+		]);
+		self::assertStringContainsString('Método Sin internet, con el archivo firmado (.lic)', $text);
+		self::assertStringContainsString($revision['jws_sha256'], preg_replace('/\s+/', '', $raw));
+		self::assertStringContainsString('Revisión del archivo 1 · revisión activa', $text);
+		self::assertStringContainsString('Copia el archivo .lic', $text);
+		self::assertStringNotContainsString($this->license['secret'], $text);
+	}
+
+	public function testPublicVerificationShowsTheCurrentStateOfTheLicense(): void
+	{
+		$app = $this->fixture->app;
+		$token = function (array $generated) use ($app): string {
+			$row = $app->db->one('SELECT snapshot_encrypted FROM license_documents WHERE id=?', [
+				Uuid::bytes($generated['document_id']),
+			]);
+			$snapshot = json_decode(
+				$app->crypto->open(
+					$row['snapshot_encrypted'],
+					'document-snapshot:' . $generated['document_id'],
+					'document',
+				),
+				true,
+			);
+			return basename($snapshot['verification_url']);
+		};
+		$before = $token($this->publicDocument());
+		self::assertSame('pending', $app->documents->verify($before)['current_state']);
+		$this->offline();
+		self::assertSame('issued', $app->documents->verify($before)['current_state']);
+		$verified = $app->documents->verify($before);
+		self::assertSame(['licensing', 1], [$verified['type'], $verified['revision']]);
+		self::assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', $verified['pdf_sha256']);
+		self::assertNull($app->documents->verify(str_repeat('A', 43)));
+		self::assertNull($app->documents->verify('no válido'));
 	}
 
 	public function testAdministrativeEditsKeepTechnicalLicenseAndHistoricalDocumentsUnchanged(): void
@@ -325,7 +469,9 @@ final class CommercialDeliveryTest extends TestCase
 		$pdf2 = $app->documents->download($this->actor, $second['document_id']);
 		self::assertSame($pdf1['bytes'], $app->documents->download($this->actor, $first['document_id'])['bytes']);
 		self::assertStringNotContainsString('Contrato ADQ-2026-084', $text);
-		self::assertStringContainsString('Contrato ADQ-2026-084', $this->text($pdf2['bytes']));
+		// La referencia comercial es un dato interno (puede ser un pedido o una factura): desde la etapa 5 ninguna
+		// constancia la imprime. La constancia anterior no cambia y la nueva es otro documento.
+		self::assertStringNotContainsString('Contrato ADQ-2026-084', $this->text($pdf2['bytes']));
 		self::assertNotSame($pdf1['bytes'], $pdf2['bytes']);
 		$app->licenses->administrative($this->actor, Uuid::create(), $this->license['id'], [
 			'reference' => '',

@@ -111,6 +111,13 @@ final class DocumentService
 					'administrative_version' => (int) $license['administrative_version'],
 					'activation_method' => $method,
 					'verification_url' => rtrim($this->config->get('APP_URL'), '/') . '/verify/' . $verification,
+					// Revisión firmada más reciente de la licencia y su computadora activa, al generar (etapa 5).
+					'signed_revision' => (int) $license['revision_counter'],
+					'active_server' =>
+						$this->db->one(
+							"SELECT BIN_TO_UUID(server_id) AS server FROM activations WHERE license_id=? AND state='active'",
+							[$license['license_id']],
+						)['server'] ?? null,
 				];
 				$credentialId = null;
 				$offlineRevision = null;
@@ -224,7 +231,7 @@ final class DocumentService
 			return null;
 		}
 		$row = $this->db->one(
-			'SELECT d.public_json,d.pdf_sha256,l.commercial_status,l.license_type,l.expires_at,
+			'SELECT d.public_json,d.pdf_sha256,l.commercial_status,l.license_type,l.expires_at,l.period_starts_at,
 					l.grace_days,d.credential_id,c.state AS credential_state,d.offline_revision_id,
 					a.state AS activation_state,a.current_revision_id
 				FROM license_documents d
@@ -240,6 +247,9 @@ final class DocumentService
 		}
 		$public = json_decode($row['public_json'], true, 16, JSON_THROW_ON_ERROR);
 		$state = $row['commercial_status'] === 'revoked' ? 'revoked' : 'issued';
+		if ($state === 'issued' && $row['period_starts_at'] === null) {
+			$state = 'pending';
+		}
 		if ($state === 'issued' && $row['expires_at'] !== null && $row['expires_at'] <= $this->clock->sql()) {
 			$end = (new \DateTimeImmutable($row['expires_at'], new \DateTimeZone('UTC')))->modify(
 				'+' . $row['grace_days'] . ' days',

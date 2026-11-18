@@ -3409,3 +3409,42 @@ Se quitaron **11 reglas**. En la primera pasada **tres no se detectaban** y una 
 | Dependencias de producción | Sin cambios en `composer.json` ni en `package.json` |
 | `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
 | Bases y usuarios `adelpos_license_test_*` | 0 y 0 |
+
+---
+
+## Etapa 5 · Fase 4 — Constancias PDF definitivas
+
+Fecha: 2026-11-17. Estado: **cerrada**.
+
+### E5-4.1 Qué cambió
+
+| Constancia | Contenido |
+| --- | --- |
+| **De licenciamiento** | Marca (el logo claro con su SHA-256 comprobado), folio con la revisión de la constancia y su fecha; titular con razón social y RFC si existen; producto, licencia, tipo y periodo, plan, cupos y la **revisión firmada más reciente**; fechas (emisión, inicio del periodo, vencimiento, tolerancia y fin de actualizaciones) en la **zona horaria del titular, con su nombre**; aviso de alcance; QR y dirección de verificación |
+| **De activación y entrega** | Lo anterior, más el **método** (en línea o sin internet), la **computadora** (`server_id`: la del archivo firmado, o la activa al generar una entrega en línea), el archivo, su revisión y su **SHA-256** si es sin internet, el código si es en línea, e **instrucciones para el restaurante** |
+| **Las dos** | **Sin montos ni pagos** (tampoco la referencia comercial, que puede ser una factura); **una página A4**; la marca `PENDIENTE etapa 5` desapareció (cero marcas) |
+| **Verificación pública** | Se conserva por folio y SHA-256 del PDF. Muestra el estado actual con los nombres del panel, ahora también «Sin activar», y el tipo con el nombre del documento |
+
+Muestras revisadas a la vista (`var/screenshots/constancias/`, no se versiona): licenciamiento de una perpetua, una suscripción y una prueba de un cliente de Tijuana, y las dos entregas. Las cinco caben en una página.
+
+### E5-4.2 Pruebas
+
+| Archivo | Pruebas | Qué comprueba |
+| --- | --- | --- |
+| `tests/Integration/CommercialDeliveryTest.php` | +2 (10) | Con `pdftotext`: la constancia de licenciamiento de una **suscripción, una prueba y una perpetua** de un cliente de **Tijuana** (activada en horario de verano, vencida en horario estándar): titular, razón social, RFC, tipo y periodo, fechas con su zona, tolerancia, revisión firmada, verificación, **una página** y **ningún monto** (ni `$`, ni `MXN`, ni el monto cobrado, ni su motivo); la de entrega **en línea** (código, computadora activa, instrucciones) y **sin internet** (archivo, revisión, SHA-256 exacto, sin el código). La verificación pública: «Sin activar» antes de activar, vigente después, tipo, revisión y SHA-256 del PDF, y nada con una referencia inválida |
+| `tests/Integration/CommercialDeliveryTest.php` | — | Las aserciones de la prueba de la etapa 2 siguen el diseño nuevo (etiquetas «Tipo y periodo», «Cupos simultáneos», «cupos personalizados»). La de los datos administrativos comprueba ahora que la referencia comercial **no** aparece en ninguna constancia (antes, que aparecía en la nueva); la constancia anterior sigue sin cambiar |
+| `tests/Unit/StageClosureTest.php` | — | Cero marcas `PENDIENTE` |
+
+### E5-4.3 Reglas comprobadas quitándolas una a la vez
+
+Se quitaron **9 reglas**, todas detectadas: sin datos comerciales internos (la referencia), sin montos (un precio de catálogo), la revisión firmada más reciente, la computadora activa en la entrega en línea (una mutación se rehízo porque la primera no aplicaba), «Sin activar» en la verificación pública, las fechas en la zona del titular, el RFC, una página A4 en la entrega y las instrucciones para el restaurante.
+
+### E5-4.4 Resultado
+
+| Comprobación | Resultado |
+| --- | --- |
+| PHPUnit, PHP 8.3.36 | **488 pruebas, 29 290 aserciones**, todas OK |
+| Playwright (panel) | OK; datos sintéticos eliminados |
+| Marcas `PENDIENTE etapa` | 0 |
+| `npm run format:check` y `bin/check-secrets.php` | Sin diferencias; sin hallazgos |
+| Bases y usuarios `adelpos_license_test_*` | 0 y 0 |

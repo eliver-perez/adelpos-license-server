@@ -98,12 +98,7 @@ final class StageClosureTest extends TestCase
 			);
 		}
 		ksort($marks);
-		self::assertSame(
-			[
-				// Diseño final de las constancias.
-				'templates/certificate-pdf.php' => [5],
-			],
-			$marks,
-		);
+		// Desde la etapa 5 (Fase 4) no queda ninguna marca.
+		self::assertSame([], $marks);
 	}
 }

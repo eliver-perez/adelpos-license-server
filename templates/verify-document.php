@@ -1,7 +1,16 @@
 <?php
 use AdelPos\License\Http\View as V;
 
-$stateNames = ['issued' => 'Emitida', 'revoked' => 'Revocada', 'grace' => 'En tolerancia', 'expired' => 'Vencida'];
+// Verificación pública de una constancia (etapa 5, Fase 4): folio, tipo, revisión, fecha, estado actual de la
+// licencia y SHA-256 del PDF original. No muestra datos del titular ni de la licencia.
+$stateNames = [
+	'issued' => ['Vigente', 'green'],
+	'pending' => ['Sin activar', 'outline'],
+	'revoked' => ['Revocada', 'darkred'],
+	'grace' => ['En tolerancia', 'amber'],
+	'expired' => ['Vencida', 'red'],
+];
+$typeNames = ['licensing' => 'Constancia de licenciamiento', 'delivery' => 'Constancia de activación y entrega'];
 ?>
 <!doctype html>
 <html lang="es">
@@ -33,23 +42,20 @@ $stateNames = ['issued' => 'Emitida', 'revoked' => 'Revocada', 'grace' => 'En to
 						</div>
 						<div>
 							<dt>Tipo</dt>
-							<?php if ($verification['type'] === 'licensing'): ?>
-								<dd>Licenciamiento</dd>
-							<?php else: ?>
-								<dd>Entrega para activación</dd>
-							<?php endif; ?>
+							<dd><?= V::escape($typeNames[$verification['type']]) ?></dd>
 						</div>
 						<div>
-							<dt>Revisión documental</dt>
+							<dt>Revisión de la constancia</dt>
 							<dd><?= (int) $verification['revision'] ?></dd>
 						</div>
 						<div>
-							<dt>Generación</dt>
+							<dt>Generada</dt>
 							<dd><?= V::escape(V::date($verification['generated_at'])) ?></dd>
 						</div>
 						<div>
-							<dt>Estado comercial actual</dt>
-							<dd><?= V::escape($stateNames[$verification['current_state']]) ?></dd>
+							<dt>Estado actual de la licencia</dt>
+							<?php [$stateLabel, $stateTone] = $stateNames[$verification['current_state']]; ?>
+							<dd><?= V::badge($stateLabel, $stateTone) ?></dd>
 						</div>
 						<div class="wide">
 							<dt>SHA-256 del PDF original</dt>

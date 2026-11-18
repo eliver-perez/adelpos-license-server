@@ -683,3 +683,14 @@ El diseño completo está en [docs/PANEL.md](docs/PANEL.md). Estas son las decis
 | 6 | **Los mensajes de validación nombran el campo en español** (`Input::LABELS`): «Escribe o elige el campo «Nombre de contacto»: es obligatorio.» en lugar de «Revisa el campo contact_name.». Un campo sin nombre registrado usa su clave. | Mensajes de error en español claro (especificación, Fase 3, punto 6). |
 | 7 | **La lista de solicitudes sin internet muestra el cliente también de una solicitud pendiente** de renovación o desactivación (el de la licencia que trae la solicitud); una activación pendiente dice «Por asignar». Se quitó el filtro por producto. | La información para decidir; solo existe AD-EL POS. |
 | 8 | **La revisión de una alerta, el formulario de emisión y las vistas previas conservan lo escrito con el mismo mecanismo**; el JavaScript del formulario de emisión no pisa los cupos ni el monto que volvieron (`data-restored`). | Que el mecanismo de la decisión 1 sirva en los formularios largos. |
+
+### Fase 4 — Constancias PDF definitivas
+
+| # | Decisión | Motivo |
+| --- | --- | --- |
+| 1 | **La referencia comercial ya no se imprime en las constancias.** | Es un dato interno: el formulario de emisión la sugiere para «pedido, factura o acuerdo», y una factura es un dato de pago; la especificación pide que las constancias no muestren montos ni pagos. Sigue en el panel. Una prueba de la etapa 2 comprobaba que la constancia nueva la mostraba; ahora comprueba que no aparece en ninguna. |
+| 2 | **«Revisión» son dos datos:** la revisión de la constancia (r1, r2…) junto al folio, y la **revisión firmada más reciente** de la licencia al generarla (o «Todavía no se firma» si no se ha activado). | La revisión firmada es la que el restaurante ve en AD-EL POS; la de la constancia identifica el documento en la verificación pública. |
+| 3 | **La computadora de la constancia de activación y entrega:** sin internet, la del archivo firmado; en línea, la computadora activa al generarla, o «Se registra al activar». | La especificación pide el `server_id`; en una entrega en línea antes de activar todavía no existe. |
+| 4 | **Todas las fechas de la constancia van en la zona del titular, con su nombre**, también la de generación. | Antes la generación iba en la zona del panel. |
+| 5 | **Una página A4:** la de licenciamiento con el estilo de base; la de activación y entrega con tamaños y espacios más compactos. Las cinco muestras (tres tipos de licencia y los dos métodos de entrega) caben en una página, y las pruebas lo comprueban. | «Una página A4 cuando sea posible». |
+| 6 | **La verificación pública muestra el estado actual con los nombres del panel** (vigente, en tolerancia, vencida, revocada) y agrega **«Sin activar»**; el tipo se llama como el documento. Sigue sin mostrar datos del titular ni de la licencia. | Que coincida con el panel y no diga «Emitida» de una licencia que todavía no se activa. |
